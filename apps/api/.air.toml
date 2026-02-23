@@ -1,0 +1,17 @@
+root = "."
+
+tmp_dir = "tmp"
+
+[build]
+  bin = "bin/dsim"
+  cmd = "go build -o ./bin/dsim ./cmd"
+  delay = 1000
+  exclude_dir = ["tmp", "vendor"]
+  include_ext = ["go", "tmpl", "tpl", "html", "yaml", "yml", "json"]
+  exclude_regex = ["_test.go"]
+
+[run]
+  cmd = "./bin/dsim"
+
+[log]
+  time = true
