@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 
-type Response = {
-  message: string;
+type CreateNodeResponse = {
+  id: string;
+  name: string;
+  image: string;
+  containerId: string;
 };
 
 export function CreateButton() {
@@ -16,7 +19,7 @@ export function CreateButton() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
-    const data: Response = await res.json();
+    const data: CreateNodeResponse = await res.json();
     setMessage(JSON.stringify(data) ?? "");
   };
 

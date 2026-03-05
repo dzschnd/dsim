@@ -14,7 +14,7 @@ func (app *application) LoadEnv() error {
 }
 
 func (app *application) mount() http.Handler {
-	return routes.NewRouter(routes.NewServer(app.docker))
+	return routes.NewRouter(routes.NewServer(app.docker, app.store))
 }
 
 func (app *application) run(h http.Handler) error {
@@ -30,6 +30,7 @@ func (app *application) run(h http.Handler) error {
 type application struct {
 	config config
 	docker *client.Client
+	store  *routes.Store
 	// logger
 	// db driver
 }
@@ -53,4 +54,10 @@ func (app *application) closeDocker() {
 		return
 	}
 	_ = app.docker.Close()
+}
+
+func (app *application) initStore() {
+	if app.store == nil {
+		app.store = routes.NewStore()
+	}
 }
