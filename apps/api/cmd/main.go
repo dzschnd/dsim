@@ -20,6 +20,10 @@ func main() {
 	if err := api.LoadEnv(); err != nil {
 		log.Fatalf("Failed to load env. Error: %s", err)
 	}
+	if err := api.initDocker(); err != nil {
+		log.Fatalf("Failed to init docker client. Error: %s", err)
+	}
+	defer api.closeDocker()
 	if err := api.run(api.mount()); err != nil {
 		log.Fatalf("Failed to start server. Error: %s", err)
 	}

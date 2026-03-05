@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/docker/docker/client"
 	"github.com/dzschnd/dsim/internal/routes"
 	"github.com/joho/godotenv"
 )
@@ -13,7 +14,7 @@ func (app *application) LoadEnv() error {
 }
 
 func (app *application) mount() http.Handler {
-	return routes.NewRouter()
+	return routes.NewRouter(routes.NewServer(app.docker))
 }
 
 func (app *application) run(h http.Handler) error {
@@ -28,6 +29,7 @@ func (app *application) run(h http.Handler) error {
 
 type application struct {
 	config config
+	docker *client.Client
 	// logger
 	// db driver
 }
@@ -35,4 +37,20 @@ type application struct {
 type config struct {
 	addr string
 	// db dbConfig
+}
+
+func (app *application) initDocker() error {
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		return err
+	}
+	app.docker = cli
+	return nil
+}
+
+func (app *application) closeDocker() {
+	if app.docker == nil {
+		return
+	}
+	_ = app.docker.Close()
 }
