@@ -1,0 +1,390 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ReactFlow, {
+	addEdge,
+	Background,
+	Connection,
+	ConnectionLineType,
+	Controls,
+	Edge,
+	MiniMap,
+	Node,
+	OnConnect,
+	OnEdgesChange,
+	OnNodesChange,
+	applyEdgeChanges,
+	applyNodeChanges,
+} from "reactflow";
+import "reactflow/dist/style.css";
+
+import { SquareNode, type SquareNodeData } from "./SquareNode";
+
+type ApiNode = {
+	id: string;
+	name: string;
+	image: string;
+	containerId: string;
+	createdAt: string;
+};
+
+type ApiLink = {
+	id: string;
+	nodeAId: string;
+	nodeBId: string;
+	networkId: string;
+	networkName: string;
+	createdAt: string;
+};
+
+type ApiError = {
+	error: string;
+};
+
+const NODE_SIZE = 160;
+const EDGE_STYLE = {
+	stroke: "#334155",
+	strokeWidth: 3,
+};
+
+function randomPos(index: number) {
+	const row = Math.floor(index / 5);
+	const col = index % 5;
+	return {
+		x: 80 + col * 220,
+		y: 100 + row * 180,
+	};
+}
+
+function applySelectedNode(
+	nodes: Node<SquareNodeData>[],
+	selectedNodeId: string,
+): Node<SquareNodeData>[] {
+	return nodes.map((node) => ({
+		...node,
+		selected: node.id === selectedNodeId,
+		data: {
+			...node.data,
+			isSelected: node.id === selectedNodeId,
+		},
+	}));
+}
+
+const nodeTypes = {
+	square: SquareNode,
+};
+
+export function TopologyCanvas() {
+	const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+
+	const [nodes, setNodes] = useState<Node<SquareNodeData>[]>([]);
+	const [edges, setEdges] = useState<Edge[]>([]);
+	const [selectedNodeId, setSelectedNodeId] = useState<string>("");
+	const [busy, setBusy] = useState<boolean>(false);
+	const [status, setStatus] = useState<string>("");
+	const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+
+	const edgeByPair = useMemo(() => {
+		const map = new Map<string, Edge>();
+		for (const edge of edges) {
+			const a = String(edge.source);
+			const b = String(edge.target);
+			const key = a < b ? `${a}|${b}` : `${b}|${a}`;
+			map.set(key, edge);
+		}
+		return map;
+	}, [edges]);
+
+	const parseError = useCallback(async (res: Response) => {
+		const text = await res.text();
+		if (!text) {
+			return `${res.status} ${res.statusText}`;
+		}
+		try {
+			const parsed = JSON.parse(text) as ApiError;
+			if (parsed.error) {
+				return `${res.status}: ${parsed.error}`;
+			}
+			return `${res.status} ${res.statusText}`;
+		} catch {
+			return `${res.status} ${res.statusText}`;
+		}
+	}, []);
+
+	const loadTopology = useCallback(async () => {
+		setBusy(true);
+		setStatus("Loading topology...");
+		try {
+			const [nodesRes, linksRes] = await Promise.all([
+				fetch(`${baseUrl}/api/v1/nodes`),
+				fetch(`${baseUrl}/api/v1/links`),
+			]);
+
+			if (!nodesRes.ok) {
+				setStatus(await parseError(nodesRes));
+				return;
+			}
+			if (!linksRes.ok) {
+				setStatus(await parseError(linksRes));
+				return;
+			}
+
+			const apiNodes = (await nodesRes.json()) as ApiNode[];
+			const apiLinks = (await linksRes.json()) as ApiLink[];
+			const existingPositions = nodePositionsRef.current;
+
+			const flowNodes: Node<SquareNodeData>[] = apiNodes.map((node, index) => ({
+				id: node.id,
+				type: "square",
+				position: existingPositions.get(node.id) ?? randomPos(index),
+				selected: node.id === selectedNodeId,
+				data: {
+					label: `${node.name} (${node.id})`,
+					image: node.image,
+					containerId: node.containerId,
+					isSelected: node.id === selectedNodeId,
+				},
+			}));
+
+			const flowEdges: Edge[] = apiLinks.map((link) => ({
+				id: link.id,
+				type: "straight",
+				source: link.nodeAId,
+				target: link.nodeBId,
+				style: EDGE_STYLE,
+				data: {
+					linkId: link.id,
+					networkId: link.networkId,
+					networkName: link.networkName,
+				},
+			}));
+
+			setNodes(applySelectedNode(flowNodes, selectedNodeId));
+			setEdges(flowEdges);
+			setStatus(`Loaded ${flowNodes.length} nodes, ${flowEdges.length} links`);
+		} catch {
+			setStatus("Failed to load topology");
+		} finally {
+			setBusy(false);
+		}
+	}, [baseUrl, parseError, selectedNodeId]);
+
+	useEffect(() => {
+		void loadTopology();
+	}, [loadTopology]);
+
+	useEffect(() => {
+		nodePositionsRef.current = new Map(
+			nodes.map((node) => [
+				node.id,
+				{
+					x: node.position.x,
+					y: node.position.y,
+				},
+			]),
+		);
+	}, [nodes]);
+
+	const onNodesChange: OnNodesChange = useCallback((changes) => {
+		setNodes((curr) => applySelectedNode(applyNodeChanges(changes, curr), selectedNodeId));
+	}, [selectedNodeId]);
+
+	const onEdgesChange: OnEdgesChange = useCallback((changes) => {
+		setEdges((curr) => applyEdgeChanges(changes, curr));
+	}, []);
+
+	const createNode = useCallback(async () => {
+		setBusy(true);
+		setStatus("Creating node...");
+		try {
+			const res = await fetch(`${baseUrl}/api/v1/nodes`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({}),
+			});
+			if (!res.ok) {
+				setStatus(await parseError(res));
+				return;
+			}
+			await loadTopology();
+		} catch {
+			setStatus("Failed to create node");
+		} finally {
+			setBusy(false);
+		}
+	}, [baseUrl, loadTopology, parseError]);
+
+	const deleteSelectedNode = useCallback(async () => {
+		if (!selectedNodeId) {
+			setStatus("Select a node first");
+			return;
+		}
+
+		setBusy(true);
+		setStatus(`Deleting node ${selectedNodeId}...`);
+		try {
+			const res = await fetch(`${baseUrl}/api/v1/nodes/${selectedNodeId}`, {
+				method: "DELETE",
+			});
+			if (!res.ok) {
+				setStatus(await parseError(res));
+				return;
+			}
+			setSelectedNodeId("");
+			setNodes((curr) => applySelectedNode(curr, ""));
+			await loadTopology();
+		} catch {
+			setStatus("Failed to delete node");
+		} finally {
+			setBusy(false);
+		}
+	}, [baseUrl, loadTopology, parseError, selectedNodeId]);
+
+	useEffect(() => {
+		function onKeyDown(event: KeyboardEvent) {
+			if (event.key !== "Delete") {
+				return;
+			}
+
+			const target = event.target;
+			if (
+				target instanceof HTMLElement &&
+				(target.tagName === "INPUT" ||
+					target.tagName === "TEXTAREA" ||
+					target.isContentEditable)
+			) {
+				return;
+			}
+
+			event.preventDefault();
+			void deleteSelectedNode();
+		}
+
+		window.addEventListener("keydown", onKeyDown);
+		return () => {
+			window.removeEventListener("keydown", onKeyDown);
+		};
+	}, [deleteSelectedNode]);
+
+	const onConnect: OnConnect = useCallback(
+		async (connection: Connection) => {
+			const source = connection.source ?? "";
+			const target = connection.target ?? "";
+			if (!source || !target || source === target) {
+				return;
+			}
+
+			const key = source < target ? `${source}|${target}` : `${target}|${source}`;
+			const existing = edgeByPair.get(key);
+
+			setBusy(true);
+			try {
+				if (existing) {
+					setStatus(`Removing link ${existing.id}...`);
+					const delRes = await fetch(`${baseUrl}/api/v1/links/${existing.id}`, {
+						method: "DELETE",
+					});
+					if (!delRes.ok) {
+						setStatus(await parseError(delRes));
+						return;
+					}
+					setEdges((curr) => curr.filter((edge) => edge.id !== existing.id));
+					setStatus("Link removed");
+					return;
+				}
+
+				setStatus("Creating link...");
+				const createRes = await fetch(`${baseUrl}/api/v1/links`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ nodeAId: source, nodeBId: target }),
+				});
+				if (!createRes.ok) {
+					setStatus(await parseError(createRes));
+					return;
+				}
+
+				const link = (await createRes.json()) as ApiLink;
+				setEdges((curr) =>
+					addEdge(
+						{
+							id: link.id,
+							type: "straight",
+							source: link.nodeAId,
+							target: link.nodeBId,
+							style: EDGE_STYLE,
+							data: {
+								linkId: link.id,
+								networkId: link.networkId,
+								networkName: link.networkName,
+							},
+						},
+						curr,
+					),
+				);
+				setStatus("Link created");
+			} catch {
+				setStatus("Failed to update link");
+			} finally {
+				setBusy(false);
+			}
+		},
+		[baseUrl, edgeByPair, parseError],
+	);
+
+	return (
+		<div className="h-screen w-screen bg-zinc-100 text-zinc-900">
+			<header className="fixed left-0 top-0 z-20 flex w-full items-center gap-3 border-b border-zinc-300 bg-white px-4 py-3">
+				<button
+					type="button"
+					onClick={() => void createNode()}
+					disabled={busy}
+					className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
+				>
+					Create node
+				</button>
+				<button
+					type="button"
+					onClick={() => void deleteSelectedNode()}
+					disabled={busy}
+					className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
+				>
+					Delete selected node
+				</button>
+				<div className="ml-3 text-sm text-zinc-600">{status}</div>
+			</header>
+
+			<main className="h-full w-full pt-14">
+				<ReactFlow
+					nodes={nodes}
+					edges={edges}
+					nodeTypes={nodeTypes}
+					onNodesChange={onNodesChange}
+					onEdgesChange={onEdgesChange}
+					onConnect={(connection) => {
+						void onConnect(connection);
+					}}
+					onNodeClick={(_, node) => {
+						setSelectedNodeId(node.id);
+						setNodes((curr) => applySelectedNode(curr, node.id));
+						setStatus(`Selected node ${node.id}`);
+					}}
+					onPaneClick={() => {
+						setSelectedNodeId("");
+						setNodes((curr) => applySelectedNode(curr, ""));
+						setStatus("");
+					}}
+					connectionLineType={ConnectionLineType.Straight}
+					defaultEdgeOptions={{ type: "straight", style: EDGE_STYLE }}
+					nodesConnectable
+					fitView
+					defaultViewport={{ x: 0, y: 0, zoom: 1 }}
+				>
+					<MiniMap zoomable pannable nodeStrokeWidth={3} nodeColor="#e5e7eb" />
+					<Controls />
+					<Background gap={18} size={1} />
+				</ReactFlow>
+			</main>
+		</div>
+	);
+}
