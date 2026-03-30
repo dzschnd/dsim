@@ -23,7 +23,8 @@ import { SquareNode, type SquareNodeData } from "./SquareNode";
 type ApiNode = {
 	id: string;
 	name: string;
-	image: string;
+	status: string;
+	type: string;
 	containerId: string;
 	createdAt: string;
 };
@@ -82,7 +83,12 @@ export function TopologyCanvas() {
 	const [selectedNodeId, setSelectedNodeId] = useState<string>("");
 	const [busy, setBusy] = useState<boolean>(false);
 	const [status, setStatus] = useState<string>("");
-	const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
+	const selectedNodeIdRef = useRef<string>("");
+	const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(
+		new Map(),
+	);
+	const nodesRef = useRef<Node<SquareNodeData>[]>([]);
+	const toggleNodeRunRef = useRef<(nodeID: string) => Promise<void>>(async () => { });
 
 	const edgeByPair = useMemo(() => {
 		const map = new Map<string, Edge>();
@@ -132,17 +138,21 @@ export function TopologyCanvas() {
 			const apiNodes = (await nodesRes.json()) as ApiNode[];
 			const apiLinks = (await linksRes.json()) as ApiLink[];
 			const existingPositions = nodePositionsRef.current;
+			const currentSelectedNodeId = selectedNodeIdRef.current;
 
 			const flowNodes: Node<SquareNodeData>[] = apiNodes.map((node, index) => ({
 				id: node.id,
 				type: "square",
 				position: existingPositions.get(node.id) ?? randomPos(index),
-				selected: node.id === selectedNodeId,
+				selected: node.id === currentSelectedNodeId,
 				data: {
 					label: `${node.name} (${node.id})`,
-					image: node.image,
+					status: node.status,
+					type: node.type,
 					containerId: node.containerId,
-					isSelected: node.id === selectedNodeId,
+					isSelected: node.id === currentSelectedNodeId,
+					isBusy: false,
+					onToggleRun: () => void toggleNodeRunRef.current(node.id),
 				},
 			}));
 
@@ -159,15 +169,54 @@ export function TopologyCanvas() {
 				},
 			}));
 
-			setNodes(applySelectedNode(flowNodes, selectedNodeId));
+			setNodes(applySelectedNode(flowNodes, currentSelectedNodeId));
 			setEdges(flowEdges);
 			setStatus(`Loaded ${flowNodes.length} nodes, ${flowEdges.length} links`);
 		} catch {
-			setStatus("Failed to load topology");
+			setStatus("Failed to load topolgy");
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl, parseError, selectedNodeId]);
+	}, [baseUrl, parseError]);
+
+	const toggleNodeRun = useCallback(
+		async (nodeID: string) => {
+			const currentNode = nodesRef.current.find((node) => node.id === nodeID);
+			if (!currentNode) {
+				setStatus("Node not found in canvas");
+				return;
+			}
+
+			const action = currentNode.data.status === "running" ? "stop" : "start";
+
+			setBusy(true);
+			setStatus(`${action === "start" ? "Starting" : "Stopping"} node ${nodeID}...`);
+			try {
+				const res = await fetch(`${baseUrl}/api/v1/nodes/${nodeID}/${action}`, {
+					method: "POST",
+				});
+				if (!res.ok) {
+					setStatus(await parseError(res));
+					return;
+				}
+				try {
+					await loadTopology();
+					setStatus(`Node ${nodeID} ${action === "start" ? "started" : "stopped"}`);
+				} catch (err: unknown) {
+					const message = err instanceof Error ? err.message : String(err);
+					setStatus(
+						`Node ${nodeID} ${action === "start" ? "started" : "stopped"}, but topology reload failed: ${message}`,
+					);
+				}
+			} catch (err: unknown) {
+				const message = err instanceof Error ? err.message : String(err);
+				setStatus(`Failed to ${action} node: ${message}`);
+			} finally {
+				setBusy(false);
+			}
+		},
+		[baseUrl, loadTopology, parseError],
+	);
 
 	useEffect(() => {
 		void loadTopology();
@@ -183,11 +232,37 @@ export function TopologyCanvas() {
 				},
 			]),
 		);
+		nodesRef.current = nodes;
 	}, [nodes]);
 
-	const onNodesChange: OnNodesChange = useCallback((changes) => {
-		setNodes((curr) => applySelectedNode(applyNodeChanges(changes, curr), selectedNodeId));
+	useEffect(() => {
+		setNodes((curr) =>
+			curr.map((node) => ({
+				...node,
+				data: {
+					...node.data,
+					isBusy: busy,
+				},
+			})),
+		);
+	}, [busy]);
+
+	useEffect(() => {
+		toggleNodeRunRef.current = toggleNodeRun;
+	}, [toggleNodeRun]);
+
+	useEffect(() => {
+		selectedNodeIdRef.current = selectedNodeId;
 	}, [selectedNodeId]);
+
+	const onNodesChange: OnNodesChange = useCallback(
+		(changes) => {
+			setNodes((curr) =>
+				applySelectedNode(applyNodeChanges(changes, curr), selectedNodeId),
+			);
+		},
+		[selectedNodeId],
+	);
 
 	const onEdgesChange: OnEdgesChange = useCallback((changes) => {
 		setEdges((curr) => applyEdgeChanges(changes, curr));
@@ -200,7 +275,7 @@ export function TopologyCanvas() {
 			const res = await fetch(`${baseUrl}/api/v1/nodes`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({}),
+				body: JSON.stringify({ type: "host" }),
 			});
 			if (!res.ok) {
 				setStatus(await parseError(res));
@@ -274,7 +349,8 @@ export function TopologyCanvas() {
 				return;
 			}
 
-			const key = source < target ? `${source}|${target}` : `${target}|${source}`;
+			const key =
+				source < target ? `${source}|${target}` : `${target}|${source}`;
 			const existing = edgeByPair.get(key);
 
 			setBusy(true);
@@ -351,6 +427,9 @@ export function TopologyCanvas() {
 				>
 					Delete selected node
 				</button>
+				<div className="ml-3 text-sm text-zinc-700">
+					{selectedNodeId ? `Selected node: ${selectedNodeId}` : "No node selected"}
+				</div>
 				<div className="ml-3 text-sm text-zinc-600">{status}</div>
 			</header>
 
@@ -367,12 +446,10 @@ export function TopologyCanvas() {
 					onNodeClick={(_, node) => {
 						setSelectedNodeId(node.id);
 						setNodes((curr) => applySelectedNode(curr, node.id));
-						setStatus(`Selected node ${node.id}`);
 					}}
 					onPaneClick={() => {
 						setSelectedNodeId("");
 						setNodes((curr) => applySelectedNode(curr, ""));
-						setStatus("");
 					}}
 					connectionLineType={ConnectionLineType.Straight}
 					defaultEdgeOptions={{ type: "straight", style: EDGE_STYLE }}

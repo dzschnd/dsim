@@ -3,17 +3,19 @@ package routes
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"github.com/dzschnd/dsim/internal/model"
 	"sort"
 	"sync"
 	"time"
 )
 
 type Node struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Image       string    `json:"image"`
-	ContainerID string    `json:"containerId"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Status      model.NodeState `json:"status"`
+	Type        model.NodeType  `json:"type"`
+	ContainerID string          `json:"containerId"`
+	CreatedAt   time.Time       `json:"createdAt"`
 }
 
 type Link struct {
@@ -24,7 +26,6 @@ type Link struct {
 	NetworkName string    `json:"networkName"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
-
 type Store struct {
 	mu        sync.RWMutex
 	nodes     map[string]Node
@@ -67,6 +68,18 @@ func (s *Store) DeleteNode(id string) bool {
 		return false
 	}
 	delete(s.nodes, id)
+	return true
+}
+
+func (s *Store) UpdateNodeStatus(id string, status model.NodeState) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	node, ok := s.nodes[id]
+	if !ok {
+		return false
+	}
+	node.Status = status
+	s.nodes[id] = node
 	return true
 }
 

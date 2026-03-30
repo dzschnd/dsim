@@ -19,13 +19,14 @@ func NewServer(docker *client.Client, store *Store) *Server {
 func NewRouter(s *Server) http.Handler {
 	r := http.NewServeMux()
 
-	r.HandleFunc("GET /", pingHandler)
 	r.HandleFunc("POST /api/v1/nodes", s.createNodeHandler)
 	r.HandleFunc("GET /api/v1/nodes", s.listNodesHandler)
 	r.HandleFunc("DELETE /api/v1/nodes/{id}", s.deleteNodeHandler)
 	r.HandleFunc("POST /api/v1/links", s.createLinkHandler)
 	r.HandleFunc("GET /api/v1/links", s.listLinksHandler)
 	r.HandleFunc("DELETE /api/v1/links/{id}", s.deleteLinkHandler)
+	r.HandleFunc("POST /api/v1/nodes/{id}/start", s.startNodeHandler)
+	r.HandleFunc("POST /api/v1/nodes/{id}/stop", s.stopNodeHandler)
 
 	return corsHeader(jsonHeader(r))
 }

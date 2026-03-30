@@ -10,13 +10,17 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/dzschnd/dsim/internal/model"
 )
 
+type createNodeRequest struct {
+	Type string `json:"type"`
+}
 type createNodeResponse struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Image       string `json:"image"`
-	ContainerID string `json:"containerId"`
+	ID          string         `json:"id"`
+	Name        string         `json:"name"`
+	Type        model.NodeType `json:"type"`
+	ContainerID string         `json:"containerId"`
 }
 
 func (s *Server) createNodeHandler(w http.ResponseWriter, r *http.Request) {
@@ -29,7 +33,17 @@ func (s *Server) createNodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	image := nodeImageTag()
+	var req createNodeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "type not provided")
+		return
+	}
+	nodeType, ok := model.NameNodeType[req.Type]
+	if !ok {
+		writeJSONError(w, http.StatusBadRequest, "invalid type")
+		return
+	}
+	image := nodeTypeTag(nodeType)
 
 	if _, _, err := s.docker.ImageInspectWithRaw(ctx, image); err != nil {
 		if client.IsErrNotFound(err) {
@@ -40,7 +54,8 @@ func (s *Server) createNodeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	createResp, err := s.docker.ContainerCreate(ctx, &container.Config{Image: image}, nil, nil, nil, "")
+	initEnabled := true
+	createResp, err := s.docker.ContainerCreate(ctx, &container.Config{Image: image}, &container.HostConfig{Init: &initEnabled}, nil, nil, "")
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "container create failed")
 		return
@@ -57,7 +72,8 @@ func (s *Server) createNodeHandler(w http.ResponseWriter, r *http.Request) {
 	node := Node{
 		ID:          nodeID,
 		Name:        name,
-		Image:       image,
+		Status:      model.Idle,
+		Type:        nodeType,
 		ContainerID: createResp.ID,
 		CreatedAt:   time.Now().UTC(),
 	}
@@ -67,15 +83,19 @@ func (s *Server) createNodeHandler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(createNodeResponse{
 		ID:          node.ID,
 		Name:        node.Name,
-		Image:       node.Image,
+		Type:        node.Type,
 		ContainerID: node.ContainerID,
 	})
 }
 
-func nodeImageTag() string {
-	image := strings.TrimSpace(os.Getenv("NODE_IMAGE"))
-	if image == "" {
-		return "dsim/host:local"
+func nodeTypeTag(t model.NodeType) string {
+	var image string
+	switch t {
+	case model.Host:
+		image = strings.TrimSpace(os.Getenv("HOST_IMAGE"))
+	//TODO: Add other images
+	default:
+		image = strings.TrimSpace(os.Getenv("HOST_IMAGE"))
 	}
 	return image
 }
@@ -127,5 +147,91 @@ func (s *Server) deleteNodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.store.DeleteNode(nodeID)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) startNodeHandler(w http.ResponseWriter, r *http.Request) {
+	if s.store == nil {
+		writeJSONError(w, http.StatusInternalServerError, "store not initialized")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	nodeID := strings.TrimSpace(r.PathValue("id"))
+	if nodeID == "" {
+		writeJSONError(w, http.StatusBadRequest, "node id required")
+		return
+	}
+
+	node, ok := s.store.GetNode(nodeID)
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "node not found")
+		return
+	}
+
+	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
+	if err != nil {
+		if client.IsErrNotFound(err) {
+			writeJSONError(w, http.StatusNotFound, "container not found")
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, "container inspect failed")
+		return
+	}
+	if inspect.State != nil && inspect.State.Running {
+		s.store.UpdateNodeStatus(nodeID, model.Running)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err := s.docker.ContainerStart(ctx, node.ContainerID, container.StartOptions{}); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to start node")
+		return
+	}
+	s.store.UpdateNodeStatus(nodeID, model.Running)
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) stopNodeHandler(w http.ResponseWriter, r *http.Request) {
+	if s.store == nil {
+		writeJSONError(w, http.StatusInternalServerError, "store not initialized")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 15*time.Second)
+	defer cancel()
+
+	nodeID := strings.TrimSpace(r.PathValue("id"))
+	if nodeID == "" {
+		writeJSONError(w, http.StatusBadRequest, "node id required")
+		return
+	}
+
+	node, ok := s.store.GetNode(nodeID)
+	if !ok {
+		writeJSONError(w, http.StatusNotFound, "node not found")
+		return
+	}
+
+	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
+	if err != nil {
+		if client.IsErrNotFound(err) {
+			writeJSONError(w, http.StatusNotFound, "container not found")
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, "container inspect failed")
+		return
+	}
+	if inspect.State != nil && !inspect.State.Running {
+		s.store.UpdateNodeStatus(nodeID, model.Idle)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if err := s.docker.ContainerStop(ctx, node.ContainerID, container.StopOptions{}); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "failed to stop node: "+err.Error())
+		return
+	}
+	s.store.UpdateNodeStatus(nodeID, model.Idle)
 	w.WriteHeader(http.StatusNoContent)
 }
