@@ -1,3 +1,9 @@
+# TODO
+- Build containers on startup if don't exist
+- Graceful shutdown
+- ping
+- 3 node types (switch/router/host)
+
 # Sources
 
 - Go: https://go.dev/

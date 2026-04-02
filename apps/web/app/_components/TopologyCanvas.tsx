@@ -42,6 +42,19 @@ type ApiError = {
 	error: string;
 };
 
+type ApiCommandResponse = {
+	command: string;
+	stdout: string;
+	stderr: string;
+	exitCode: number;
+};
+
+type TerminalState = {
+	isOpen: boolean;
+	input: string;
+	lines: string[];
+};
+
 const NODE_SIZE = 160;
 const EDGE_STYLE = {
 	stroke: "#334155",
@@ -88,7 +101,11 @@ export function TopologyCanvas() {
 		new Map(),
 	);
 	const nodesRef = useRef<Node<SquareNodeData>[]>([]);
+	const terminalStateRef = useRef<Map<string, TerminalState>>(new Map());
 	const toggleNodeRunRef = useRef<(nodeID: string) => Promise<void>>(async () => { });
+	const toggleTerminalRef = useRef<(nodeID: string) => void>(() => { });
+	const updateTerminalInputRef = useRef<(nodeID: string, value: string) => void>(() => { });
+	const submitTerminalInputRef = useRef<(nodeID: string) => Promise<void>>(async () => { });
 
 	const edgeByPair = useMemo(() => {
 		const map = new Map<string, Edge>();
@@ -139,6 +156,7 @@ export function TopologyCanvas() {
 			const apiLinks = (await linksRes.json()) as ApiLink[];
 			const existingPositions = nodePositionsRef.current;
 			const currentSelectedNodeId = selectedNodeIdRef.current;
+			const terminalState = terminalStateRef.current;
 
 			const flowNodes: Node<SquareNodeData>[] = apiNodes.map((node, index) => ({
 				id: node.id,
@@ -152,7 +170,14 @@ export function TopologyCanvas() {
 					containerId: node.containerId,
 					isSelected: node.id === currentSelectedNodeId,
 					isBusy: false,
+					isTerminalOpen:
+						node.status === "running" ? (terminalState.get(node.id)?.isOpen ?? false) : false,
+					terminalInput: terminalState.get(node.id)?.input ?? "",
+					terminalLines: terminalState.get(node.id)?.lines ?? [],
 					onToggleRun: () => void toggleNodeRunRef.current(node.id),
+					onToggleTerminal: () => toggleTerminalRef.current(node.id),
+					onTerminalInputChange: (value: string) => updateTerminalInputRef.current(node.id, value),
+					onTerminalSubmit: () => submitTerminalInputRef.current(node.id),
 				},
 			}));
 
@@ -233,6 +258,16 @@ export function TopologyCanvas() {
 			]),
 		);
 		nodesRef.current = nodes;
+		terminalStateRef.current = new Map(
+			nodes.map((node) => [
+				node.id,
+				{
+					isOpen: node.data.isTerminalOpen,
+					input: node.data.terminalInput,
+					lines: node.data.terminalLines,
+				},
+			]),
+		);
 	}, [nodes]);
 
 	useEffect(() => {
@@ -250,6 +285,171 @@ export function TopologyCanvas() {
 	useEffect(() => {
 		toggleNodeRunRef.current = toggleNodeRun;
 	}, [toggleNodeRun]);
+
+	const toggleTerminal = useCallback((nodeID: string) => {
+		setNodes((curr) =>
+			curr.map((node) =>
+				node.id === nodeID
+					? {
+						...node,
+						data: {
+							...node.data,
+							isTerminalOpen: node.data.status === "running" ? !node.data.isTerminalOpen : false,
+						},
+					}
+					: node,
+			),
+		);
+	}, []);
+
+	const updateTerminalInput = useCallback((nodeID: string, value: string) => {
+		setNodes((curr) =>
+			curr.map((node) =>
+				node.id === nodeID
+					? {
+						...node,
+						data: {
+							...node.data,
+							terminalInput: value,
+						},
+					}
+					: node,
+			),
+		);
+	}, []);
+
+	const submitTerminalInput = useCallback(
+		async (nodeID: string) => {
+			const currentNode = nodesRef.current.find((node) => node.id === nodeID);
+			if (!currentNode) {
+				setStatus("Node not found in canvas");
+				return;
+			}
+
+			const command = currentNode.data.terminalInput.trim();
+			if (command === "") {
+				return;
+			}
+
+			if (command === "clear") {
+				setNodes((curr) =>
+					curr.map((node) =>
+						node.id === nodeID
+							? {
+									...node,
+									data: {
+										...node.data,
+										terminalInput: "",
+										terminalLines: [],
+									},
+							  }
+							: node,
+					),
+				);
+				return;
+			}
+
+			setNodes((curr) =>
+				curr.map((node) =>
+					node.id === nodeID
+						? {
+								...node,
+								data: {
+									...node.data,
+									terminalInput: "",
+								},
+						  }
+						: node,
+				),
+			);
+
+			setBusy(true);
+			try {
+				const res = await fetch(`${baseUrl}/api/v1/nodes/${nodeID}/cli`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({ command }),
+				});
+
+				if (!res.ok) {
+					const message = await parseError(res);
+					setNodes((curr) =>
+						curr.map((node) =>
+							node.id === nodeID
+								? {
+										...node,
+										data: {
+											...node.data,
+											terminalLines: [...node.data.terminalLines, `$ ${command}`, message],
+										},
+								  }
+								: node,
+						),
+					);
+					setStatus(message);
+					return;
+				}
+
+				const result = (await res.json()) as ApiCommandResponse;
+				const outputLines = [
+					...result.stdout
+						.split("\n")
+						.map((line) => line.trimEnd())
+						.filter((line) => line !== ""),
+					...result.stderr
+						.split("\n")
+						.map((line) => line.trimEnd())
+						.filter((line) => line !== ""),
+				];
+
+				setNodes((curr) =>
+					curr.map((node) =>
+						node.id === nodeID
+							? {
+									...node,
+									data: {
+										...node.data,
+										terminalLines: [...node.data.terminalLines, `$ ${command}`, ...outputLines],
+									},
+							  }
+							: node,
+					),
+				);
+				setStatus(`Executed ${result.command} on ${nodeID}`);
+			} catch (err: unknown) {
+				const message = err instanceof Error ? err.message : String(err);
+				setNodes((curr) =>
+					curr.map((node) =>
+						node.id === nodeID
+							? {
+									...node,
+									data: {
+										...node.data,
+										terminalLines: [...node.data.terminalLines, `$ ${command}`, message],
+									},
+							  }
+							: node,
+					),
+				);
+				setStatus(`Failed to execute command: ${message}`);
+			} finally {
+				setBusy(false);
+			}
+		},
+		[baseUrl, parseError],
+	);
+
+	useEffect(() => {
+		toggleTerminalRef.current = toggleTerminal;
+	}, [toggleTerminal]);
+
+	useEffect(() => {
+		updateTerminalInputRef.current = updateTerminalInput;
+	}, [updateTerminalInput]);
+
+	useEffect(() => {
+		submitTerminalInputRef.current = submitTerminalInput;
+	}, [submitTerminalInput]);
 
 	useEffect(() => {
 		selectedNodeIdRef.current = selectedNodeId;
@@ -451,6 +651,7 @@ export function TopologyCanvas() {
 						setSelectedNodeId("");
 						setNodes((curr) => applySelectedNode(curr, ""));
 					}}
+					zoomOnScroll={false}
 					connectionLineType={ConnectionLineType.Straight}
 					defaultEdgeOptions={{ type: "straight", style: EDGE_STYLE }}
 					nodesConnectable

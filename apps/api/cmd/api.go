@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/dzschnd/dsim/internal/routes"
+	"github.com/dzschnd/dsim/internal/store"
 	"github.com/joho/godotenv"
 )
 
@@ -30,7 +31,7 @@ func (app *application) run(h http.Handler) error {
 type application struct {
 	config config
 	docker *client.Client
-	store  *routes.Store
+	store  *store.Store
 	// logger
 	// db driver
 }
@@ -58,6 +59,6 @@ func (app *application) closeDocker() {
 
 func (app *application) initStore() {
 	if app.store == nil {
-		app.store = routes.NewStore()
+		app.store = store.NewStore()
 	}
 }

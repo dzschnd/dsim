@@ -2,52 +2,37 @@ package routes
 
 import (
 	"net/http"
-	"os"
 
 	"github.com/docker/docker/client"
+	"github.com/dzschnd/dsim/internal/links"
+	"github.com/dzschnd/dsim/internal/nodes"
+	"github.com/dzschnd/dsim/internal/store"
 )
 
 type Server struct {
 	docker *client.Client
-	store  *Store
+	store  *store.Store
 }
 
-func NewServer(docker *client.Client, store *Store) *Server {
+func NewServer(docker *client.Client, store *store.Store) *Server {
 	return &Server{docker: docker, store: store}
 }
 
 func NewRouter(s *Server) http.Handler {
 	r := http.NewServeMux()
+	n := nodes.NewHandler(s.docker, s.store)
+	l := links.NewHandler(s.docker, s.store)
 
-	r.HandleFunc("POST /api/v1/nodes", s.createNodeHandler)
-	r.HandleFunc("GET /api/v1/nodes", s.listNodesHandler)
-	r.HandleFunc("DELETE /api/v1/nodes/{id}", s.deleteNodeHandler)
-	r.HandleFunc("POST /api/v1/links", s.createLinkHandler)
-	r.HandleFunc("GET /api/v1/links", s.listLinksHandler)
-	r.HandleFunc("DELETE /api/v1/links/{id}", s.deleteLinkHandler)
-	r.HandleFunc("POST /api/v1/nodes/{id}/start", s.startNodeHandler)
-	r.HandleFunc("POST /api/v1/nodes/{id}/stop", s.stopNodeHandler)
+	r.HandleFunc("POST /api/v1/nodes", n.CreateNodeHandler)
+	r.HandleFunc("GET /api/v1/nodes", n.ListNodesHandler)
+	r.HandleFunc("DELETE /api/v1/nodes/{id}", n.DeleteNodeHandler)
+	r.HandleFunc("POST /api/v1/nodes/{id}/start", n.StartNodeHandler)
+	r.HandleFunc("POST /api/v1/nodes/{id}/stop", n.StopNodeHandler)
+	r.HandleFunc("POST /api/v1/nodes/{id}/cli", n.CLIHandler)
+
+	r.HandleFunc("POST /api/v1/links", l.CreateLinkHandler)
+	r.HandleFunc("GET /api/v1/links", l.ListLinksHandler)
+	r.HandleFunc("DELETE /api/v1/links/{id}", l.DeleteLinkHandler)
 
 	return corsHeader(jsonHeader(r))
-}
-
-func corsHeader(next http.Handler) http.Handler {
-	webURL := os.Getenv("WEB_BASE_URL")
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", webURL)
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
-}
-
-func jsonHeader(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json; charset=utf-8")
-		next.ServeHTTP(w, r)
-	})
 }
