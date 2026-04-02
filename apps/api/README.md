@@ -1,4 +1,7 @@
 # TODO
+- Cleanup containers/networks
+- Handle IP uniqueness
+- Make sure of node isolation between networks
 - Build containers on startup if don't exist
 - Graceful shutdown
 - ping

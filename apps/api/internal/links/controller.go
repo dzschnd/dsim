@@ -16,8 +16,8 @@ type Handler struct {
 }
 
 type createLinkRequest struct {
-	NodeAID string `json:"nodeAId"`
-	NodeBID string `json:"nodeBId"`
+	InterfaceAID string `json:"interfaceAId"`
+	InterfaceBID string `json:"interfaceBId"`
 }
 
 func NewHandler(docker *client.Client, store *store.Store) *Handler {
@@ -34,7 +34,7 @@ func (h *Handler) CreateLinkHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	link, err := h.service.createLink(ctx, strings.TrimSpace(req.NodeAID), strings.TrimSpace(req.NodeBID))
+	link, err := h.service.createLink(ctx, strings.TrimSpace(req.InterfaceAID), strings.TrimSpace(req.InterfaceBID))
 	if err != nil {
 		httputil.WriteAppError(w, err)
 		return

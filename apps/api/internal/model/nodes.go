@@ -7,12 +7,13 @@ import (
 )
 
 type Node struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Status      NodeState `json:"status"`
-	Type        NodeType  `json:"type"`
-	ContainerID string    `json:"containerId"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Status      NodeState   `json:"status"`
+	Type        NodeType    `json:"type"`
+	ContainerID string      `json:"containerId"`
+	CreatedAt   time.Time   `json:"createdAt"`
+	Interfaces  []Interface `json:"interfaces"`
 }
 
 type NodeType int

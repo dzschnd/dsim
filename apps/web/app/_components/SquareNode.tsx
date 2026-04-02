@@ -1,5 +1,7 @@
+import type { ApiInterface } from "../services/topology";
 import type { NodeProps } from "reactflow";
 
+import { NodeTerminal } from "./NodeTerminal";
 import { SideHandles } from "./SideHandles";
 
 export type SquareNodeData = {
@@ -7,6 +9,7 @@ export type SquareNodeData = {
 	type: string;
 	status: string;
 	containerId: string;
+	interfaces: ApiInterface[];
 	isSelected: boolean;
 	isBusy: boolean;
 	isTerminalOpen: boolean;
@@ -69,43 +72,12 @@ export function SquareNode({ data }: NodeProps<SquareNodeData>) {
 				<div className="text-[11px] leading-tight text-zinc-500">{data.type}</div>
 			</div>
 			{isRunning && data.isTerminalOpen ? (
-				<div className="nodrag nopan absolute bottom-full left-1/2 z-20 mb-2 flex h-44 w-64 -translate-x-1/2 flex-col overflow-hidden rounded border border-slate-800 bg-zinc-950 text-left font-mono text-[11px] text-zinc-100 shadow-lg">
-					<div className="flex-1 overflow-y-scroll px-3 py-2">
-						{data.terminalLines.length > 0 && (
-							data.terminalLines.map((line, index) => (
-								<div key={`${line}-${index}`} className="leading-5 text-zinc-300">
-									{line}
-								</div>
-							))
-						)}
-					</div>
-					<div className="flex items-center gap-2 border-t border-zinc-800 px-3 py-2">
-						<span className="text-emerald-400">$</span>
-						<input
-							type="text"
-							value={data.terminalInput}
-							onChange={(event) => {
-								event.stopPropagation();
-								data.onTerminalInputChange(event.target.value);
-							}}
-							onClick={(event) => {
-								event.stopPropagation();
-							}}
-							onPointerDown={(event) => {
-								event.stopPropagation();
-							}}
-							onKeyDown={(event) => {
-								event.stopPropagation();
-								if (event.key === "Enter") {
-									event.preventDefault();
-									data.onTerminalSubmit();
-								}
-							}}
-							className="nodrag nopan w-full border-none bg-transparent p-0 text-zinc-100 outline-none placeholder:text-zinc-600"
-							placeholder="enter command"
-						/>
-					</div>
-				</div>
+				<NodeTerminal
+					terminalLines={data.terminalLines}
+					terminalInput={data.terminalInput}
+					onInputChange={data.onTerminalInputChange}
+					onSubmit={data.onTerminalSubmit}
+				/>
 			) : null}
 			<SideHandles />
 		</div>

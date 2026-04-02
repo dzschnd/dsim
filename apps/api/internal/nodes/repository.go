@@ -57,6 +57,50 @@ func (r *repository) UpdateNodeStatus(id string, status model.NodeState) bool {
 	return true
 }
 
+func (r *repository) UpdateInterfaceAddress(nodeID, interfaceName, ipAddr string, prefixLen int) bool {
+	r.store.Mu.Lock()
+	defer r.store.Mu.Unlock()
+
+	node, ok := r.store.Nodes[nodeID]
+	if !ok {
+		return false
+	}
+
+	for index, iface := range node.Interfaces {
+		if iface.Name != interfaceName {
+			continue
+		}
+		node.Interfaces[index].IPAddr = ipAddr
+		node.Interfaces[index].PrefixLen = prefixLen
+		r.store.Nodes[nodeID] = node
+		return true
+	}
+
+	return false
+}
+
+func (r *repository) UpdateInterfaceRuntime(nodeID, interfaceID, ipAddr string, prefixLen int) bool {
+	r.store.Mu.Lock()
+	defer r.store.Mu.Unlock()
+
+	node, ok := r.store.Nodes[nodeID]
+	if !ok {
+		return false
+	}
+
+	for index, iface := range node.Interfaces {
+		if iface.ID != interfaceID {
+			continue
+		}
+		node.Interfaces[index].RuntimeIPAddr = ipAddr
+		node.Interfaces[index].RuntimePrefixLen = prefixLen
+		r.store.Nodes[nodeID] = node
+		return true
+	}
+
+	return false
+}
+
 func (r *repository) ListNodes() []model.Node {
 	r.store.Mu.RLock()
 	defer r.store.Mu.RUnlock()

@@ -14,40 +14,36 @@ import (
 
 type service struct {
 	docker *client.Client
-	repo   *repository
+	repo   *Repository
 }
 
 func newService(docker *client.Client, s *store.Store) *service {
-	return &service{docker: docker, repo: newRepository(s)}
+	return &service{docker: docker, repo: NewRepository(s)}
 }
 
-func (s *service) checkStoreExists() error {
-	if s.repo.store == nil {
-		return httputil.NewAppError(http.StatusInternalServerError, "store not initialized")
+func (s *service) createLink(ctx context.Context, interfaceAID, interfaceBID string) (model.Link, error) {
+	if interfaceAID == "" || interfaceBID == "" {
+		return model.Link{}, httputil.NewAppError(http.StatusBadRequest, "interface ids are required")
 	}
-	return nil
-}
-
-func (s *service) createLink(ctx context.Context, nodeAID, nodeBID string) (model.Link, error) {
-	if err := s.checkStoreExists(); err != nil {
-		return model.Link{}, err
-	}
-	if nodeAID == "" || nodeBID == "" {
-		return model.Link{}, httputil.NewAppError(http.StatusBadRequest, "node ids are required")
-	}
-	if nodeAID == nodeBID {
-		return model.Link{}, httputil.NewAppError(http.StatusBadRequest, "node ids must be different")
+	if interfaceAID == interfaceBID {
+		return model.Link{}, httputil.NewAppError(http.StatusBadRequest, "interface ids must be different")
 	}
 
-	nodeA, ok := s.repo.GetNode(nodeAID)
+	nodeA, ifaceA, ok := s.repo.GetNodeByInterface(interfaceAID)
 	if !ok {
-		return model.Link{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+		return model.Link{}, httputil.NewAppError(http.StatusNotFound, "interface not found")
 	}
-	nodeB, ok := s.repo.GetNode(nodeBID)
+	nodeB, ifaceB, ok := s.repo.GetNodeByInterface(interfaceBID)
 	if !ok {
-		return model.Link{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+		return model.Link{}, httputil.NewAppError(http.StatusNotFound, "interface not found")
 	}
-	if s.repo.HasLink(nodeAID, nodeBID) {
+	if nodeA.ID == nodeB.ID {
+		return model.Link{}, httputil.NewAppError(http.StatusBadRequest, "interfaces must belong to different nodes")
+	}
+	if ifaceA.LinkID != "" || ifaceB.LinkID != "" {
+		return model.Link{}, httputil.NewAppError(http.StatusConflict, "interface already connected")
+	}
+	if s.repo.HasLink(interfaceAID, interfaceBID) {
 		return model.Link{}, httputil.NewAppError(http.StatusConflict, "link already exists")
 	}
 	if nodeA.ContainerID == "" || nodeB.ContainerID == "" {
@@ -73,30 +69,60 @@ func (s *service) createLink(ctx context.Context, nodeAID, nodeBID string) (mode
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "network connect failed")
 	}
 
+	inspectA, err := s.docker.ContainerInspect(ctx, nodeA.ContainerID)
+	if err != nil {
+		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeB.ContainerID, true)
+		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
+		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
+	}
+
+	endpointA, ok := inspectA.NetworkSettings.Networks[networkName]
+	if !ok || endpointA == nil {
+		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeB.ContainerID, true)
+		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
+		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "runtime network endpoint missing")
+	}
+
+	inspectB, err := s.docker.ContainerInspect(ctx, nodeB.ContainerID)
+	if err != nil {
+		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeB.ContainerID, true)
+		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
+		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
+	}
+
+	endpointB, ok := inspectB.NetworkSettings.Networks[networkName]
+	if !ok || endpointB == nil {
+		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeB.ContainerID, true)
+		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
+		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "runtime network endpoint missing")
+	}
+
 	link := model.Link{
-		ID:          linkID,
-		NodeAID:     nodeAID,
-		NodeBID:     nodeBID,
-		NetworkID:   networkResp.ID,
-		NetworkName: networkName,
-		CreatedAt:   time.Now().UTC(),
+		ID:           linkID,
+		InterfaceAID: interfaceAID,
+		InterfaceBID: interfaceBID,
+		NetworkID:    networkResp.ID,
+		NetworkName:  networkName,
+		CreatedAt:    time.Now().UTC(),
 	}
 	s.repo.AddLink(link)
+	s.repo.SetInterfaceLink(interfaceAID, linkID)
+	s.repo.SetInterfaceLink(interfaceBID, linkID)
+	s.repo.SetInterfaceRuntime(interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen)
+	s.repo.SetInterfaceRuntime(interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen)
 
 	return link, nil
 }
 
 func (s *service) listLinks() ([]model.Link, error) {
-	if err := s.checkStoreExists(); err != nil {
-		return nil, err
-	}
 	return s.repo.ListLinks(), nil
 }
 
 func (s *service) deleteLink(ctx context.Context, linkID string) error {
-	if err := s.checkStoreExists(); err != nil {
-		return err
-	}
 	if linkID == "" {
 		return httputil.NewAppError(http.StatusBadRequest, "link id required")
 	}
@@ -107,6 +133,10 @@ func (s *service) deleteLink(ctx context.Context, linkID string) error {
 	}
 
 	s.removeLinkNetwork(ctx, link)
+	s.repo.SetInterfaceLink(link.InterfaceAID, "")
+	s.repo.SetInterfaceLink(link.InterfaceBID, "")
+	s.repo.SetInterfaceRuntime(link.InterfaceAID, "", 0)
+	s.repo.SetInterfaceRuntime(link.InterfaceBID, "", 0)
 	s.repo.DeleteLink(linkID)
 	return nil
 }
@@ -115,10 +145,10 @@ func (s *service) removeLinkNetwork(ctx context.Context, link model.Link) {
 	if link.NetworkID == "" {
 		return
 	}
-	if nodeA, ok := s.repo.GetNode(link.NodeAID); ok && nodeA.ContainerID != "" {
+	if nodeA, _, ok := s.repo.GetNodeByInterface(link.InterfaceAID); ok && nodeA.ContainerID != "" {
 		_ = s.docker.NetworkDisconnect(ctx, link.NetworkID, nodeA.ContainerID, true)
 	}
-	if nodeB, ok := s.repo.GetNode(link.NodeBID); ok && nodeB.ContainerID != "" {
+	if nodeB, _, ok := s.repo.GetNodeByInterface(link.InterfaceBID); ok && nodeB.ContainerID != "" {
 		_ = s.docker.NetworkDisconnect(ctx, link.NetworkID, nodeB.ContainerID, true)
 	}
 	_ = s.docker.NetworkRemove(ctx, link.NetworkID)

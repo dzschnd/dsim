@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/dzschnd/dsim/internal/httputil"
+	"github.com/dzschnd/dsim/internal/links"
 	"github.com/dzschnd/dsim/internal/model"
 	"github.com/dzschnd/dsim/internal/store"
 )
@@ -39,7 +40,9 @@ type commandResponse struct {
 }
 
 func NewHandler(docker *client.Client, store *store.Store) *Handler {
-	return &Handler{docker: docker, service: newService(docker, store)}
+	nodeRepo := newRepository(store)
+	linkRepo := links.NewRepository(store)
+	return &Handler{docker: docker, service: newService(docker, nodeRepo, linkRepo)}
 }
 
 func (h *Handler) CreateNodeHandler(w http.ResponseWriter, r *http.Request) {

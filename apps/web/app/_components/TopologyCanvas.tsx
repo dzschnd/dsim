@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactFlow, {
-	addEdge,
 	Background,
 	Connection,
 	ConnectionLineType,
@@ -19,35 +18,19 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 
 import { SquareNode, type SquareNodeData } from "./SquareNode";
-
-type ApiNode = {
-	id: string;
-	name: string;
-	status: string;
-	type: string;
-	containerId: string;
-	createdAt: string;
-};
-
-type ApiLink = {
-	id: string;
-	nodeAId: string;
-	nodeBId: string;
-	networkId: string;
-	networkName: string;
-	createdAt: string;
-};
-
-type ApiError = {
-	error: string;
-};
-
-type ApiCommandResponse = {
-	command: string;
-	stdout: string;
-	stderr: string;
-	exitCode: number;
-};
+import {
+	type ApiCommandResponse,
+	type ApiInterface,
+	type ApiLink,
+	createHostNode,
+	createLink,
+	deleteLink,
+	deleteNode,
+	fetchTopology,
+	runNodeCommand,
+	startNode,
+	stopNode,
+} from "../services/topology";
 
 type TerminalState = {
 	isOpen: boolean;
@@ -55,7 +38,13 @@ type TerminalState = {
 	lines: string[];
 };
 
-const NODE_SIZE = 160;
+type PendingConnection = {
+	sourceNodeID: string;
+	targetNodeID: string;
+	sourceInterfaceID: string;
+	targetInterfaceID: string;
+};
+
 const EDGE_STYLE = {
 	stroke: "#334155",
 	strokeWidth: 3,
@@ -84,6 +73,17 @@ function applySelectedNode(
 	}));
 }
 
+function getAvailableInterfaces(interfaces: ApiInterface[]): ApiInterface[] {
+	return interfaces.filter((iface) => iface.linkId === "");
+}
+
+function findNodeIDByInterfaceID(nodes: Node<SquareNodeData>[], interfaceID: string): string {
+	const node = nodes.find((candidate) =>
+		candidate.data.interfaces.some((iface) => iface.id === interfaceID),
+	);
+	return node?.id ?? "";
+}
+
 const nodeTypes = {
 	square: SquareNode,
 };
@@ -94,6 +94,7 @@ export function TopologyCanvas() {
 	const [nodes, setNodes] = useState<Node<SquareNodeData>[]>([]);
 	const [edges, setEdges] = useState<Edge[]>([]);
 	const [selectedNodeId, setSelectedNodeId] = useState<string>("");
+	const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
 	const [busy, setBusy] = useState<boolean>(false);
 	const [status, setStatus] = useState<string>("");
 	const selectedNodeIdRef = useRef<string>("");
@@ -118,42 +119,11 @@ export function TopologyCanvas() {
 		return map;
 	}, [edges]);
 
-	const parseError = useCallback(async (res: Response) => {
-		const text = await res.text();
-		if (!text) {
-			return `${res.status} ${res.statusText}`;
-		}
-		try {
-			const parsed = JSON.parse(text) as ApiError;
-			if (parsed.error) {
-				return `${res.status}: ${parsed.error}`;
-			}
-			return `${res.status} ${res.statusText}`;
-		} catch {
-			return `${res.status} ${res.statusText}`;
-		}
-	}, []);
-
 	const loadTopology = useCallback(async () => {
 		setBusy(true);
 		setStatus("Loading topology...");
 		try {
-			const [nodesRes, linksRes] = await Promise.all([
-				fetch(`${baseUrl}/api/v1/nodes`),
-				fetch(`${baseUrl}/api/v1/links`),
-			]);
-
-			if (!nodesRes.ok) {
-				setStatus(await parseError(nodesRes));
-				return;
-			}
-			if (!linksRes.ok) {
-				setStatus(await parseError(linksRes));
-				return;
-			}
-
-			const apiNodes = (await nodesRes.json()) as ApiNode[];
-			const apiLinks = (await linksRes.json()) as ApiLink[];
+			const { nodes: apiNodes, links: apiLinks } = await fetchTopology(baseUrl);
 			const existingPositions = nodePositionsRef.current;
 			const currentSelectedNodeId = selectedNodeIdRef.current;
 			const terminalState = terminalStateRef.current;
@@ -168,6 +138,7 @@ export function TopologyCanvas() {
 					status: node.status,
 					type: node.type,
 					containerId: node.containerId,
+					interfaces: node.interfaces,
 					isSelected: node.id === currentSelectedNodeId,
 					isBusy: false,
 					isTerminalOpen:
@@ -184,25 +155,28 @@ export function TopologyCanvas() {
 			const flowEdges: Edge[] = apiLinks.map((link) => ({
 				id: link.id,
 				type: "straight",
-				source: link.nodeAId,
-				target: link.nodeBId,
+				source: findNodeIDByInterfaceID(flowNodes, link.interfaceAId),
+				target: findNodeIDByInterfaceID(flowNodes, link.interfaceBId),
 				style: EDGE_STYLE,
 				data: {
 					linkId: link.id,
 					networkId: link.networkId,
 					networkName: link.networkName,
+					interfaceAId: link.interfaceAId,
+					interfaceBId: link.interfaceBId,
 				},
 			}));
 
 			setNodes(applySelectedNode(flowNodes, currentSelectedNodeId));
 			setEdges(flowEdges);
 			setStatus(`Loaded ${flowNodes.length} nodes, ${flowEdges.length} links`);
-		} catch {
-			setStatus("Failed to load topolgy");
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			setStatus(message || "Failed to load topolgy");
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl, parseError]);
+	}, [baseUrl]);
 
 	const toggleNodeRun = useCallback(
 		async (nodeID: string) => {
@@ -217,12 +191,10 @@ export function TopologyCanvas() {
 			setBusy(true);
 			setStatus(`${action === "start" ? "Starting" : "Stopping"} node ${nodeID}...`);
 			try {
-				const res = await fetch(`${baseUrl}/api/v1/nodes/${nodeID}/${action}`, {
-					method: "POST",
-				});
-				if (!res.ok) {
-					setStatus(await parseError(res));
-					return;
+				if (action === "start") {
+					await startNode(baseUrl, nodeID);
+				} else {
+					await stopNode(baseUrl, nodeID);
 				}
 				try {
 					await loadTopology();
@@ -240,7 +212,7 @@ export function TopologyCanvas() {
 				setBusy(false);
 			}
 		},
-		[baseUrl, loadTopology, parseError],
+		[baseUrl, loadTopology],
 	);
 
 	useEffect(() => {
@@ -365,32 +337,7 @@ export function TopologyCanvas() {
 
 			setBusy(true);
 			try {
-				const res = await fetch(`${baseUrl}/api/v1/nodes/${nodeID}/cli`, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ command }),
-				});
-
-				if (!res.ok) {
-					const message = await parseError(res);
-					setNodes((curr) =>
-						curr.map((node) =>
-							node.id === nodeID
-								? {
-										...node,
-										data: {
-											...node.data,
-											terminalLines: [...node.data.terminalLines, `$ ${command}`, message],
-										},
-								  }
-								: node,
-						),
-					);
-					setStatus(message);
-					return;
-				}
-
-				const result = (await res.json()) as ApiCommandResponse;
+				const result: ApiCommandResponse = await runNodeCommand(baseUrl, nodeID, command);
 				const outputLines = [
 					...result.stdout
 						.split("\n")
@@ -436,7 +383,7 @@ export function TopologyCanvas() {
 				setBusy(false);
 			}
 		},
-		[baseUrl, parseError],
+		[baseUrl],
 	);
 
 	useEffect(() => {
@@ -472,22 +419,15 @@ export function TopologyCanvas() {
 		setBusy(true);
 		setStatus("Creating node...");
 		try {
-			const res = await fetch(`${baseUrl}/api/v1/nodes`, {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ type: "host" }),
-			});
-			if (!res.ok) {
-				setStatus(await parseError(res));
-				return;
-			}
+			await createHostNode(baseUrl);
 			await loadTopology();
-		} catch {
-			setStatus("Failed to create node");
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			setStatus(message || "Failed to create node");
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl, loadTopology, parseError]);
+	}, [baseUrl, loadTopology]);
 
 	const deleteSelectedNode = useCallback(async () => {
 		if (!selectedNodeId) {
@@ -498,22 +438,17 @@ export function TopologyCanvas() {
 		setBusy(true);
 		setStatus(`Deleting node ${selectedNodeId}...`);
 		try {
-			const res = await fetch(`${baseUrl}/api/v1/nodes/${selectedNodeId}`, {
-				method: "DELETE",
-			});
-			if (!res.ok) {
-				setStatus(await parseError(res));
-				return;
-			}
+			await deleteNode(baseUrl, selectedNodeId);
 			setSelectedNodeId("");
 			setNodes((curr) => applySelectedNode(curr, ""));
 			await loadTopology();
-		} catch {
-			setStatus("Failed to delete node");
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			setStatus(message || "Failed to delete node");
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl, loadTopology, parseError, selectedNodeId]);
+	}, [baseUrl, loadTopology, selectedNodeId]);
 
 	useEffect(() => {
 		function onKeyDown(event: KeyboardEvent) {
@@ -557,56 +492,91 @@ export function TopologyCanvas() {
 			try {
 				if (existing) {
 					setStatus(`Removing link ${existing.id}...`);
-					const delRes = await fetch(`${baseUrl}/api/v1/links/${existing.id}`, {
-						method: "DELETE",
-					});
-					if (!delRes.ok) {
-						setStatus(await parseError(delRes));
-						return;
-					}
-					setEdges((curr) => curr.filter((edge) => edge.id !== existing.id));
+					await deleteLink(baseUrl, existing.id);
+					await loadTopology();
 					setStatus("Link removed");
 					return;
 				}
 
-				setStatus("Creating link...");
-				const createRes = await fetch(`${baseUrl}/api/v1/links`, {
-					method: "POST",
-					headers: { "Content-Type": "application/json" },
-					body: JSON.stringify({ nodeAId: source, nodeBId: target }),
-				});
-				if (!createRes.ok) {
-					setStatus(await parseError(createRes));
+				const sourceNode = nodesRef.current.find((node) => node.id === source);
+				const targetNode = nodesRef.current.find((node) => node.id === target);
+				if (!sourceNode || !targetNode) {
+					setStatus("Node not found in canvas");
 					return;
 				}
 
-				const link = (await createRes.json()) as ApiLink;
-				setEdges((curr) =>
-					addEdge(
-						{
-							id: link.id,
-							type: "straight",
-							source: link.nodeAId,
-							target: link.nodeBId,
-							style: EDGE_STYLE,
-							data: {
-								linkId: link.id,
-								networkId: link.networkId,
-								networkName: link.networkName,
-							},
-						},
-						curr,
-					),
-				);
-				setStatus("Link created");
-			} catch {
-				setStatus("Failed to update link");
+				const sourceInterfaces = getAvailableInterfaces(sourceNode.data.interfaces);
+				const targetInterfaces = getAvailableInterfaces(targetNode.data.interfaces);
+				if (sourceInterfaces.length === 0 || targetInterfaces.length === 0) {
+					setStatus("No available interfaces on one of the nodes");
+					return;
+				}
+
+				setPendingConnection({
+					sourceNodeID: source,
+					targetNodeID: target,
+					sourceInterfaceID: sourceInterfaces[0].id,
+					targetInterfaceID: targetInterfaces[0].id,
+				});
+				setStatus("Choose interfaces for the new link");
+			} catch (err: unknown) {
+				const message = err instanceof Error ? err.message : String(err);
+				setStatus(message || "Failed to update link");
 			} finally {
 				setBusy(false);
 			}
 		},
-		[baseUrl, edgeByPair, parseError],
+		[baseUrl, edgeByPair, loadTopology],
 	);
+
+	const confirmPendingConnection = useCallback(async () => {
+		if (!pendingConnection) {
+			return;
+		}
+
+		setBusy(true);
+		setStatus("Creating link...");
+		try {
+			await createLink(
+				baseUrl,
+				pendingConnection.sourceInterfaceID,
+				pendingConnection.targetInterfaceID,
+			);
+			setPendingConnection(null);
+			await loadTopology();
+			setStatus("Link created");
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			setStatus(message || "Failed to create link");
+		} finally {
+			setBusy(false);
+		}
+	}, [baseUrl, loadTopology, pendingConnection]);
+
+	const updatePendingConnection = useCallback(
+		(key: "sourceInterfaceID" | "targetInterfaceID", value: string) => {
+			setPendingConnection((current) =>
+				current
+					? {
+							...current,
+							[key]: value,
+						}
+					: current,
+			);
+		},
+		[],
+	);
+
+	const sourceInterfaceOptions = pendingConnection
+		? getAvailableInterfaces(
+				nodes.find((node) => node.id === pendingConnection.sourceNodeID)?.data.interfaces ?? [],
+			)
+		: [];
+	const targetInterfaceOptions = pendingConnection
+		? getAvailableInterfaces(
+				nodes.find((node) => node.id === pendingConnection.targetNodeID)?.data.interfaces ?? [],
+			)
+		: [];
 
 	return (
 		<div className="h-screen w-screen bg-zinc-100 text-zinc-900">
@@ -634,6 +604,62 @@ export function TopologyCanvas() {
 			</header>
 
 			<main className="h-full w-full pt-14">
+				{pendingConnection ? (
+					<div className="fixed left-1/2 top-20 z-30 w-[360px] -translate-x-1/2 rounded border border-zinc-300 bg-white p-4 shadow-lg">
+						<div className="mb-3 text-sm font-semibold text-zinc-900">Choose interfaces</div>
+						<div className="mb-3 flex flex-col gap-1">
+							<label className="text-xs text-zinc-600" htmlFor="source-interface">
+								Source interface
+							</label>
+							<select
+								id="source-interface"
+								value={pendingConnection.sourceInterfaceID}
+								onChange={(event) => updatePendingConnection("sourceInterfaceID", event.target.value)}
+								className="rounded border border-zinc-300 px-2 py-1 text-sm"
+							>
+								{sourceInterfaceOptions.map((iface) => (
+									<option key={iface.id} value={iface.id}>
+										{iface.name}
+									</option>
+								))}
+							</select>
+						</div>
+						<div className="mb-4 flex flex-col gap-1">
+							<label className="text-xs text-zinc-600" htmlFor="target-interface">
+								Target interface
+							</label>
+							<select
+								id="target-interface"
+								value={pendingConnection.targetInterfaceID}
+								onChange={(event) => updatePendingConnection("targetInterfaceID", event.target.value)}
+								className="rounded border border-zinc-300 px-2 py-1 text-sm"
+							>
+								{targetInterfaceOptions.map((iface) => (
+									<option key={iface.id} value={iface.id}>
+										{iface.name}
+									</option>
+								))}
+							</select>
+						</div>
+						<div className="flex justify-end gap-2">
+							<button
+								type="button"
+								onClick={() => setPendingConnection(null)}
+								className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-100"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onClick={() => void confirmPendingConnection()}
+								disabled={busy}
+								className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
+							>
+								Create link
+							</button>
+						</div>
+					</div>
+				) : null}
 				<ReactFlow
 					nodes={nodes}
 					edges={edges}
