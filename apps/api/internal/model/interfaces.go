@@ -8,4 +8,5 @@ type Interface struct {
 	PrefixLen        int    `json:"prefixLength"`
 	RuntimeIPAddr    string `json:"runtimeIpAddress"`
 	RuntimePrefixLen int    `json:"runtimePrefixLength"`
+	RuntimeName      string `json:"runtimeName"`
 }

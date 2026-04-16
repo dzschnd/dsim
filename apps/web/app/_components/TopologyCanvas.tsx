@@ -22,7 +22,7 @@ import {
 	type ApiCommandResponse,
 	type ApiInterface,
 	type ApiLink,
-	createHostNode,
+	createNode as createNodeRequest,
 	createLink,
 	deleteLink,
 	deleteNode,
@@ -90,6 +90,7 @@ const nodeTypes = {
 
 export function TopologyCanvas() {
 	const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+	const [createNodeType, setCreateNodeType] = useState<"host" | "switch" | "router">("host");
 
 	const [nodes, setNodes] = useState<Node<SquareNodeData>[]>([]);
 	const [edges, setEdges] = useState<Edge[]>([]);
@@ -417,9 +418,9 @@ export function TopologyCanvas() {
 
 	const createNode = useCallback(async () => {
 		setBusy(true);
-		setStatus("Creating node...");
+		setStatus(`Creating ${createNodeType}...`);
 		try {
-			await createHostNode(baseUrl);
+			await createNodeRequest(baseUrl, createNodeType);
 			await loadTopology();
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : String(err);
@@ -427,7 +428,7 @@ export function TopologyCanvas() {
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl, loadTopology]);
+	}, [baseUrl, createNodeType, loadTopology]);
 
 	const deleteSelectedNode = useCallback(async () => {
 		if (!selectedNodeId) {
@@ -581,6 +582,18 @@ export function TopologyCanvas() {
 	return (
 		<div className="h-screen w-screen bg-zinc-100 text-zinc-900">
 			<header className="fixed left-0 top-0 z-20 flex w-full items-center gap-3 border-b border-zinc-300 bg-white px-4 py-3">
+				<select
+					value={createNodeType}
+					onChange={(event) =>
+						setCreateNodeType(event.target.value as "host" | "switch" | "router")
+					}
+					disabled={busy}
+					className="rounded border border-zinc-700 bg-white px-3 py-1 text-sm disabled:opacity-60"
+				>
+					<option value="host">Host</option>
+					<option value="switch">Switch</option>
+					<option value="router">Router</option>
+				</select>
 				<button
 					type="button"
 					onClick={() => void createNode()}

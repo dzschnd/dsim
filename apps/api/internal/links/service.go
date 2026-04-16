@@ -1,12 +1,18 @@
 package links
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/dzschnd/dsim/internal/httputil"
 	"github.com/dzschnd/dsim/internal/model"
 	"github.com/dzschnd/dsim/internal/store"
@@ -15,6 +21,16 @@ import (
 type service struct {
 	docker *client.Client
 	repo   *Repository
+}
+
+type runtimeAddrInfo struct {
+	Local     string `json:"local"`
+	PrefixLen int    `json:"prefixlen"`
+}
+
+type runtimeInterfaceInfo struct {
+	IfName   string            `json:"ifname"`
+	AddrInfo []runtimeAddrInfo `json:"addr_info"`
 }
 
 func newService(docker *client.Client, s *store.Store) *service {
@@ -114,6 +130,12 @@ func (s *service) createLink(ctx context.Context, interfaceAID, interfaceBID str
 	s.repo.SetInterfaceLink(interfaceBID, linkID)
 	s.repo.SetInterfaceRuntime(interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen)
 	s.repo.SetInterfaceRuntime(interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen)
+	if err := s.realizeLinkedInterface(ctx, nodeA.ContainerID, interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen, ifaceA.IPAddr, ifaceA.PrefixLen); err != nil {
+		return model.Link{}, err
+	}
+	if err := s.realizeLinkedInterface(ctx, nodeB.ContainerID, interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen, ifaceB.IPAddr, ifaceB.PrefixLen); err != nil {
+		return model.Link{}, err
+	}
 
 	return link, nil
 }
@@ -137,6 +159,8 @@ func (s *service) deleteLink(ctx context.Context, linkID string) error {
 	s.repo.SetInterfaceLink(link.InterfaceBID, "")
 	s.repo.SetInterfaceRuntime(link.InterfaceAID, "", 0)
 	s.repo.SetInterfaceRuntime(link.InterfaceBID, "", 0)
+	s.repo.SetInterfaceRuntimeName(link.InterfaceAID, "")
+	s.repo.SetInterfaceRuntimeName(link.InterfaceBID, "")
 	s.repo.DeleteLink(linkID)
 	return nil
 }
@@ -152,4 +176,144 @@ func (s *service) removeLinkNetwork(ctx context.Context, link model.Link) {
 		_ = s.docker.NetworkDisconnect(ctx, link.NetworkID, nodeB.ContainerID, true)
 	}
 	_ = s.docker.NetworkRemove(ctx, link.NetworkID)
+}
+
+func (s *service) realizeLinkedInterface(
+	ctx context.Context,
+	containerID string,
+	interfaceID string,
+	runtimeIP string,
+	runtimePrefixLen int,
+	logicalIP string,
+	logicalPrefixLen int,
+) error {
+	inspect, err := s.docker.ContainerInspect(ctx, containerID)
+	if err != nil {
+		if client.IsErrNotFound(err) {
+			return httputil.NewAppError(http.StatusNotFound, "container not found")
+		}
+		return httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
+	}
+	if inspect.State == nil || !inspect.State.Running {
+		return nil
+	}
+
+	runtimeName, err := resolveRuntimeInterfaceName(ctx, s.docker, containerID, runtimeIP, runtimePrefixLen)
+	if err != nil {
+		return err
+	}
+	if !s.repo.SetInterfaceRuntimeName(interfaceID, runtimeName) {
+		return httputil.NewAppError(http.StatusInternalServerError, "failed to persist runtime interface name")
+	}
+	if logicalIP == "" || logicalPrefixLen == 0 {
+		return nil
+	}
+
+	cidr := logicalIP + "/" + strconv.Itoa(logicalPrefixLen)
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		containerID,
+		[]string{"ip", "addr", "replace", cidr, "dev", runtimeName},
+		"failed to apply runtime interface address",
+	); err != nil {
+		return err
+	}
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		containerID,
+		[]string{"ip", "link", "set", runtimeName, "up"},
+		"failed to bring runtime interface up",
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func resolveRuntimeInterfaceName(
+	ctx context.Context,
+	docker *client.Client,
+	containerID string,
+	runtimeIP string,
+	runtimePrefixLen int,
+) (string, error) {
+	stdout, err := execInContainerChecked(
+		ctx,
+		docker,
+		containerID,
+		[]string{"ip", "-j", "addr", "show"},
+		"failed to inspect runtime interfaces",
+	)
+	if err != nil {
+		return "", err
+	}
+
+	var runtimeIfaces []runtimeInterfaceInfo
+	if err := json.Unmarshal([]byte(stdout), &runtimeIfaces); err != nil {
+		return "", httputil.NewAppError(http.StatusInternalServerError, "runtime interface inspect parse failed")
+	}
+
+	targetAddr := runtimeIP + "/" + strconv.Itoa(runtimePrefixLen)
+	for _, runtimeIface := range runtimeIfaces {
+		for _, addrInfo := range runtimeIface.AddrInfo {
+			if addrInfo.Local+"/"+strconv.Itoa(addrInfo.PrefixLen) == targetAddr {
+				return runtimeIface.IfName, nil
+			}
+		}
+	}
+
+	return "", httputil.NewAppError(http.StatusInternalServerError, "runtime interface name resolution failed")
+}
+
+func execInContainer(ctx context.Context, docker *client.Client, containerID string, execCmd []string) (string, string, int, error) {
+	execResp, err := docker.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+		AttachStdout: true,
+		AttachStderr: true,
+		Cmd:          execCmd,
+	})
+	if err != nil {
+		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec create failed")
+	}
+
+	attachResp, err := docker.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec attach failed")
+	}
+	defer attachResp.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if _, err := stdcopy.StdCopy(&stdout, &stderr, attachResp.Reader); err != nil {
+		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec read failed")
+	}
+
+	execInspect, err := docker.ContainerExecInspect(ctx, execResp.ID)
+	if err != nil {
+		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec inspect failed")
+	}
+
+	return stdout.String(), stderr.String(), execInspect.ExitCode, nil
+}
+
+func execInContainerChecked(
+	ctx context.Context,
+	docker *client.Client,
+	containerID string,
+	execCmd []string,
+	failureMessage string,
+) (string, error) {
+	stdout, stderr, exitCode, err := execInContainer(ctx, docker, containerID, execCmd)
+	if err != nil {
+		return "", err
+	}
+	if exitCode != 0 {
+		message := failureMessage
+		if trimmed := strings.TrimSpace(stderr); trimmed != "" {
+			message += ": " + trimmed
+		}
+		return "", httputil.NewAppError(http.StatusInternalServerError, message)
+	}
+	return stdout, nil
 }

@@ -19,6 +19,9 @@ func (r *repository) AddNode(node model.Node) {
 	r.store.Mu.Lock()
 	defer r.store.Mu.Unlock()
 	r.store.Nodes[node.ID] = node
+	for _, iface := range node.Interfaces {
+		r.store.InterfaceOwnerIndex[iface.ID] = node.ID
+	}
 }
 
 func (r *repository) HasNode(id string) bool {
@@ -38,8 +41,12 @@ func (r *repository) GetNode(id string) (model.Node, bool) {
 func (r *repository) DeleteNode(id string) bool {
 	r.store.Mu.Lock()
 	defer r.store.Mu.Unlock()
-	if _, ok := r.store.Nodes[id]; !ok {
+	node, ok := r.store.Nodes[id]
+	if !ok {
 		return false
+	}
+	for _, iface := range node.Interfaces {
+		delete(r.store.InterfaceOwnerIndex, iface.ID)
 	}
 	delete(r.store.Nodes, id)
 	return true
@@ -83,6 +90,11 @@ func (r *repository) UpdateInterfaceRuntime(nodeID, interfaceID, ipAddr string, 
 	r.store.Mu.Lock()
 	defer r.store.Mu.Unlock()
 
+	ownerID, ok := r.store.InterfaceOwnerIndex[interfaceID]
+	if !ok || ownerID != nodeID {
+		return false
+	}
+
 	node, ok := r.store.Nodes[nodeID]
 	if !ok {
 		return false
@@ -99,6 +111,55 @@ func (r *repository) UpdateInterfaceRuntime(nodeID, interfaceID, ipAddr string, 
 	}
 
 	return false
+}
+
+func (r *repository) UpdateInterfaceRuntimeName(nodeID, interfaceID, runtimeName string) bool {
+	r.store.Mu.Lock()
+	defer r.store.Mu.Unlock()
+
+	ownerID, ok := r.store.InterfaceOwnerIndex[interfaceID]
+	if !ok || ownerID != nodeID {
+		return false
+	}
+
+	node, ok := r.store.Nodes[nodeID]
+	if !ok {
+		return false
+	}
+
+	for index, iface := range node.Interfaces {
+		if iface.ID != interfaceID {
+			continue
+		}
+		node.Interfaces[index].RuntimeName = runtimeName
+		r.store.Nodes[nodeID] = node
+		return true
+	}
+
+	return false
+}
+
+func (r *repository) UpsertRoute(nodeID string, route model.Route) bool {
+	r.store.Mu.Lock()
+	defer r.store.Mu.Unlock()
+
+	node, ok := r.store.Nodes[nodeID]
+	if !ok {
+		return false
+	}
+
+	for index, existing := range node.Routes {
+		if existing.Destination != route.Destination {
+			continue
+		}
+		node.Routes[index] = route
+		r.store.Nodes[nodeID] = node
+		return true
+	}
+
+	node.Routes = append(node.Routes, route)
+	r.store.Nodes[nodeID] = node
+	return true
 }
 
 func (r *repository) ListNodes() []model.Node {

@@ -14,6 +14,7 @@ type Node struct {
 	ContainerID string      `json:"containerId"`
 	CreatedAt   time.Time   `json:"createdAt"`
 	Interfaces  []Interface `json:"interfaces"`
+	Routes      []Route     `json:"routes"`
 }
 
 type NodeType int

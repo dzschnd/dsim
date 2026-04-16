@@ -75,11 +75,11 @@ export async function fetchTopology(baseUrl: string): Promise<{
 	};
 }
 
-export async function createHostNode(baseUrl: string): Promise<void> {
+export async function createNode(baseUrl: string, type: "host" | "switch" | "router"): Promise<void> {
 	const res = await fetch(`${baseUrl}/api/v1/nodes`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ type: "host" }),
+		body: JSON.stringify({ type }),
 	});
 
 	if (!res.ok) {

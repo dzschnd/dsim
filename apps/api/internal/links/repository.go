@@ -94,11 +94,19 @@ func (r *Repository) GetNodeByInterface(interfaceID string) (model.Node, model.I
 	r.store.Mu.RLock()
 	defer r.store.Mu.RUnlock()
 
-	for _, node := range r.store.Nodes {
-		for _, iface := range node.Interfaces {
-			if iface.ID == interfaceID {
-				return node, iface, true
-			}
+	nodeID, ok := r.store.InterfaceOwnerIndex[interfaceID]
+	if !ok {
+		return model.Node{}, model.Interface{}, false
+	}
+
+	node, ok := r.store.Nodes[nodeID]
+	if !ok {
+		return model.Node{}, model.Interface{}, false
+	}
+
+	for _, iface := range node.Interfaces {
+		if iface.ID == interfaceID {
+			return node, iface, true
 		}
 	}
 
@@ -115,47 +123,79 @@ func (r *Repository) SetInterfaceRuntime(interfaceID, ipAddr string, prefixLen i
 	r.store.Mu.Lock()
 	defer r.store.Mu.Unlock()
 
-	for nodeID, node := range r.store.Nodes {
-		for index, iface := range node.Interfaces {
-			if iface.ID != interfaceID {
-				continue
-			}
-			node.Interfaces[index].RuntimeIPAddr = ipAddr
-			node.Interfaces[index].RuntimePrefixLen = prefixLen
-			r.store.Nodes[nodeID] = node
-			return true
+	nodeID, ok := r.store.InterfaceOwnerIndex[interfaceID]
+	if !ok {
+		return false
+	}
+
+	node, ok := r.store.Nodes[nodeID]
+	if !ok {
+		return false
+	}
+
+	for index, iface := range node.Interfaces {
+		if iface.ID != interfaceID {
+			continue
 		}
+		node.Interfaces[index].RuntimeIPAddr = ipAddr
+		node.Interfaces[index].RuntimePrefixLen = prefixLen
+		r.store.Nodes[nodeID] = node
+		return true
+	}
+
+	return false
+}
+
+func (r *Repository) SetInterfaceRuntimeName(interfaceID, runtimeName string) bool {
+	r.store.Mu.Lock()
+	defer r.store.Mu.Unlock()
+
+	nodeID, ok := r.store.InterfaceOwnerIndex[interfaceID]
+	if !ok {
+		return false
+	}
+
+	node, ok := r.store.Nodes[nodeID]
+	if !ok {
+		return false
+	}
+
+	for index, iface := range node.Interfaces {
+		if iface.ID != interfaceID {
+			continue
+		}
+		node.Interfaces[index].RuntimeName = runtimeName
+		r.store.Nodes[nodeID] = node
+		return true
 	}
 
 	return false
 }
 
 func (r *Repository) setInterfaceLinkLocked(interfaceID, linkID string) bool {
-	for nodeID, node := range r.store.Nodes {
-		for index, iface := range node.Interfaces {
-			if iface.ID != interfaceID {
-				continue
-			}
-			node.Interfaces[index].LinkID = linkID
-			r.store.Nodes[nodeID] = node
-			return true
+	nodeID, ok := r.store.InterfaceOwnerIndex[interfaceID]
+	if !ok {
+		return false
+	}
+
+	node, ok := r.store.Nodes[nodeID]
+	if !ok {
+		return false
+	}
+
+	for index, iface := range node.Interfaces {
+		if iface.ID != interfaceID {
+			continue
 		}
+		node.Interfaces[index].LinkID = linkID
+		r.store.Nodes[nodeID] = node
+		return true
 	}
 
 	return false
 }
 
 func (r *Repository) nodeOwnsInterfaceLocked(nodeID, interfaceID string) bool {
-	node, ok := r.store.Nodes[nodeID]
-	if !ok {
-		return false
-	}
-
-	for _, iface := range node.Interfaces {
-		if iface.ID == interfaceID {
-			return true
-		}
-	}
-
-	return false
+	ownerID, ok := r.store.InterfaceOwnerIndex[interfaceID]
+	return ok && ownerID == nodeID
 }

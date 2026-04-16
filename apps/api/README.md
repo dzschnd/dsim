@@ -1,5 +1,6 @@
 # TODO
 - Cleanup containers/networks
+- Handle if docker has too many networks
 - Handle IP uniqueness
 - Make sure of node isolation between networks
 - Build containers on startup if don't exist

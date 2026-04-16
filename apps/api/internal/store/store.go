@@ -9,17 +9,19 @@ import (
 )
 
 type Store struct {
-	Mu        sync.RWMutex
-	Nodes     map[string]model.Node
-	Links     map[string]model.Link
-	LinkIndex map[string]string
+	Mu                  sync.RWMutex
+	Nodes               map[string]model.Node
+	Links               map[string]model.Link
+	LinkIndex           map[string]string
+	InterfaceOwnerIndex map[string]string
 }
 
 func NewStore() *Store {
 	return &Store{
-		Nodes:     make(map[string]model.Node),
-		Links:     make(map[string]model.Link),
-		LinkIndex: make(map[string]string),
+		Nodes:               make(map[string]model.Node),
+		Links:               make(map[string]model.Link),
+		LinkIndex:           make(map[string]string),
+		InterfaceOwnerIndex: make(map[string]string),
 	}
 }
 
