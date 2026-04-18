@@ -72,6 +72,33 @@ func (a *SubnetAllocator) ReleaseString(cidr string) {
 	a.Release(subnet)
 }
 
+func (a *SubnetAllocator) ReserveOverlapping(other netip.Prefix) int {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	other = other.Masked()
+	if !other.Addr().Is4() || !a.base.Overlaps(other) {
+		return 0
+	}
+
+	baseUint := ipv4ToUint32(a.base.Addr())
+	reserved := 0
+	for index := uint32(0); index < a.subnetCount; index++ {
+		addr := uint32ToIPv4(baseUint + index*a.blockSize)
+		subnet := netip.PrefixFrom(addr, a.allocBits).Masked()
+		if !subnet.Overlaps(other) {
+			continue
+		}
+		if _, used := a.used[subnet.String()]; used {
+			continue
+		}
+		a.used[subnet.String()] = struct{}{}
+		reserved++
+	}
+
+	return reserved
+}
+
 func GatewayAddr(subnet netip.Prefix) (netip.Addr, error) {
 	subnet = subnet.Masked()
 	if !subnet.Addr().Is4() {

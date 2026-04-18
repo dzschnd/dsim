@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 
@@ -61,7 +62,7 @@ func (app *application) cleanUp() {
 
 func (app *application) initStore() error {
 	if app.store == nil {
-		newStore, err := store.NewStore()
+		newStore, err := store.NewStore(context.Background(), app.docker)
 		if err != nil {
 			return err
 		}
