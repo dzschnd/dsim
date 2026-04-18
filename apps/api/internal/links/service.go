@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -72,16 +74,19 @@ func (s *service) createLink(ctx context.Context, interfaceAID, interfaceBID str
 		Driver: "bridge",
 	})
 	if err != nil {
-		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "network create failed")
+		slog.Error("Network create failed", "err", err)
+		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, fmt.Sprintf("network create failed: %v", err))
 	}
 
 	if err := s.docker.NetworkConnect(ctx, networkResp.ID, nodeA.ContainerID, nil); err != nil {
 		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		slog.Error("Network connect failed", "err", err)
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "network connect failed")
 	}
 	if err := s.docker.NetworkConnect(ctx, networkResp.ID, nodeB.ContainerID, nil); err != nil {
 		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
 		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		slog.Error("Network connect failed", "err", err)
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "network connect failed")
 	}
 
@@ -90,6 +95,7 @@ func (s *service) createLink(ctx context.Context, interfaceAID, interfaceBID str
 		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeB.ContainerID, true)
 		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
 		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		slog.Error("Container inspect failed", "err", err)
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 
@@ -98,6 +104,7 @@ func (s *service) createLink(ctx context.Context, interfaceAID, interfaceBID str
 		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeB.ContainerID, true)
 		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
 		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		slog.Error("Runtime network endpoint missing")
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "runtime network endpoint missing")
 	}
 
@@ -106,6 +113,7 @@ func (s *service) createLink(ctx context.Context, interfaceAID, interfaceBID str
 		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeB.ContainerID, true)
 		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
 		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		slog.Error("Container inspect failed", "err", err)
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 
@@ -114,6 +122,7 @@ func (s *service) createLink(ctx context.Context, interfaceAID, interfaceBID str
 		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeB.ContainerID, true)
 		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
 		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		slog.Error("Runtime network endpoint missing")
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "runtime network endpoint missing")
 	}
 
@@ -203,6 +212,7 @@ func (s *service) realizeLinkedInterface(
 		if client.IsErrNotFound(err) {
 			return httputil.NewAppError(http.StatusNotFound, "container not found")
 		}
+		slog.Error("Container inspect failed", "err", err)
 		return httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 	if inspect.State == nil || !inspect.State.Running {
@@ -214,6 +224,7 @@ func (s *service) realizeLinkedInterface(
 		return err
 	}
 	if !s.repo.SetInterfaceRuntimeName(interfaceID, runtimeName) {
+		slog.Error("Failed to persist runtime interface name")
 		return httputil.NewAppError(http.StatusInternalServerError, "failed to persist runtime interface name")
 	}
 	if node.Type == model.Switch {
@@ -266,6 +277,7 @@ func resolveRuntimeInterfaceName(
 
 	var runtimeIfaces []runtimeInterfaceInfo
 	if err := json.Unmarshal([]byte(stdout), &runtimeIfaces); err != nil {
+		slog.Error("Runtime interface inspect parse failed", "err", err)
 		return "", httputil.NewAppError(http.StatusInternalServerError, "runtime interface inspect parse failed")
 	}
 
@@ -278,6 +290,7 @@ func resolveRuntimeInterfaceName(
 		}
 	}
 
+	slog.Error("Runtime interface name resolution failed")
 	return "", httputil.NewAppError(http.StatusInternalServerError, "runtime interface name resolution failed")
 }
 
@@ -288,11 +301,13 @@ func execInContainer(ctx context.Context, docker *client.Client, containerID str
 		Cmd:          execCmd,
 	})
 	if err != nil {
+		slog.Error("Exec create failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec create failed")
 	}
 
 	attachResp, err := docker.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
 	if err != nil {
+		slog.Error("Exec attach failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec attach failed")
 	}
 	defer attachResp.Close()
@@ -300,11 +315,13 @@ func execInContainer(ctx context.Context, docker *client.Client, containerID str
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	if _, err := stdcopy.StdCopy(&stdout, &stderr, attachResp.Reader); err != nil {
+		slog.Error("Exec read failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec read failed")
 	}
 
 	execInspect, err := docker.ContainerExecInspect(ctx, execResp.ID)
 	if err != nil {
+		slog.Error("Exec inspect failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec inspect failed")
 	}
 
@@ -327,6 +344,7 @@ func execInContainerChecked(
 		if trimmed := strings.TrimSpace(stderr); trimmed != "" {
 			message += ": " + trimmed
 		}
+		slog.Error("Container exec failed", "message", message)
 		return "", httputil.NewAppError(http.StatusInternalServerError, message)
 	}
 	return stdout, nil
@@ -393,6 +411,7 @@ func (s *service) detachSwitchPortIfRunning(ctx context.Context, node model.Node
 		if client.IsErrNotFound(err) {
 			return httputil.NewAppError(http.StatusNotFound, "container not found")
 		}
+		slog.Error("Container inspect failed", "err", err)
 		return httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 	if inspect.State == nil || !inspect.State.Running || runtimeName == "" {

@@ -34,5 +34,5 @@ func NewRouter(s *Server) http.Handler {
 	r.HandleFunc("GET /api/v1/links", l.ListLinksHandler)
 	r.HandleFunc("DELETE /api/v1/links/{id}", l.DeleteLinkHandler)
 
-	return corsHeader(jsonHeader(r))
+	return requestLogger(corsHeader(jsonHeader(r)))
 }

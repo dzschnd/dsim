@@ -2,7 +2,9 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"github.com/lmittmann/tint"
+	"log/slog"
+	"os"
 )
 
 func main() {
@@ -17,15 +19,24 @@ func main() {
 		config: cfg,
 	}
 
+	logger := slog.New(tint.NewHandler(os.Stdout,
+		&tint.Options{
+			Level:      slog.LevelInfo,
+			TimeFormat: "15:04:05",
+			NoColor:    false,
+		},
+	))
+	slog.SetDefault(logger)
+
 	if err := api.LoadEnv(); err != nil {
-		log.Fatalf("Failed to load env. Error: %s", err)
+		slog.Error("Failed to load env", "err", err)
 	}
 	if err := api.initDocker(); err != nil {
-		log.Fatalf("Failed to init docker client. Error: %s", err)
+		slog.Error("Failed to init docker client", "err", err)
 	}
 	defer api.closeDocker()
 	api.initStore()
 	if err := api.run(api.mount()); err != nil {
-		log.Fatalf("Failed to start server. Error: %s", err)
+		slog.Error("Failed to start server", "port", port, "err", err)
 	}
 }

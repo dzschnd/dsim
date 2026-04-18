@@ -4,6 +4,8 @@ go 1.25.5
 
 require github.com/joho/godotenv v1.5.1
 
+require github.com/lmittmann/tint v1.1.3 // indirect
+
 require (
 	github.com/Microsoft/go-winio v0.4.21 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

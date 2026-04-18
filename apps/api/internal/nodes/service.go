@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/netip"
 	"os"
@@ -71,6 +72,7 @@ func (s *service) createNode(ctx context.Context, reqNodeType string) (model.Nod
 		if client.IsErrNotFound(err) {
 			return model.Node{}, httputil.NewAppError(http.StatusNotFound, "image not found: "+image)
 		}
+		slog.Error("Image inspect failed", "err", err)
 		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "image inspect failed")
 	}
 
@@ -80,6 +82,7 @@ func (s *service) createNode(ctx context.Context, reqNodeType string) (model.Nod
 		Driver: "bridge",
 	})
 	if err != nil {
+		slog.Error("Isolated network create failed", "err", err)
 		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "isolated network create failed")
 	}
 
@@ -106,6 +109,7 @@ func (s *service) createNode(ctx context.Context, reqNodeType string) (model.Nod
 	)
 	if err != nil {
 		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		slog.Error("Container create failed", "err", err)
 		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "container create failed")
 	}
 
@@ -113,6 +117,7 @@ func (s *service) createNode(ctx context.Context, reqNodeType string) (model.Nod
 	if err != nil {
 		_ = s.docker.ContainerRemove(ctx, createResp.ID, container.RemoveOptions{Force: true})
 		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		slog.Error("Container inspect failed", "err", err)
 		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 
@@ -157,6 +162,7 @@ func (s *service) deleteNode(ctx context.Context, nodeID string) error {
 	if node.ContainerID != "" {
 		err := s.docker.ContainerRemove(ctx, node.ContainerID, container.RemoveOptions{Force: true})
 		if err != nil && !client.IsErrNotFound(err) {
+			slog.Error("Container remove failed", "err", err)
 			return httputil.NewAppError(http.StatusInternalServerError, "container remove failed")
 		}
 	}
@@ -180,6 +186,7 @@ func (s *service) startNode(ctx context.Context, nodeID string) error {
 		if client.IsErrNotFound(err) {
 			return httputil.NewAppError(http.StatusNotFound, "container not found")
 		}
+		slog.Error("Container inspect failed", "err", err)
 		return httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 	if inspect.State != nil && inspect.State.Running {
@@ -203,6 +210,7 @@ func (s *service) startNode(ctx context.Context, nodeID string) error {
 	}
 
 	if err := s.docker.ContainerStart(ctx, node.ContainerID, container.StartOptions{}); err != nil {
+		slog.Error("Failed to start node", "err", err)
 		return httputil.NewAppError(http.StatusInternalServerError, "failed to start node")
 	}
 
@@ -211,6 +219,7 @@ func (s *service) startNode(ctx context.Context, nodeID string) error {
 		if client.IsErrNotFound(err) {
 			return httputil.NewAppError(http.StatusNotFound, "container not found")
 		}
+		slog.Error("Container inspect failed", "err", err)
 		return httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 
@@ -374,6 +383,7 @@ func (s *service) syncRuntimeInterfaceNames(ctx context.Context, nodeID string) 
 
 	var runtimeIfaces []runtimeInterfaceInfo
 	if err := json.Unmarshal([]byte(stdout), &runtimeIfaces); err != nil {
+		slog.Error("Runtime interface inspect parse failed", "err", err)
 		return httputil.NewAppError(http.StatusInternalServerError, "runtime interface inspect parse failed")
 	}
 
@@ -396,9 +406,11 @@ func (s *service) syncRuntimeInterfaceNames(ctx context.Context, nodeID string) 
 		addr := fmt.Sprintf("%s/%d", iface.RuntimeIPAddr, iface.RuntimePrefixLen)
 		runtimeName := runtimeNameByAddress[addr]
 		if runtimeName == "" {
+			slog.Error("Runtime interface name resolution failed")
 			return httputil.NewAppError(http.StatusInternalServerError, "runtime interface name resolution failed")
 		}
 		if !s.repo.UpdateInterfaceRuntimeName(nodeID, iface.ID, runtimeName) {
+			slog.Error("Failed to persist runtime interface name")
 			return httputil.NewAppError(http.StatusInternalServerError, "failed to persist runtime interface name")
 		}
 	}
@@ -454,6 +466,7 @@ func (s *service) stopNode(ctx context.Context, nodeID string) error {
 		if client.IsErrNotFound(err) {
 			return httputil.NewAppError(http.StatusNotFound, "container not found")
 		}
+		slog.Error("Container inspect failed", "err", err)
 		return httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 	if inspect.State != nil && !inspect.State.Running {
@@ -462,6 +475,7 @@ func (s *service) stopNode(ctx context.Context, nodeID string) error {
 	}
 
 	if err := s.docker.ContainerStop(ctx, node.ContainerID, container.StopOptions{}); err != nil {
+		slog.Error("Failed to stop node", "err", err)
 		return httputil.NewAppError(http.StatusInternalServerError, "failed to stop node: "+err.Error())
 	}
 
@@ -476,11 +490,13 @@ func execInContainer(ctx context.Context, docker *client.Client, containerID str
 		Cmd:          execCmd,
 	})
 	if err != nil {
+		slog.Error("Exec create failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec create failed")
 	}
 
 	attachResp, err := docker.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
 	if err != nil {
+		slog.Error("Exec attach failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec attach failed")
 	}
 	defer attachResp.Close()
@@ -488,11 +504,13 @@ func execInContainer(ctx context.Context, docker *client.Client, containerID str
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	if _, err := stdcopy.StdCopy(&stdout, &stderr, attachResp.Reader); err != nil {
+		slog.Error("Exec read failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec read failed")
 	}
 
 	execInspect, err := docker.ContainerExecInspect(ctx, execResp.ID)
 	if err != nil {
+		slog.Error("Exec inspect failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec inspect failed")
 	}
 
@@ -515,6 +533,7 @@ func execInContainerChecked(
 		if trimmed := strings.TrimSpace(stderr); trimmed != "" {
 			message += ": " + trimmed
 		}
+		slog.Error("Container exec failed", "message", message)
 		return "", httputil.NewAppError(http.StatusInternalServerError, message)
 	}
 	return stdout, nil
@@ -553,6 +572,7 @@ func (s *service) runCommand(ctx context.Context, nodeID, command string) (comma
 		if client.IsErrNotFound(err) {
 			return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "container not found")
 		}
+		slog.Error("Container inspect failed", "err", err)
 		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 	if inspect.State == nil || !inspect.State.Running {
@@ -669,6 +689,7 @@ func (s *service) runIPSet(ctx context.Context, command, nodeID, interfaceName, 
 		if client.IsErrNotFound(err) {
 			return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "container not found")
 		}
+		slog.Error("Container inspect failed", "err", err)
 		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 	if inspect.State != nil && inspect.State.Running {
@@ -719,6 +740,7 @@ func (s *service) runIPSet(ctx context.Context, command, nodeID, interfaceName, 
 				break
 			}
 			if targetIface.RuntimeName == "" {
+				slog.Error("Runtime interface name resolution failed")
 				return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "runtime interface name resolution failed")
 			}
 		}
@@ -815,6 +837,7 @@ func (s *service) runIPRoute(
 	}
 
 	if !s.repo.UpsertRoute(node.ID, route) {
+		slog.Error("Failed to persist route")
 		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "failed to persist route")
 	}
 

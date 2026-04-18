@@ -1,7 +1,8 @@
 package main
 
 import (
-	"log"
+	"fmt"
+	"log/slog"
 	"net/http"
 
 	"github.com/docker/docker/client"
@@ -11,7 +12,11 @@ import (
 )
 
 func (app *application) LoadEnv() error {
-	return godotenv.Load()
+	if err := godotenv.Load(); err != nil {
+		return err
+	}
+	slog.Info("Env loaded")
+	return nil
 }
 
 func (app *application) mount() http.Handler {
@@ -24,7 +29,7 @@ func (app *application) run(h http.Handler) error {
 		Handler: h,
 	}
 
-	log.Printf("Server listening at http://localhost%s\n", app.config.addr)
+	slog.Info("Server started", "url", fmt.Sprintf("http://localhost%s", app.config.addr))
 	return srv.ListenAndServe()
 }
 
@@ -32,13 +37,10 @@ type application struct {
 	config config
 	docker *client.Client
 	store  *store.Store
-	// logger
-	// db driver
 }
 
 type config struct {
 	addr string
-	// db dbConfig
 }
 
 func (app *application) initDocker() error {
@@ -47,6 +49,7 @@ func (app *application) initDocker() error {
 		return err
 	}
 	app.docker = cli
+	slog.Info("Docker initialized")
 	return nil
 }
 
@@ -55,10 +58,12 @@ func (app *application) closeDocker() {
 		return
 	}
 	_ = app.docker.Close()
+	slog.Info("Docker closed")
 }
 
 func (app *application) initStore() {
 	if app.store == nil {
 		app.store = store.NewStore()
+		slog.Info("Store initialized")
 	}
 }
