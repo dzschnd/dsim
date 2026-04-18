@@ -130,10 +130,10 @@ func (s *service) createLink(ctx context.Context, interfaceAID, interfaceBID str
 	s.repo.SetInterfaceLink(interfaceBID, linkID)
 	s.repo.SetInterfaceRuntime(interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen)
 	s.repo.SetInterfaceRuntime(interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen)
-	if err := s.realizeLinkedInterface(ctx, nodeA.ContainerID, interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen, ifaceA.IPAddr, ifaceA.PrefixLen); err != nil {
+	if err := s.realizeLinkedInterface(ctx, nodeA, interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen, ifaceA.IPAddr, ifaceA.PrefixLen); err != nil {
 		return model.Link{}, err
 	}
-	if err := s.realizeLinkedInterface(ctx, nodeB.ContainerID, interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen, ifaceB.IPAddr, ifaceB.PrefixLen); err != nil {
+	if err := s.realizeLinkedInterface(ctx, nodeB, interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen, ifaceB.IPAddr, ifaceB.PrefixLen); err != nil {
 		return model.Link{}, err
 	}
 
@@ -152,6 +152,17 @@ func (s *service) deleteLink(ctx context.Context, linkID string) error {
 	link, ok := s.repo.GetLink(linkID)
 	if !ok {
 		return httputil.NewAppError(http.StatusNotFound, "link not found")
+	}
+
+	if nodeA, ifaceA, ok := s.repo.GetNodeByInterface(link.InterfaceAID); ok && nodeA.Type == model.Switch && ifaceA.RuntimeName != "" {
+		if err := s.detachSwitchPortIfRunning(ctx, nodeA, ifaceA.RuntimeName); err != nil {
+			return err
+		}
+	}
+	if nodeB, ifaceB, ok := s.repo.GetNodeByInterface(link.InterfaceBID); ok && nodeB.Type == model.Switch && ifaceB.RuntimeName != "" {
+		if err := s.detachSwitchPortIfRunning(ctx, nodeB, ifaceB.RuntimeName); err != nil {
+			return err
+		}
 	}
 
 	s.removeLinkNetwork(ctx, link)
@@ -180,14 +191,14 @@ func (s *service) removeLinkNetwork(ctx context.Context, link model.Link) {
 
 func (s *service) realizeLinkedInterface(
 	ctx context.Context,
-	containerID string,
+	node model.Node,
 	interfaceID string,
 	runtimeIP string,
 	runtimePrefixLen int,
 	logicalIP string,
 	logicalPrefixLen int,
 ) error {
-	inspect, err := s.docker.ContainerInspect(ctx, containerID)
+	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
 	if err != nil {
 		if client.IsErrNotFound(err) {
 			return httputil.NewAppError(http.StatusNotFound, "container not found")
@@ -198,12 +209,15 @@ func (s *service) realizeLinkedInterface(
 		return nil
 	}
 
-	runtimeName, err := resolveRuntimeInterfaceName(ctx, s.docker, containerID, runtimeIP, runtimePrefixLen)
+	runtimeName, err := resolveRuntimeInterfaceName(ctx, s.docker, node.ContainerID, runtimeIP, runtimePrefixLen)
 	if err != nil {
 		return err
 	}
 	if !s.repo.SetInterfaceRuntimeName(interfaceID, runtimeName) {
 		return httputil.NewAppError(http.StatusInternalServerError, "failed to persist runtime interface name")
+	}
+	if node.Type == model.Switch {
+		return s.attachSwitchPort(ctx, node, runtimeName)
 	}
 	if logicalIP == "" || logicalPrefixLen == 0 {
 		return nil
@@ -213,7 +227,7 @@ func (s *service) realizeLinkedInterface(
 	if _, err := execInContainerChecked(
 		ctx,
 		s.docker,
-		containerID,
+		node.ContainerID,
 		[]string{"ip", "addr", "replace", cidr, "dev", runtimeName},
 		"failed to apply runtime interface address",
 	); err != nil {
@@ -222,7 +236,7 @@ func (s *service) realizeLinkedInterface(
 	if _, err := execInContainerChecked(
 		ctx,
 		s.docker,
-		containerID,
+		node.ContainerID,
 		[]string{"ip", "link", "set", runtimeName, "up"},
 		"failed to bring runtime interface up",
 	); err != nil {
@@ -316,4 +330,84 @@ func execInContainerChecked(
 		return "", httputil.NewAppError(http.StatusInternalServerError, message)
 	}
 	return stdout, nil
+}
+
+func (s *service) ensureSwitchBridge(ctx context.Context, node model.Node) error {
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"sh", "-c", "ip link show br0 >/dev/null 2>&1 || ip link add br0 type bridge"},
+		"failed to create switch bridge",
+	); err != nil {
+		return err
+	}
+
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"ip", "link", "set", "br0", "up"},
+		"failed to bring switch bridge up",
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *service) attachSwitchPort(ctx context.Context, node model.Node, runtimeName string) error {
+	if runtimeName == "" {
+		return httputil.NewAppError(http.StatusBadRequest, "runtime interface name not resolved")
+	}
+	if err := s.ensureSwitchBridge(ctx, node); err != nil {
+		return err
+	}
+
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"ip", "link", "set", runtimeName, "master", "br0"},
+		"failed to attach switch port to bridge",
+	); err != nil {
+		return err
+	}
+
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"ip", "link", "set", runtimeName, "up"},
+		"failed to bring switch port up",
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *service) detachSwitchPortIfRunning(ctx context.Context, node model.Node, runtimeName string) error {
+	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
+	if err != nil {
+		if client.IsErrNotFound(err) {
+			return httputil.NewAppError(http.StatusNotFound, "container not found")
+		}
+		return httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
+	}
+	if inspect.State == nil || !inspect.State.Running || runtimeName == "" {
+		return nil
+	}
+
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"ip", "link", "set", runtimeName, "nomaster"},
+		"failed to detach switch port from bridge",
+	); err != nil {
+		return err
+	}
+
+	return nil
 }

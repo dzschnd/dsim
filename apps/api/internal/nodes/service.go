@@ -187,6 +187,11 @@ func (s *service) startNode(ctx context.Context, nodeID string) error {
 		if err := s.syncRuntimeInterfaceNames(ctx, nodeID); err != nil {
 			return err
 		}
+		if node.Type == model.Switch {
+			if err := s.syncSwitchPorts(ctx, nodeID); err != nil {
+				return err
+			}
+		}
 		if err := s.syncRuntimeInterfaceAddresses(ctx, nodeID); err != nil {
 			return err
 		}
@@ -213,6 +218,11 @@ func (s *service) startNode(ctx context.Context, nodeID string) error {
 	if err := s.syncRuntimeInterfaceNames(ctx, nodeID); err != nil {
 		return err
 	}
+	if node.Type == model.Switch {
+		if err := s.syncSwitchPorts(ctx, nodeID); err != nil {
+			return err
+		}
+	}
 	if err := s.syncRuntimeInterfaceAddresses(ctx, nodeID); err != nil {
 		return err
 	}
@@ -221,6 +231,85 @@ func (s *service) startNode(ctx context.Context, nodeID string) error {
 	}
 
 	s.repo.UpdateNodeStatus(nodeID, model.Running)
+
+	return nil
+}
+
+func (s *service) ensureSwitchBridge(ctx context.Context, node model.Node) error {
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"sh", "-c", "ip link show br0 >/dev/null 2>&1 || ip link add br0 type bridge"},
+		"failed to create switch bridge",
+	); err != nil {
+		return err
+	}
+
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"ip", "link", "set", "br0", "up"},
+		"failed to bring switch bridge up",
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *service) attachSwitchPort(ctx context.Context, node model.Node, runtimeName string) error {
+	if runtimeName == "" {
+		return httputil.NewAppError(http.StatusBadRequest, "runtime interface name not resolved")
+	}
+	if err := s.ensureSwitchBridge(ctx, node); err != nil {
+		return err
+	}
+
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"ip", "link", "set", runtimeName, "master", "br0"},
+		"failed to attach switch port to bridge",
+	); err != nil {
+		return err
+	}
+
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"ip", "link", "set", runtimeName, "up"},
+		"failed to bring switch port up",
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *service) syncSwitchPorts(ctx context.Context, nodeID string) error {
+	node, ok := s.repo.GetNode(nodeID)
+	if !ok {
+		return httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+	if node.Type != model.Switch {
+		return nil
+	}
+	if err := s.ensureSwitchBridge(ctx, node); err != nil {
+		return err
+	}
+
+	for _, iface := range node.Interfaces {
+		if iface.LinkID == "" || iface.RuntimeName == "" {
+			continue
+		}
+		if err := s.attachSwitchPort(ctx, node, iface.RuntimeName); err != nil {
+			return err
+		}
+	}
 
 	return nil
 }
@@ -478,6 +567,17 @@ func (s *service) runCommand(ctx context.Context, nodeID, command string) (comma
 	}
 
 	fields := strings.Fields(command)
+	if node.Type == model.Switch {
+		if len(fields) >= 2 && fields[0] == "ping" {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support ping")
+		}
+		if len(fields) >= 2 && fields[0] == "ip" && fields[1] == "set" {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch ports do not support ip assignment")
+		}
+		if len(fields) >= 2 && fields[0] == "ip" && fields[1] == "route" {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support routing commands")
+		}
+	}
 	if len(fields) == 2 && fields[0] == "ping" {
 		return s.runPing(ctx, command, node)
 	}
@@ -537,16 +637,8 @@ func (s *service) runIPAddr(command string, node model.Node) commandResponse {
 func (s *service) runPing(ctx context.Context, command string, node model.Node) (commandResponse, error) {
 	fields := strings.Fields(command)
 	targetLogicalIP := fields[1]
-	targetAddr, err := netip.ParseAddr(targetLogicalIP)
-	if err != nil {
+	if _, err := netip.ParseAddr(targetLogicalIP); err != nil {
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
-	}
-
-	s.repo.store.Mu.RLock()
-	defer s.repo.store.Mu.RUnlock()
-
-	if !s.canReachTargetLocked(node.ID, targetAddr, targetLogicalIP, map[string]struct{}{}) {
-		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "target ip is unreachable")
 	}
 
 	return s.execCommand(
@@ -738,7 +830,7 @@ func (s *service) applyRuntimeRoute(ctx context.Context, node model.Node, route 
 	s.repo.store.Mu.RLock()
 	defer s.repo.store.Mu.RUnlock()
 
-	_, _, ok := s.findDirectNextHopLocked(node, route.NextHop)
+	_, _, ok := s.findReachableNextHopLocked(node, route.NextHop)
 	if !ok {
 		return httputil.NewAppError(http.StatusBadRequest, "next hop is not directly reachable")
 	}
@@ -757,40 +849,12 @@ func (s *service) applyRuntimeRoute(ctx context.Context, node model.Node, route 
 	return nil
 }
 
-func (s *service) canReachTargetLocked(
-	nodeID string,
-	targetAddr netip.Addr,
-	targetLogicalIP string,
-	visited map[string]struct{},
-) bool {
-	if _, ok := visited[nodeID]; ok {
-		return false
-	}
-	visited[nodeID] = struct{}{}
-
-	node, ok := s.repo.store.Nodes[nodeID]
-	if !ok {
-		return false
+func (s *service) findReachableNextHopLocked(node model.Node, nextHop string) (model.Node, model.Interface, bool) {
+	nextHopAddr, err := netip.ParseAddr(nextHop)
+	if err != nil {
+		return model.Node{}, model.Interface{}, false
 	}
 
-	if s.hasDirectTargetLocked(node, targetAddr, targetLogicalIP) {
-		return true
-	}
-
-	route, ok := s.findBestRouteLocked(node, targetAddr)
-	if !ok {
-		return false
-	}
-
-	nextHopNode, _, ok := s.findDirectNextHopLocked(node, route.NextHop)
-	if !ok {
-		return false
-	}
-
-	return s.canReachTargetLocked(nextHopNode.ID, targetAddr, targetLogicalIP, visited)
-}
-
-func (s *service) hasDirectTargetLocked(node model.Node, targetAddr netip.Addr, targetLogicalIP string) bool {
 	for _, sourceIface := range node.Interfaces {
 		if sourceIface.LinkID == "" || sourceIface.IPAddr == "" || sourceIface.PrefixLen == 0 {
 			continue
@@ -802,29 +866,92 @@ func (s *service) hasDirectTargetLocked(node model.Node, targetAddr netip.Addr, 
 		}
 
 		prefix := netip.PrefixFrom(sourceAddr, sourceIface.PrefixLen)
-		if !prefix.Contains(targetAddr) {
+		if !prefix.Contains(nextHopAddr) {
 			continue
 		}
 
-		link, ok := s.repo.store.Links[sourceIface.LinkID]
-		if !ok {
-			continue
+		peerNode, peerIface, ok := s.findInterfaceThroughSwitchesLocked(sourceIface.ID, map[string]struct{}{}, func(candidateNode model.Node, candidateIface model.Interface) bool {
+			return candidateNode.Type != model.Switch && candidateIface.IPAddr == nextHop
+		})
+		if ok {
+			return peerNode, peerIface, true
 		}
-
-		targetInterfaceID := link.InterfaceAID
-		if targetInterfaceID == sourceIface.ID {
-			targetInterfaceID = link.InterfaceBID
-		}
-
-		_, candidateIface, ok := s.findInterfaceOwnerLocked(targetInterfaceID)
-		if !ok || candidateIface.IPAddr != targetLogicalIP {
-			continue
-		}
-
-		return true
 	}
 
-	return false
+	return model.Node{}, model.Interface{}, false
+}
+
+func (s *service) findInterfaceThroughSwitchesLocked(
+	interfaceID string,
+	visited map[string]struct{},
+	match func(model.Node, model.Interface) bool,
+) (model.Node, model.Interface, bool) {
+	if _, ok := visited[interfaceID]; ok {
+		return model.Node{}, model.Interface{}, false
+	}
+	visited[interfaceID] = struct{}{}
+
+	_, iface, ok := s.findInterfaceOwnerLocked(interfaceID)
+	if !ok || iface.LinkID == "" {
+		return model.Node{}, model.Interface{}, false
+	}
+
+	link, ok := s.repo.store.Links[iface.LinkID]
+	if !ok {
+		return model.Node{}, model.Interface{}, false
+	}
+
+	peerInterfaceID := link.InterfaceAID
+	if peerInterfaceID == iface.ID {
+		peerInterfaceID = link.InterfaceBID
+	}
+	if _, ok := visited[peerInterfaceID]; ok {
+		return model.Node{}, model.Interface{}, false
+	}
+	visited[peerInterfaceID] = struct{}{}
+
+	peerNode, peerIface, ok := s.findInterfaceOwnerLocked(peerInterfaceID)
+	if !ok {
+		return model.Node{}, model.Interface{}, false
+	}
+	if peerNode.Type != model.Switch {
+		if match(peerNode, peerIface) {
+			return peerNode, peerIface, true
+		}
+		return model.Node{}, model.Interface{}, false
+	}
+
+	for _, switchIface := range peerNode.Interfaces {
+		if switchIface.ID == peerIface.ID || switchIface.LinkID == "" {
+			continue
+		}
+		foundNode, foundIface, found := s.findInterfaceThroughSwitchesLocked(switchIface.ID, visited, match)
+		if found {
+			return foundNode, foundIface, true
+		}
+	}
+
+	return model.Node{}, model.Interface{}, false
+}
+
+func (s *service) findInterfaceOwnerLocked(interfaceID string) (model.Node, model.Interface, bool) {
+	nodeID, ok := s.repo.store.InterfaceOwnerIndex[interfaceID]
+	if !ok {
+		return model.Node{}, model.Interface{}, false
+	}
+
+	node, ok := s.repo.store.Nodes[nodeID]
+	if !ok {
+		return model.Node{}, model.Interface{}, false
+	}
+
+	for _, iface := range node.Interfaces {
+		if iface.ID == interfaceID {
+			return node, iface, true
+		}
+	}
+
+	return model.Node{}, model.Interface{}, false
 }
 
 func (s *service) findBestRouteLocked(node model.Node, targetAddr netip.Addr) (model.Route, bool) {
@@ -861,51 +988,4 @@ func (s *service) findBestRouteLocked(node model.Node, targetAddr netip.Addr) (m
 	}
 
 	return best, true
-}
-
-func (s *service) findDirectNextHopLocked(node model.Node, nextHop string) (model.Node, model.Interface, bool) {
-	for _, sourceIface := range node.Interfaces {
-		if sourceIface.LinkID == "" {
-			continue
-		}
-
-		link, ok := s.repo.store.Links[sourceIface.LinkID]
-		if !ok {
-			continue
-		}
-
-		peerInterfaceID := link.InterfaceAID
-		if peerInterfaceID == sourceIface.ID {
-			peerInterfaceID = link.InterfaceBID
-		}
-
-		peerNode, peerIface, ok := s.findInterfaceOwnerLocked(peerInterfaceID)
-		if !ok || peerIface.IPAddr != nextHop {
-			continue
-		}
-
-		return peerNode, peerIface, true
-	}
-
-	return model.Node{}, model.Interface{}, false
-}
-
-func (s *service) findInterfaceOwnerLocked(interfaceID string) (model.Node, model.Interface, bool) {
-	nodeID, ok := s.repo.store.InterfaceOwnerIndex[interfaceID]
-	if !ok {
-		return model.Node{}, model.Interface{}, false
-	}
-
-	node, ok := s.repo.store.Nodes[nodeID]
-	if !ok {
-		return model.Node{}, model.Interface{}, false
-	}
-
-	for _, iface := range node.Interfaces {
-		if iface.ID == interfaceID {
-			return node, iface, true
-		}
-	}
-
-	return model.Node{}, model.Interface{}, false
 }
