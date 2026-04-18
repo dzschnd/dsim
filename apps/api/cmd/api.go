@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -23,14 +22,13 @@ func (app *application) mount() http.Handler {
 	return routes.NewRouter(routes.NewServer(app.docker, app.store))
 }
 
-func (app *application) run(h http.Handler) error {
+func (app *application) newServer(h http.Handler) *http.Server {
 	srv := &http.Server{
 		Addr:    app.config.addr,
 		Handler: h,
 	}
 
-	slog.Info("Server started", "url", fmt.Sprintf("http://localhost%s", app.config.addr))
-	return srv.ListenAndServe()
+	return srv
 }
 
 type application struct {
@@ -53,7 +51,7 @@ func (app *application) initDocker() error {
 	return nil
 }
 
-func (app *application) closeDocker() {
+func (app *application) cleanUp() {
 	if app.docker == nil {
 		return
 	}

@@ -1,10 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
-	"github.com/lmittmann/tint"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/lmittmann/tint"
 )
 
 func main() {
@@ -30,13 +36,34 @@ func main() {
 
 	if err := api.LoadEnv(); err != nil {
 		slog.Error("Failed to load env", "err", err)
+		os.Exit(1)
 	}
 	if err := api.initDocker(); err != nil {
 		slog.Error("Failed to init docker client", "err", err)
+		os.Exit(1)
 	}
-	defer api.closeDocker()
 	api.initStore()
-	if err := api.run(api.mount()); err != nil {
-		slog.Error("Failed to start server", "port", port, "err", err)
+	srv := api.newServer(api.mount())
+
+	slog.Info("Starting server", "url", fmt.Sprintf("http://localhost%s", srv.Addr))
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("Server stopped", "err", err)
+		}
+	}()
+
+	shutdown, stop := signal.NotifyContext(context.Background(), syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+	<-shutdown.Done()
+
+	slog.Info("Shutting down server")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("Shutdown with error", "err", err)
+	} else {
+		slog.Info("Shutdown complete")
 	}
+
+	api.cleanUp()
 }

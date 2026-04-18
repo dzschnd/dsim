@@ -9,6 +9,8 @@ tmp_dir = "tmp"
   exclude_dir = ["tmp", "vendor"]
   include_ext = ["go", "tmpl", "tpl", "html", "yaml", "yml", "json"]
   exclude_regex = ["_test.go"]
+  send_interrupt = true
+  kill_delay = "10s"
 
 [run]
   cmd = "./bin/dsim"
