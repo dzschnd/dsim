@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -70,58 +71,69 @@ func (s *service) createLink(ctx context.Context, interfaceAID, interfaceBID str
 
 	linkID := store.NewID("link_")
 	networkName := linkID
+	subnet, err := s.repo.store.LinkSubnets.Allocate()
+	if err != nil {
+		slog.Error("Link subnet allocation failed", "err", err)
+		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "link subnet allocation failed")
+	}
+	gateway, err := store.GatewayAddr(subnet)
+	if err != nil {
+		s.repo.store.LinkSubnets.Release(subnet)
+		slog.Error("Link subnet gateway resolution failed", "err", err)
+		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "link subnet gateway resolution failed")
+	}
 	networkResp, err := s.docker.NetworkCreate(ctx, networkName, network.CreateOptions{
 		Driver: "bridge",
+		IPAM: &network.IPAM{
+			Config: []network.IPAMConfig{
+				{
+					Subnet:  subnet.String(),
+					Gateway: gateway.String(),
+				},
+			},
+		},
 	})
 	if err != nil {
+		s.repo.store.LinkSubnets.Release(subnet)
 		slog.Error("Network create failed", "err", err)
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, fmt.Sprintf("network create failed: %v", err))
 	}
 
 	if err := s.docker.NetworkConnect(ctx, networkResp.ID, nodeA.ContainerID, nil); err != nil {
-		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		s.rollbackLinkCreate(ctx, networkResp.ID, subnet, nodeA.ContainerID)
 		slog.Error("Network connect failed", "err", err)
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "network connect failed")
 	}
 	if err := s.docker.NetworkConnect(ctx, networkResp.ID, nodeB.ContainerID, nil); err != nil {
-		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
-		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		s.rollbackLinkCreate(ctx, networkResp.ID, subnet, nodeA.ContainerID, nodeB.ContainerID)
 		slog.Error("Network connect failed", "err", err)
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "network connect failed")
 	}
 
 	inspectA, err := s.docker.ContainerInspect(ctx, nodeA.ContainerID)
 	if err != nil {
-		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeB.ContainerID, true)
-		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
-		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		s.rollbackLinkCreate(ctx, networkResp.ID, subnet, nodeA.ContainerID, nodeB.ContainerID)
 		slog.Error("Container inspect failed", "err", err)
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 
 	endpointA, ok := inspectA.NetworkSettings.Networks[networkName]
 	if !ok || endpointA == nil {
-		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeB.ContainerID, true)
-		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
-		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		s.rollbackLinkCreate(ctx, networkResp.ID, subnet, nodeA.ContainerID, nodeB.ContainerID)
 		slog.Error("Runtime network endpoint missing")
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "runtime network endpoint missing")
 	}
 
 	inspectB, err := s.docker.ContainerInspect(ctx, nodeB.ContainerID)
 	if err != nil {
-		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeB.ContainerID, true)
-		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
-		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		s.rollbackLinkCreate(ctx, networkResp.ID, subnet, nodeA.ContainerID, nodeB.ContainerID)
 		slog.Error("Container inspect failed", "err", err)
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 
 	endpointB, ok := inspectB.NetworkSettings.Networks[networkName]
 	if !ok || endpointB == nil {
-		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeB.ContainerID, true)
-		_ = s.docker.NetworkDisconnect(ctx, networkResp.ID, nodeA.ContainerID, true)
-		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		s.rollbackLinkCreate(ctx, networkResp.ID, subnet, nodeA.ContainerID, nodeB.ContainerID)
 		slog.Error("Runtime network endpoint missing")
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "runtime network endpoint missing")
 	}
@@ -132,6 +144,7 @@ func (s *service) createLink(ctx context.Context, interfaceAID, interfaceBID str
 		InterfaceBID: interfaceBID,
 		NetworkID:    networkResp.ID,
 		NetworkName:  networkName,
+		Subnet:       subnet.String(),
 		CreatedAt:    time.Now().UTC(),
 	}
 	s.repo.AddLink(link)
@@ -140,9 +153,11 @@ func (s *service) createLink(ctx context.Context, interfaceAID, interfaceBID str
 	s.repo.SetInterfaceRuntime(interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen)
 	s.repo.SetInterfaceRuntime(interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen)
 	if err := s.realizeLinkedInterface(ctx, nodeA, interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen, ifaceA.IPAddr, ifaceA.PrefixLen); err != nil {
+		s.rollbackPersistedLinkCreate(ctx, link)
 		return model.Link{}, err
 	}
 	if err := s.realizeLinkedInterface(ctx, nodeB, interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen, ifaceB.IPAddr, ifaceB.PrefixLen); err != nil {
+		s.rollbackPersistedLinkCreate(ctx, link)
 		return model.Link{}, err
 	}
 
@@ -174,7 +189,9 @@ func (s *service) deleteLink(ctx context.Context, linkID string) error {
 		}
 	}
 
-	s.removeLinkNetwork(ctx, link)
+	if err := s.removeLinkNetwork(ctx, link); err != nil {
+		return err
+	}
 	s.repo.SetInterfaceLink(link.InterfaceAID, "")
 	s.repo.SetInterfaceLink(link.InterfaceBID, "")
 	s.repo.SetInterfaceRuntime(link.InterfaceAID, "", 0)
@@ -182,12 +199,13 @@ func (s *service) deleteLink(ctx context.Context, linkID string) error {
 	s.repo.SetInterfaceRuntimeName(link.InterfaceAID, "")
 	s.repo.SetInterfaceRuntimeName(link.InterfaceBID, "")
 	s.repo.DeleteLink(linkID)
+	s.repo.store.LinkSubnets.ReleaseString(link.Subnet)
 	return nil
 }
 
-func (s *service) removeLinkNetwork(ctx context.Context, link model.Link) {
+func (s *service) removeLinkNetwork(ctx context.Context, link model.Link) error {
 	if link.NetworkID == "" {
-		return
+		return nil
 	}
 	if nodeA, _, ok := s.repo.GetNodeByInterface(link.InterfaceAID); ok && nodeA.ContainerID != "" {
 		_ = s.docker.NetworkDisconnect(ctx, link.NetworkID, nodeA.ContainerID, true)
@@ -195,7 +213,36 @@ func (s *service) removeLinkNetwork(ctx context.Context, link model.Link) {
 	if nodeB, _, ok := s.repo.GetNodeByInterface(link.InterfaceBID); ok && nodeB.ContainerID != "" {
 		_ = s.docker.NetworkDisconnect(ctx, link.NetworkID, nodeB.ContainerID, true)
 	}
-	_ = s.docker.NetworkRemove(ctx, link.NetworkID)
+	if err := s.docker.NetworkRemove(ctx, link.NetworkID); err != nil && !client.IsErrNotFound(err) {
+		slog.Error("Link network remove failed", "err", err)
+		return httputil.NewAppError(http.StatusInternalServerError, "link network remove failed")
+	}
+	return nil
+}
+
+func (s *service) rollbackLinkCreate(ctx context.Context, networkID string, subnet netip.Prefix, containerIDs ...string) {
+	for _, containerID := range containerIDs {
+		if containerID == "" {
+			continue
+		}
+		_ = s.docker.NetworkDisconnect(ctx, networkID, containerID, true)
+	}
+	if networkID != "" {
+		_ = s.docker.NetworkRemove(ctx, networkID)
+	}
+	s.repo.store.LinkSubnets.Release(subnet)
+}
+
+func (s *service) rollbackPersistedLinkCreate(ctx context.Context, link model.Link) {
+	_ = s.removeLinkNetwork(ctx, link)
+	s.repo.SetInterfaceLink(link.InterfaceAID, "")
+	s.repo.SetInterfaceLink(link.InterfaceBID, "")
+	s.repo.SetInterfaceRuntime(link.InterfaceAID, "", 0)
+	s.repo.SetInterfaceRuntime(link.InterfaceBID, "", 0)
+	s.repo.SetInterfaceRuntimeName(link.InterfaceAID, "")
+	s.repo.SetInterfaceRuntimeName(link.InterfaceBID, "")
+	s.repo.DeleteLink(link.ID)
+	s.repo.store.LinkSubnets.ReleaseString(link.Subnet)
 }
 
 func (s *service) realizeLinkedInterface(

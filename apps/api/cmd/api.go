@@ -59,9 +59,14 @@ func (app *application) cleanUp() {
 	slog.Info("Docker closed")
 }
 
-func (app *application) initStore() {
+func (app *application) initStore() error {
 	if app.store == nil {
-		app.store = store.NewStore()
+		newStore, err := store.NewStore()
+		if err != nil {
+			return err
+		}
+		app.store = newStore
 		slog.Info("Store initialized")
 	}
+	return nil
 }

@@ -42,7 +42,11 @@ func main() {
 		slog.Error("Failed to init docker client", "err", err)
 		os.Exit(1)
 	}
-	api.initStore()
+	if err := api.initStore(); err != nil {
+		slog.Error("Failed to init store", "err", err)
+		os.Exit(1)
+	}
+
 	srv := api.newServer(api.mount())
 
 	slog.Info("Starting server", "url", fmt.Sprintf("http://localhost%s", srv.Addr))

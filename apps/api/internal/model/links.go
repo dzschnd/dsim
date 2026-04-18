@@ -8,5 +8,6 @@ type Link struct {
 	InterfaceBID string    `json:"interfaceBId"`
 	NetworkID    string    `json:"networkId"`
 	NetworkName  string    `json:"networkName"`
+	Subnet       string    `json:"subnet"`
 	CreatedAt    time.Time `json:"createdAt"`
 }

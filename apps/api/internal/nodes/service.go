@@ -78,10 +78,30 @@ func (s *service) createNode(ctx context.Context, reqNodeType string) (model.Nod
 
 	nodeID := store.NewID("node_")
 	networkName := nodeID + "_isolated"
+	subnet, err := s.repo.store.IsolatedSubnets.Allocate()
+	if err != nil {
+		slog.Error("Isolated subnet allocation failed", "err", err)
+		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "isolated subnet allocation failed")
+	}
+	gateway, err := store.GatewayAddr(subnet)
+	if err != nil {
+		s.repo.store.IsolatedSubnets.Release(subnet)
+		slog.Error("Isolated subnet gateway resolution failed", "err", err)
+		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "isolated subnet gateway resolution failed")
+	}
 	networkResp, err := s.docker.NetworkCreate(ctx, networkName, network.CreateOptions{
 		Driver: "bridge",
+		IPAM: &network.IPAM{
+			Config: []network.IPAMConfig{
+				{
+					Subnet:  subnet.String(),
+					Gateway: gateway.String(),
+				},
+			},
+		},
 	})
 	if err != nil {
+		s.repo.store.IsolatedSubnets.Release(subnet)
 		slog.Error("Isolated network create failed", "err", err)
 		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "isolated network create failed")
 	}
@@ -109,6 +129,7 @@ func (s *service) createNode(ctx context.Context, reqNodeType string) (model.Nod
 	)
 	if err != nil {
 		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		s.repo.store.IsolatedSubnets.Release(subnet)
 		slog.Error("Container create failed", "err", err)
 		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "container create failed")
 	}
@@ -117,6 +138,7 @@ func (s *service) createNode(ctx context.Context, reqNodeType string) (model.Nod
 	if err != nil {
 		_ = s.docker.ContainerRemove(ctx, createResp.ID, container.RemoveOptions{Force: true})
 		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
+		s.repo.store.IsolatedSubnets.Release(subnet)
 		slog.Error("Container inspect failed", "err", err)
 		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
@@ -128,6 +150,9 @@ func (s *service) createNode(ctx context.Context, reqNodeType string) (model.Nod
 		Status:      model.Idle,
 		Type:        nodeType,
 		ContainerID: createResp.ID,
+		NetworkID:   networkResp.ID,
+		NetworkName: networkName,
+		Subnet:      subnet.String(),
 		CreatedAt:   time.Now().UTC(),
 		Interfaces:  make([]model.Interface, 0, ifaceCount),
 		Routes:      make([]model.Route, 0),
@@ -155,8 +180,13 @@ func (s *service) deleteNode(ctx context.Context, nodeID string) error {
 		return httputil.NewAppError(http.StatusNotFound, "node not found")
 	}
 
-	if s.linkRepo != nil {
-		s.linkRepo.DeleteLinkByNode(nodeID)
+	links := s.linksForNode(nodeID)
+	for _, link := range links {
+		if err := s.removeLinkNetwork(ctx, link); err != nil {
+			return err
+		}
+		s.releaseLinkSubnet(link)
+		s.deleteLinkState(link)
 	}
 
 	if node.ContainerID != "" {
@@ -166,9 +196,119 @@ func (s *service) deleteNode(ctx context.Context, nodeID string) error {
 			return httputil.NewAppError(http.StatusInternalServerError, "container remove failed")
 		}
 	}
+	if node.NetworkID != "" {
+		if err := s.docker.NetworkRemove(ctx, node.NetworkID); err != nil && !client.IsErrNotFound(err) {
+			slog.Error("Isolated network remove failed", "err", err)
+			return httputil.NewAppError(http.StatusInternalServerError, "isolated network remove failed")
+		}
+	}
+	if node.Subnet != "" {
+		s.repo.store.IsolatedSubnets.ReleaseString(node.Subnet)
+	}
 
 	s.repo.DeleteNode(nodeID)
 	return nil
+}
+
+func (s *service) linksForNode(nodeID string) []model.Link {
+	s.repo.store.Mu.RLock()
+	defer s.repo.store.Mu.RUnlock()
+
+	links := make([]model.Link, 0)
+	for _, link := range s.repo.store.Links {
+		if s.nodeOwnsInterfaceLocked(nodeID, link.InterfaceAID) || s.nodeOwnsInterfaceLocked(nodeID, link.InterfaceBID) {
+			links = append(links, link)
+		}
+	}
+	return links
+}
+
+func (s *service) nodeOwnsInterfaceLocked(nodeID, interfaceID string) bool {
+	ownerID, ok := s.repo.store.InterfaceOwnerIndex[interfaceID]
+	return ok && ownerID == nodeID
+}
+
+func (s *service) removeLinkNetwork(ctx context.Context, link model.Link) error {
+	if link.NetworkID == "" {
+		return nil
+	}
+	if nodeA, _, ok := s.nodeByInterface(link.InterfaceAID); ok && nodeA.ContainerID != "" {
+		_ = s.docker.NetworkDisconnect(ctx, link.NetworkID, nodeA.ContainerID, true)
+	}
+	if nodeB, _, ok := s.nodeByInterface(link.InterfaceBID); ok && nodeB.ContainerID != "" {
+		_ = s.docker.NetworkDisconnect(ctx, link.NetworkID, nodeB.ContainerID, true)
+	}
+	if err := s.docker.NetworkRemove(ctx, link.NetworkID); err != nil && !client.IsErrNotFound(err) {
+		slog.Error("Link network remove failed", "err", err)
+		return httputil.NewAppError(http.StatusInternalServerError, "link network remove failed")
+	}
+	return nil
+}
+
+func (s *service) nodeByInterface(interfaceID string) (model.Node, model.Interface, bool) {
+	s.repo.store.Mu.RLock()
+	defer s.repo.store.Mu.RUnlock()
+
+	nodeID, ok := s.repo.store.InterfaceOwnerIndex[interfaceID]
+	if !ok {
+		return model.Node{}, model.Interface{}, false
+	}
+	node, ok := s.repo.store.Nodes[nodeID]
+	if !ok {
+		return model.Node{}, model.Interface{}, false
+	}
+	for _, iface := range node.Interfaces {
+		if iface.ID == interfaceID {
+			return node, iface, true
+		}
+	}
+	return model.Node{}, model.Interface{}, false
+}
+
+func (s *service) releaseLinkSubnet(link model.Link) {
+	if link.Subnet == "" {
+		return
+	}
+	s.repo.store.LinkSubnets.ReleaseString(link.Subnet)
+}
+
+func (s *service) deleteLinkState(link model.Link) {
+	s.repo.store.Mu.Lock()
+	defer s.repo.store.Mu.Unlock()
+
+	s.setInterfaceLinkStateLocked(link.InterfaceAID, "", "", 0, "")
+	s.setInterfaceLinkStateLocked(link.InterfaceBID, "", "", 0, "")
+	delete(s.repo.store.Links, link.ID)
+	delete(s.repo.store.LinkIndex, nodeLinkKey(link.InterfaceAID, link.InterfaceBID))
+}
+
+func (s *service) setInterfaceLinkStateLocked(interfaceID, linkID, runtimeIP string, runtimePrefixLen int, runtimeName string) {
+	nodeID, ok := s.repo.store.InterfaceOwnerIndex[interfaceID]
+	if !ok {
+		return
+	}
+	node, ok := s.repo.store.Nodes[nodeID]
+	if !ok {
+		return
+	}
+	for index, iface := range node.Interfaces {
+		if iface.ID != interfaceID {
+			continue
+		}
+		node.Interfaces[index].LinkID = linkID
+		node.Interfaces[index].RuntimeIPAddr = runtimeIP
+		node.Interfaces[index].RuntimePrefixLen = runtimePrefixLen
+		node.Interfaces[index].RuntimeName = runtimeName
+		s.repo.store.Nodes[nodeID] = node
+		return
+	}
+}
+
+func nodeLinkKey(a, b string) string {
+	if a < b {
+		return a + "|" + b
+	}
+	return b + "|" + a
 }
 
 func (s *service) startNode(ctx context.Context, nodeID string) error {

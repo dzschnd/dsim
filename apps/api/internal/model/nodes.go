@@ -12,6 +12,9 @@ type Node struct {
 	Status      NodeState   `json:"status"`
 	Type        NodeType    `json:"type"`
 	ContainerID string      `json:"containerId"`
+	NetworkID   string      `json:"networkId"`
+	NetworkName string      `json:"networkName"`
+	Subnet      string      `json:"subnet"`
 	CreatedAt   time.Time   `json:"createdAt"`
 	Interfaces  []Interface `json:"interfaces"`
 	Routes      []Route     `json:"routes"`
