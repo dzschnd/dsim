@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import ReactFlow, {
 	Background,
 	Connection,
@@ -22,14 +22,18 @@ import {
 	type ApiCommandResponse,
 	type ApiInterface,
 	type ApiLink,
+	type TopologyFile,
 	createNode as createNodeRequest,
 	createLink,
 	deleteLink,
 	deleteNode,
+	exportTopology,
 	fetchTopology,
+	importTopology,
 	runNodeCommand,
 	startNode,
 	stopNode,
+	updateNodePosition,
 } from "../services/topology";
 
 type TerminalState = {
@@ -99,6 +103,7 @@ export function TopologyCanvas() {
 	const [busy, setBusy] = useState<boolean>(false);
 	const [status, setStatus] = useState<string>("");
 	const selectedNodeIdRef = useRef<string>("");
+	const importInputRef = useRef<HTMLInputElement | null>(null);
 	const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(
 		new Map(),
 	);
@@ -132,7 +137,7 @@ export function TopologyCanvas() {
 			const flowNodes: Node<SquareNodeData>[] = apiNodes.map((node, index) => ({
 				id: node.id,
 				type: "square",
-				position: existingPositions.get(node.id) ?? randomPos(index),
+				position: existingPositions.get(node.id) ?? node.position ?? randomPos(index),
 				selected: node.id === currentSelectedNodeId,
 				data: {
 					label: `${node.name} (${node.id})`,
@@ -309,13 +314,13 @@ export function TopologyCanvas() {
 					curr.map((node) =>
 						node.id === nodeID
 							? {
-									...node,
-									data: {
-										...node.data,
-										terminalInput: "",
-										terminalLines: [],
-									},
-							  }
+								...node,
+								data: {
+									...node.data,
+									terminalInput: "",
+									terminalLines: [],
+								},
+							}
 							: node,
 					),
 				);
@@ -326,12 +331,12 @@ export function TopologyCanvas() {
 				curr.map((node) =>
 					node.id === nodeID
 						? {
-								...node,
-								data: {
-									...node.data,
-									terminalInput: "",
-								},
-						  }
+							...node,
+							data: {
+								...node.data,
+								terminalInput: "",
+							},
+						}
 						: node,
 				),
 			);
@@ -354,12 +359,12 @@ export function TopologyCanvas() {
 					curr.map((node) =>
 						node.id === nodeID
 							? {
-									...node,
-									data: {
-										...node.data,
-										terminalLines: [...node.data.terminalLines, `$ ${command}`, ...outputLines],
-									},
-							  }
+								...node,
+								data: {
+									...node.data,
+									terminalLines: [...node.data.terminalLines, `$ ${command}`, ...outputLines],
+								},
+							}
 							: node,
 					),
 				);
@@ -370,12 +375,12 @@ export function TopologyCanvas() {
 					curr.map((node) =>
 						node.id === nodeID
 							? {
-									...node,
-									data: {
-										...node.data,
-										terminalLines: [...node.data.terminalLines, `$ ${command}`, message],
-									},
-							  }
+								...node,
+								data: {
+									...node.data,
+									terminalLines: [...node.data.terminalLines, `$ ${command}`, message],
+								},
+							}
 							: node,
 					),
 				);
@@ -420,7 +425,7 @@ export function TopologyCanvas() {
 		setBusy(true);
 		setStatus(`Creating ${createNodeType}...`);
 		try {
-			await createNodeRequest(baseUrl, createNodeType);
+			await createNodeRequest(baseUrl, createNodeType, randomPos(nodesRef.current.length));
 			await loadTopology();
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : String(err);
@@ -429,6 +434,63 @@ export function TopologyCanvas() {
 			setBusy(false);
 		}
 	}, [baseUrl, createNodeType, loadTopology]);
+
+	const saveTopologyToFile = useCallback(async () => {
+		setBusy(true);
+		setStatus("Saving topology...");
+		try {
+			const topology = await exportTopology(baseUrl);
+			const blob = new Blob([JSON.stringify(topology, null, 2)], {
+				type: "application/json",
+			});
+			const url = URL.createObjectURL(blob);
+			const link = document.createElement("a");
+			link.href = url;
+			link.download = "topology.json";
+			document.body.appendChild(link);
+			link.click();
+			document.body.removeChild(link);
+			URL.revokeObjectURL(url);
+			setStatus("Topology saved");
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			setStatus(message || "Failed to save topology");
+		} finally {
+			setBusy(false);
+		}
+	}, [baseUrl]);
+
+	const openImportPicker = useCallback(() => {
+		importInputRef.current?.click();
+	}, []);
+
+	const loadTopologyFromFile = useCallback(
+		async (event: ChangeEvent<HTMLInputElement>) => {
+			const file = event.target.files?.[0];
+			event.target.value = "";
+			if (!file) {
+				return;
+			}
+
+			setBusy(true);
+			setStatus(`Loading topology from ${file.name}...`);
+			try {
+				const raw = await file.text();
+				const topology = JSON.parse(raw) as TopologyFile;
+				await importTopology(baseUrl, topology);
+				nodePositionsRef.current = new Map();
+				await loadTopology();
+				setSelectedNodeId("");
+				setStatus("Topology loaded");
+			} catch (err: unknown) {
+				const message = err instanceof Error ? err.message : String(err);
+				setStatus(message || "Failed to load topology");
+			} finally {
+				setBusy(false);
+			}
+		},
+		[baseUrl, loadTopology],
+	);
 
 	const deleteSelectedNode = useCallback(async () => {
 		if (!selectedNodeId) {
@@ -559,29 +621,50 @@ export function TopologyCanvas() {
 			setPendingConnection((current) =>
 				current
 					? {
-							...current,
-							[key]: value,
-						}
+						...current,
+						[key]: value,
+					}
 					: current,
 			);
 		},
 		[],
 	);
 
+	const persistNodePosition = useCallback(
+		async (nodeID: string, position: { x: number; y: number }) => {
+			try {
+				await updateNodePosition(baseUrl, nodeID, position);
+			} catch (err: unknown) {
+				const message = err instanceof Error ? err.message : String(err);
+				setStatus(`Failed to persist node position: ${message}`);
+			}
+		},
+		[baseUrl],
+	);
+
 	const sourceInterfaceOptions = pendingConnection
 		? getAvailableInterfaces(
-				nodes.find((node) => node.id === pendingConnection.sourceNodeID)?.data.interfaces ?? [],
-			)
+			nodes.find((node) => node.id === pendingConnection.sourceNodeID)?.data.interfaces ?? [],
+		)
 		: [];
 	const targetInterfaceOptions = pendingConnection
 		? getAvailableInterfaces(
-				nodes.find((node) => node.id === pendingConnection.targetNodeID)?.data.interfaces ?? [],
-			)
+			nodes.find((node) => node.id === pendingConnection.targetNodeID)?.data.interfaces ?? [],
+		)
 		: [];
 
 	return (
 		<div className="h-screen w-screen bg-zinc-100 text-zinc-900">
 			<header className="fixed left-0 top-0 z-20 flex w-full items-center gap-3 border-b border-zinc-300 bg-white px-4 py-3">
+				<input
+					ref={importInputRef}
+					type="file"
+					accept="application/json"
+					onChange={(event) => {
+						void loadTopologyFromFile(event);
+					}}
+					className="hidden"
+				/>
 				<select
 					value={createNodeType}
 					onChange={(event) =>
@@ -609,6 +692,22 @@ export function TopologyCanvas() {
 					className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
 				>
 					Delete selected node
+				</button>
+				<button
+					type="button"
+					onClick={() => void saveTopologyToFile()}
+					disabled={busy}
+					className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
+				>
+					Save
+				</button>
+				<button
+					type="button"
+					onClick={openImportPicker}
+					disabled={busy}
+					className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
+				>
+					Load
 				</button>
 				<div className="ml-3 text-sm text-zinc-700">
 					{selectedNodeId ? `Selected node: ${selectedNodeId}` : "No node selected"}
@@ -685,6 +784,12 @@ export function TopologyCanvas() {
 					onNodeClick={(_, node) => {
 						setSelectedNodeId(node.id);
 						setNodes((curr) => applySelectedNode(curr, node.id));
+					}}
+					onNodeDragStop={(_, node) => {
+						void persistNodePosition(node.id, {
+							x: node.position.x,
+							y: node.position.y,
+						});
 					}}
 					onPaneClick={() => {
 						setSelectedNodeId("");

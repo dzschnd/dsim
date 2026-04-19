@@ -11,8 +11,7 @@ import (
 )
 
 type Handler struct {
-	docker  *client.Client
-	service *service
+	service *Service
 }
 
 type createLinkRequest struct {
@@ -21,7 +20,7 @@ type createLinkRequest struct {
 }
 
 func NewHandler(docker *client.Client, store *store.Store) *Handler {
-	return &Handler{docker: docker, service: newService(docker, store)}
+	return &Handler{service: NewService(docker, store)}
 }
 
 func (h *Handler) CreateLinkHandler(w http.ResponseWriter, r *http.Request) {
@@ -34,7 +33,7 @@ func (h *Handler) CreateLinkHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	link, err := h.service.createLink(ctx, strings.TrimSpace(req.InterfaceAID), strings.TrimSpace(req.InterfaceBID))
+	link, err := h.service.CreateLink(ctx, strings.TrimSpace(req.InterfaceAID), strings.TrimSpace(req.InterfaceBID))
 	if err != nil {
 		httputil.WriteAppError(w, err)
 		return

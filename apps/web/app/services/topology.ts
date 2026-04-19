@@ -9,6 +9,7 @@ export type ApiInterface = {
 export type ApiNode = {
 	id: string;
 	name: string;
+	position: TopologyPosition;
 	status: string;
 	type: string;
 	containerId: string;
@@ -34,6 +35,47 @@ export type ApiCommandResponse = {
 	stdout: string;
 	stderr: string;
 	exitCode: number;
+};
+
+export type TopologyPosition = {
+	x: number;
+	y: number;
+};
+
+export type TopologyInterface = {
+	name: string;
+	cidr?: string;
+};
+
+export type TopologyRoute = {
+	destination: string;
+	gateway: string;
+};
+
+export type TopologyNode = {
+	id: string;
+	name: string;
+	type: string;
+	position: TopologyPosition;
+	interfaces: TopologyInterface[];
+	routes: TopologyRoute[];
+	running: boolean;
+};
+
+export type TopologyLinkEndpoint = {
+	nodeId: string;
+	interface: string;
+};
+
+export type TopologyLink = {
+	id: string;
+	a: TopologyLinkEndpoint;
+	b: TopologyLinkEndpoint;
+};
+
+export type TopologyFile = {
+	nodes: TopologyNode[];
+	links: TopologyLink[];
 };
 
 export async function parseApiError(res: Response): Promise<string> {
@@ -75,11 +117,53 @@ export async function fetchTopology(baseUrl: string): Promise<{
 	};
 }
 
-export async function createNode(baseUrl: string, type: "host" | "switch" | "router"): Promise<void> {
+export async function exportTopology(baseUrl: string): Promise<TopologyFile> {
+	const res = await fetch(`${baseUrl}/api/v1/topology`);
+
+	if (!res.ok) {
+		throw new Error(await parseApiError(res));
+	}
+
+	return (await res.json()) as TopologyFile;
+}
+
+export async function importTopology(baseUrl: string, topology: TopologyFile): Promise<void> {
+	const res = await fetch(`${baseUrl}/api/v1/topology`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(topology),
+	});
+
+	if (!res.ok) {
+		throw new Error(await parseApiError(res));
+	}
+}
+
+export async function createNode(
+	baseUrl: string,
+	type: "host" | "switch" | "router",
+	position: TopologyPosition,
+): Promise<void> {
 	const res = await fetch(`${baseUrl}/api/v1/nodes`, {
 		method: "POST",
 		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ type }),
+		body: JSON.stringify({ type, position }),
+	});
+
+	if (!res.ok) {
+		throw new Error(await parseApiError(res));
+	}
+}
+
+export async function updateNodePosition(
+	baseUrl: string,
+	nodeID: string,
+	position: TopologyPosition,
+): Promise<void> {
+	const res = await fetch(`${baseUrl}/api/v1/nodes/${nodeID}/position`, {
+		method: "PATCH",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify(position),
 	});
 
 	if (!res.ok) {

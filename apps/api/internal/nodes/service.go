@@ -18,6 +18,7 @@ import (
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/dzschnd/dsim/internal/httputil"
+	"github.com/dzschnd/dsim/internal/links"
 	"github.com/dzschnd/dsim/internal/model"
 	"github.com/dzschnd/dsim/internal/store"
 )
@@ -26,17 +27,19 @@ type linkRepository interface {
 	DeleteLinkByNode(nodeID string)
 }
 
-type service struct {
+type Service struct {
 	docker   *client.Client
 	repo     *repository
 	linkRepo linkRepository
 }
 
-func newService(docker *client.Client, repo *repository, linkRepo linkRepository) *service {
-	return &service{docker: docker, repo: repo, linkRepo: linkRepo}
+func NewService(docker *client.Client, s *store.Store) *Service {
+	repo := newRepository(s)
+	linkRepo := links.NewRepository(s)
+	return &Service{docker: docker, repo: repo, linkRepo: linkRepo}
 }
 
-func (s *service) getNodes() ([]model.Node, error) {
+func (s *Service) getNodes() ([]model.Node, error) {
 	return s.repo.ListNodes(), nil
 }
 
@@ -61,7 +64,7 @@ func nodeTypeTag(t model.NodeType) (string, int) {
 	return image, ifaceCount
 }
 
-func (s *service) createNode(ctx context.Context, reqNodeType string) (model.Node, error) {
+func (s *Service) CreateNode(ctx context.Context, reqNodeType string, position model.Position) (model.Node, error) {
 	nodeType, ok := model.NameNodeType[reqNodeType]
 	if !ok {
 		return model.Node{}, httputil.NewAppError(http.StatusBadRequest, "invalid node type")
@@ -147,6 +150,7 @@ func (s *service) createNode(ctx context.Context, reqNodeType string) (model.Nod
 	node := model.Node{
 		ID:          nodeID,
 		Name:        name,
+		Position:    position,
 		Status:      model.Idle,
 		Type:        nodeType,
 		ContainerID: createResp.ID,
@@ -170,7 +174,21 @@ func (s *service) createNode(ctx context.Context, reqNodeType string) (model.Nod
 	return node, nil
 }
 
-func (s *service) deleteNode(ctx context.Context, nodeID string) error {
+func (s *Service) UpdateNodePosition(ctx context.Context, nodeID string, position model.Position) error {
+	_ = ctx
+
+	if nodeID == "" {
+		return httputil.NewAppError(http.StatusBadRequest, "node id required")
+	}
+
+	if !s.repo.UpdateNodePosition(nodeID, position) {
+		return httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+
+	return nil
+}
+
+func (s *Service) deleteNode(ctx context.Context, nodeID string) error {
 	if nodeID == "" {
 		return httputil.NewAppError(http.StatusBadRequest, "node id required")
 	}
@@ -210,7 +228,7 @@ func (s *service) deleteNode(ctx context.Context, nodeID string) error {
 	return nil
 }
 
-func (s *service) linksForNode(nodeID string) []model.Link {
+func (s *Service) linksForNode(nodeID string) []model.Link {
 	s.repo.store.Mu.RLock()
 	defer s.repo.store.Mu.RUnlock()
 
@@ -223,12 +241,12 @@ func (s *service) linksForNode(nodeID string) []model.Link {
 	return links
 }
 
-func (s *service) nodeOwnsInterfaceLocked(nodeID, interfaceID string) bool {
+func (s *Service) nodeOwnsInterfaceLocked(nodeID, interfaceID string) bool {
 	ownerID, ok := s.repo.store.InterfaceOwnerIndex[interfaceID]
 	return ok && ownerID == nodeID
 }
 
-func (s *service) removeLinkNetwork(ctx context.Context, link model.Link) error {
+func (s *Service) removeLinkNetwork(ctx context.Context, link model.Link) error {
 	if link.NetworkID == "" {
 		return nil
 	}
@@ -245,7 +263,7 @@ func (s *service) removeLinkNetwork(ctx context.Context, link model.Link) error 
 	return nil
 }
 
-func (s *service) nodeByInterface(interfaceID string) (model.Node, model.Interface, bool) {
+func (s *Service) nodeByInterface(interfaceID string) (model.Node, model.Interface, bool) {
 	s.repo.store.Mu.RLock()
 	defer s.repo.store.Mu.RUnlock()
 
@@ -265,14 +283,14 @@ func (s *service) nodeByInterface(interfaceID string) (model.Node, model.Interfa
 	return model.Node{}, model.Interface{}, false
 }
 
-func (s *service) releaseLinkSubnet(link model.Link) {
+func (s *Service) releaseLinkSubnet(link model.Link) {
 	if link.Subnet == "" {
 		return
 	}
 	s.repo.store.LinkSubnets.ReleaseString(link.Subnet)
 }
 
-func (s *service) deleteLinkState(link model.Link) {
+func (s *Service) deleteLinkState(link model.Link) {
 	s.repo.store.Mu.Lock()
 	defer s.repo.store.Mu.Unlock()
 
@@ -282,7 +300,7 @@ func (s *service) deleteLinkState(link model.Link) {
 	delete(s.repo.store.LinkIndex, nodeLinkKey(link.InterfaceAID, link.InterfaceBID))
 }
 
-func (s *service) setInterfaceLinkStateLocked(interfaceID, linkID, runtimeIP string, runtimePrefixLen int, runtimeName string) {
+func (s *Service) setInterfaceLinkStateLocked(interfaceID, linkID, runtimeIP string, runtimePrefixLen int, runtimeName string) {
 	nodeID, ok := s.repo.store.InterfaceOwnerIndex[interfaceID]
 	if !ok {
 		return
@@ -311,7 +329,7 @@ func nodeLinkKey(a, b string) string {
 	return b + "|" + a
 }
 
-func (s *service) startNode(ctx context.Context, nodeID string) error {
+func (s *Service) StartNode(ctx context.Context, nodeID string) error {
 	if nodeID == "" {
 		return httputil.NewAppError(http.StatusBadRequest, "node id required")
 	}
@@ -384,7 +402,7 @@ func (s *service) startNode(ctx context.Context, nodeID string) error {
 	return nil
 }
 
-func (s *service) ensureSwitchBridge(ctx context.Context, node model.Node) error {
+func (s *Service) ensureSwitchBridge(ctx context.Context, node model.Node) error {
 	if _, err := execInContainerChecked(
 		ctx,
 		s.docker,
@@ -408,7 +426,7 @@ func (s *service) ensureSwitchBridge(ctx context.Context, node model.Node) error
 	return nil
 }
 
-func (s *service) attachSwitchPort(ctx context.Context, node model.Node, runtimeName string) error {
+func (s *Service) attachSwitchPort(ctx context.Context, node model.Node, runtimeName string) error {
 	if runtimeName == "" {
 		return httputil.NewAppError(http.StatusBadRequest, "runtime interface name not resolved")
 	}
@@ -439,7 +457,7 @@ func (s *service) attachSwitchPort(ctx context.Context, node model.Node, runtime
 	return nil
 }
 
-func (s *service) syncSwitchPorts(ctx context.Context, nodeID string) error {
+func (s *Service) syncSwitchPorts(ctx context.Context, nodeID string) error {
 	node, ok := s.repo.GetNode(nodeID)
 	if !ok {
 		return httputil.NewAppError(http.StatusNotFound, "node not found")
@@ -463,7 +481,7 @@ func (s *service) syncSwitchPorts(ctx context.Context, nodeID string) error {
 	return nil
 }
 
-func (s *service) syncRuntimeInterfaces(nodeID string, interfaces []model.Interface, inspect types.ContainerJSON) {
+func (s *Service) syncRuntimeInterfaces(nodeID string, interfaces []model.Interface, inspect types.ContainerJSON) {
 	if inspect.NetworkSettings == nil || inspect.NetworkSettings.Networks == nil {
 		return
 	}
@@ -504,7 +522,7 @@ type runtimeInterfaceInfo struct {
 	AddrInfo []runtimeAddrInfo `json:"addr_info"`
 }
 
-func (s *service) syncRuntimeInterfaceNames(ctx context.Context, nodeID string) error {
+func (s *Service) syncRuntimeInterfaceNames(ctx context.Context, nodeID string) error {
 	node, ok := s.repo.GetNode(nodeID)
 	if !ok {
 		return httputil.NewAppError(http.StatusNotFound, "node not found")
@@ -558,7 +576,7 @@ func (s *service) syncRuntimeInterfaceNames(ctx context.Context, nodeID string) 
 	return nil
 }
 
-func (s *service) syncRuntimeInterfaceAddresses(ctx context.Context, nodeID string) error {
+func (s *Service) syncRuntimeInterfaceAddresses(ctx context.Context, nodeID string) error {
 	node, ok := s.repo.GetNode(nodeID)
 	if !ok {
 		return httputil.NewAppError(http.StatusNotFound, "node not found")
@@ -576,7 +594,7 @@ func (s *service) syncRuntimeInterfaceAddresses(ctx context.Context, nodeID stri
 	return nil
 }
 
-func (s *service) syncRuntimeRoutes(ctx context.Context, nodeID string) error {
+func (s *Service) syncRuntimeRoutes(ctx context.Context, nodeID string) error {
 	node, ok := s.repo.GetNode(nodeID)
 	if !ok {
 		return httputil.NewAppError(http.StatusNotFound, "node not found")
@@ -591,7 +609,7 @@ func (s *service) syncRuntimeRoutes(ctx context.Context, nodeID string) error {
 	return nil
 }
 
-func (s *service) stopNode(ctx context.Context, nodeID string) error {
+func (s *Service) stopNode(ctx context.Context, nodeID string) error {
 	if nodeID == "" {
 		return httputil.NewAppError(http.StatusBadRequest, "node id required")
 	}
@@ -679,7 +697,7 @@ func execInContainerChecked(
 	return stdout, nil
 }
 
-func (s *service) execCommand(ctx context.Context, containerID string, execCmd []string, command string) (commandResponse, error) {
+func (s *Service) execCommand(ctx context.Context, containerID string, execCmd []string, command string) (commandResponse, error) {
 	stdout, stderr, exitCode, err := execInContainer(ctx, s.docker, containerID, execCmd)
 	if err != nil {
 		return commandResponse{}, err
@@ -693,7 +711,7 @@ func (s *service) execCommand(ctx context.Context, containerID string, execCmd [
 	}, nil
 }
 
-func (s *service) runCommand(ctx context.Context, nodeID, command string) (commandResponse, error) {
+func (s *Service) runCommand(ctx context.Context, nodeID, command string) (commandResponse, error) {
 	if nodeID == "" {
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "node id required")
 	}
@@ -776,7 +794,7 @@ func runHelp(command string) commandResponse {
 	}
 }
 
-func (s *service) runIPAddr(command string, node model.Node) commandResponse {
+func (s *Service) runIPAddr(command string, node model.Node) commandResponse {
 	lines := make([]string, 0, len(node.Interfaces))
 	for _, iface := range node.Interfaces {
 		if iface.IPAddr == "" || iface.PrefixLen == 0 {
@@ -794,7 +812,7 @@ func (s *service) runIPAddr(command string, node model.Node) commandResponse {
 	}
 }
 
-func (s *service) runPing(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+func (s *Service) runPing(ctx context.Context, command string, node model.Node) (commandResponse, error) {
 	fields := strings.Fields(command)
 	targetLogicalIP := fields[1]
 	if _, err := netip.ParseAddr(targetLogicalIP); err != nil {
@@ -809,7 +827,7 @@ func (s *service) runPing(ctx context.Context, command string, node model.Node) 
 	)
 }
 
-func (s *service) runIPSet(ctx context.Context, command, nodeID, interfaceName, cidr string) (commandResponse, error) {
+func (s *Service) runIPSet(ctx context.Context, command, nodeID, interfaceName, cidr string) (commandResponse, error) {
 	prefix, err := netip.ParsePrefix(cidr)
 	if err != nil {
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid interface address")
@@ -898,7 +916,7 @@ func (s *service) runIPSet(ctx context.Context, command, nodeID, interfaceName, 
 	}, nil
 }
 
-func (s *service) applyRuntimeInterfaceAddress(ctx context.Context, node model.Node, iface model.Interface) error {
+func (s *Service) applyRuntimeInterfaceAddress(ctx context.Context, node model.Node, iface model.Interface) error {
 	if iface.RuntimeName == "" {
 		return httputil.NewAppError(http.StatusBadRequest, "runtime interface name not resolved")
 	}
@@ -948,7 +966,7 @@ func runIPRouteList(command string, node model.Node) commandResponse {
 	}
 }
 
-func (s *service) runIPRoute(
+func (s *Service) runIPRoute(
 	ctx context.Context,
 	command string,
 	node model.Node,
@@ -989,7 +1007,7 @@ func (s *service) runIPRoute(
 	}, nil
 }
 
-func (s *service) applyRuntimeRoute(ctx context.Context, node model.Node, route model.Route) error {
+func (s *Service) applyRuntimeRoute(ctx context.Context, node model.Node, route model.Route) error {
 	s.repo.store.Mu.RLock()
 	defer s.repo.store.Mu.RUnlock()
 
@@ -1012,7 +1030,7 @@ func (s *service) applyRuntimeRoute(ctx context.Context, node model.Node, route 
 	return nil
 }
 
-func (s *service) findReachableNextHopLocked(node model.Node, nextHop string) (model.Node, model.Interface, bool) {
+func (s *Service) findReachableNextHopLocked(node model.Node, nextHop string) (model.Node, model.Interface, bool) {
 	nextHopAddr, err := netip.ParseAddr(nextHop)
 	if err != nil {
 		return model.Node{}, model.Interface{}, false
@@ -1044,7 +1062,7 @@ func (s *service) findReachableNextHopLocked(node model.Node, nextHop string) (m
 	return model.Node{}, model.Interface{}, false
 }
 
-func (s *service) findInterfaceThroughSwitchesLocked(
+func (s *Service) findInterfaceThroughSwitchesLocked(
 	interfaceID string,
 	visited map[string]struct{},
 	match func(model.Node, model.Interface) bool,
@@ -1097,7 +1115,7 @@ func (s *service) findInterfaceThroughSwitchesLocked(
 	return model.Node{}, model.Interface{}, false
 }
 
-func (s *service) findInterfaceOwnerLocked(interfaceID string) (model.Node, model.Interface, bool) {
+func (s *Service) findInterfaceOwnerLocked(interfaceID string) (model.Node, model.Interface, bool) {
 	nodeID, ok := s.repo.store.InterfaceOwnerIndex[interfaceID]
 	if !ok {
 		return model.Node{}, model.Interface{}, false
@@ -1117,7 +1135,7 @@ func (s *service) findInterfaceOwnerLocked(interfaceID string) (model.Node, mode
 	return model.Node{}, model.Interface{}, false
 }
 
-func (s *service) findBestRouteLocked(node model.Node, targetAddr netip.Addr) (model.Route, bool) {
+func (s *Service) findBestRouteLocked(node model.Node, targetAddr netip.Addr) (model.Route, bool) {
 	var best model.Route
 	bestBits := -1
 

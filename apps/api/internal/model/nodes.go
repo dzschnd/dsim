@@ -9,6 +9,7 @@ import (
 type Node struct {
 	ID          string      `json:"id"`
 	Name        string      `json:"name"`
+	Position    Position    `json:"position"`
 	Status      NodeState   `json:"status"`
 	Type        NodeType    `json:"type"`
 	ContainerID string      `json:"containerId"`
@@ -18,6 +19,11 @@ type Node struct {
 	CreatedAt   time.Time   `json:"createdAt"`
 	Interfaces  []Interface `json:"interfaces"`
 	Routes      []Route     `json:"routes"`
+}
+
+type Position struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
 }
 
 type NodeType int

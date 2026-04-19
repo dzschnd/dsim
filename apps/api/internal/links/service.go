@@ -21,7 +21,7 @@ import (
 	"github.com/dzschnd/dsim/internal/store"
 )
 
-type service struct {
+type Service struct {
 	docker *client.Client
 	repo   *Repository
 }
@@ -36,11 +36,11 @@ type runtimeInterfaceInfo struct {
 	AddrInfo []runtimeAddrInfo `json:"addr_info"`
 }
 
-func newService(docker *client.Client, s *store.Store) *service {
-	return &service{docker: docker, repo: NewRepository(s)}
+func NewService(docker *client.Client, s *store.Store) *Service {
+	return &Service{docker: docker, repo: NewRepository(s)}
 }
 
-func (s *service) createLink(ctx context.Context, interfaceAID, interfaceBID string) (model.Link, error) {
+func (s *Service) CreateLink(ctx context.Context, interfaceAID, interfaceBID string) (model.Link, error) {
 	if interfaceAID == "" || interfaceBID == "" {
 		return model.Link{}, httputil.NewAppError(http.StatusBadRequest, "interface ids are required")
 	}
@@ -164,11 +164,11 @@ func (s *service) createLink(ctx context.Context, interfaceAID, interfaceBID str
 	return link, nil
 }
 
-func (s *service) listLinks() ([]model.Link, error) {
+func (s *Service) listLinks() ([]model.Link, error) {
 	return s.repo.ListLinks(), nil
 }
 
-func (s *service) deleteLink(ctx context.Context, linkID string) error {
+func (s *Service) deleteLink(ctx context.Context, linkID string) error {
 	if linkID == "" {
 		return httputil.NewAppError(http.StatusBadRequest, "link id required")
 	}
@@ -203,7 +203,7 @@ func (s *service) deleteLink(ctx context.Context, linkID string) error {
 	return nil
 }
 
-func (s *service) removeLinkNetwork(ctx context.Context, link model.Link) error {
+func (s *Service) removeLinkNetwork(ctx context.Context, link model.Link) error {
 	if link.NetworkID == "" {
 		return nil
 	}
@@ -220,7 +220,7 @@ func (s *service) removeLinkNetwork(ctx context.Context, link model.Link) error 
 	return nil
 }
 
-func (s *service) rollbackLinkCreate(ctx context.Context, networkID string, subnet netip.Prefix, containerIDs ...string) {
+func (s *Service) rollbackLinkCreate(ctx context.Context, networkID string, subnet netip.Prefix, containerIDs ...string) {
 	for _, containerID := range containerIDs {
 		if containerID == "" {
 			continue
@@ -233,7 +233,7 @@ func (s *service) rollbackLinkCreate(ctx context.Context, networkID string, subn
 	s.repo.store.LinkSubnets.Release(subnet)
 }
 
-func (s *service) rollbackPersistedLinkCreate(ctx context.Context, link model.Link) {
+func (s *Service) rollbackPersistedLinkCreate(ctx context.Context, link model.Link) {
 	_ = s.removeLinkNetwork(ctx, link)
 	s.repo.SetInterfaceLink(link.InterfaceAID, "")
 	s.repo.SetInterfaceLink(link.InterfaceBID, "")
@@ -245,7 +245,7 @@ func (s *service) rollbackPersistedLinkCreate(ctx context.Context, link model.Li
 	s.repo.store.LinkSubnets.ReleaseString(link.Subnet)
 }
 
-func (s *service) realizeLinkedInterface(
+func (s *Service) realizeLinkedInterface(
 	ctx context.Context,
 	node model.Node,
 	interfaceID string,
@@ -397,7 +397,7 @@ func execInContainerChecked(
 	return stdout, nil
 }
 
-func (s *service) ensureSwitchBridge(ctx context.Context, node model.Node) error {
+func (s *Service) ensureSwitchBridge(ctx context.Context, node model.Node) error {
 	if _, err := execInContainerChecked(
 		ctx,
 		s.docker,
@@ -421,7 +421,7 @@ func (s *service) ensureSwitchBridge(ctx context.Context, node model.Node) error
 	return nil
 }
 
-func (s *service) attachSwitchPort(ctx context.Context, node model.Node, runtimeName string) error {
+func (s *Service) attachSwitchPort(ctx context.Context, node model.Node, runtimeName string) error {
 	if runtimeName == "" {
 		return httputil.NewAppError(http.StatusBadRequest, "runtime interface name not resolved")
 	}
@@ -452,7 +452,7 @@ func (s *service) attachSwitchPort(ctx context.Context, node model.Node, runtime
 	return nil
 }
 
-func (s *service) detachSwitchPortIfRunning(ctx context.Context, node model.Node, runtimeName string) error {
+func (s *Service) detachSwitchPortIfRunning(ctx context.Context, node model.Node, runtimeName string) error {
 	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
 	if err != nil {
 		if client.IsErrNotFound(err) {

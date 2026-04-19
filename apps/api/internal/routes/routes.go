@@ -7,6 +7,7 @@ import (
 	"github.com/dzschnd/dsim/internal/links"
 	"github.com/dzschnd/dsim/internal/nodes"
 	"github.com/dzschnd/dsim/internal/store"
+	"github.com/dzschnd/dsim/internal/topology"
 )
 
 type Server struct {
@@ -22,10 +23,12 @@ func NewRouter(s *Server) http.Handler {
 	r := http.NewServeMux()
 	n := nodes.NewHandler(s.docker, s.store)
 	l := links.NewHandler(s.docker, s.store)
+	t := topology.NewHandler(s.docker, s.store)
 
 	r.HandleFunc("POST /api/v1/nodes", n.CreateNodeHandler)
 	r.HandleFunc("GET /api/v1/nodes", n.ListNodesHandler)
 	r.HandleFunc("DELETE /api/v1/nodes/{id}", n.DeleteNodeHandler)
+	r.HandleFunc("PATCH /api/v1/nodes/{id}/position", n.UpdateNodePositionHandler)
 	r.HandleFunc("POST /api/v1/nodes/{id}/start", n.StartNodeHandler)
 	r.HandleFunc("POST /api/v1/nodes/{id}/stop", n.StopNodeHandler)
 	r.HandleFunc("POST /api/v1/nodes/{id}/cli", n.CLIHandler)
@@ -33,6 +36,9 @@ func NewRouter(s *Server) http.Handler {
 	r.HandleFunc("POST /api/v1/links", l.CreateLinkHandler)
 	r.HandleFunc("GET /api/v1/links", l.ListLinksHandler)
 	r.HandleFunc("DELETE /api/v1/links/{id}", l.DeleteLinkHandler)
+
+	r.HandleFunc("GET /api/v1/topology", t.ExportTopologyHandler)
+	r.HandleFunc("POST /api/v1/topology", t.ImportTopologyHandler)
 
 	return requestLogger(corsHeader(jsonHeader(r)))
 }
