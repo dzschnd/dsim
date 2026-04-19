@@ -28,7 +28,7 @@ func main() {
 	logger := slog.New(tint.NewHandler(os.Stdout,
 		&tint.Options{
 			Level:      slog.LevelInfo,
-			TimeFormat: "15:04:05",
+			TimeFormat: "15:04:05.000",
 			NoColor:    false,
 		},
 	))
@@ -69,5 +69,7 @@ func main() {
 		slog.Info("Shutdown complete")
 	}
 
-	api.cleanUp()
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 1*time.Minute)
+	defer cleanupCancel()
+	api.cleanUp(cleanupCtx)
 }

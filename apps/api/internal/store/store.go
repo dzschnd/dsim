@@ -78,3 +78,27 @@ func hydrateSubnetAllocators(ctx context.Context, docker *client.Client, s *Stor
 
 	return nil
 }
+
+func (s *Store) NodesSnapshot() []model.Node {
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
+
+	nodes := make([]model.Node, 0, len(s.Nodes))
+	for _, node := range s.Nodes {
+		nodes = append(nodes, node)
+	}
+
+	return nodes
+}
+
+func (s *Store) LinksSnapshot() []model.Link {
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
+
+	links := make([]model.Link, 0, len(s.Links))
+	for _, link := range s.Links {
+		links = append(links, link)
+	}
+
+	return links
+}

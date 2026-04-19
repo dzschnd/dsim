@@ -8,6 +8,7 @@
 - ping
 - 3 node types (switch/router/host)
 - What if host docker uses 10.251.0.0/16?
+- on sigint: stop/remove containers, prune networks
 
 # Sources
 
