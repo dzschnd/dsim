@@ -21,7 +21,10 @@ export function NodeTerminal({
 			>
 				{terminalLines.length > 0
 					? terminalLines.map((line, index) => (
-						<div key={`${line}-${index}`} className="leading-5 text-zinc-300">
+						<div
+							key={`${line}-${index}`}
+							className="break-words whitespace-pre-wrap leading-5 text-zinc-300"
+						>
 							{line}
 						</div>
 					))

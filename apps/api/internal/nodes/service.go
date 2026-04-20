@@ -33,6 +33,8 @@ type Service struct {
 	linkRepo linkRepository
 }
 
+const iperfLogPath = "/var/log/iperf/iperf.log"
+
 func NewService(docker *client.Client, s *store.Store) *Service {
 	repo := newRepository(s)
 	linkRepo := links.NewRepository(s)
@@ -741,13 +743,19 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 		return s.runIPAddr(command, node), nil
 	}
 	if command == "help" {
-		return runHelp(command), nil
+		return runHelp(command, node.Type), nil
 	}
 
 	fields := strings.Fields(command)
 	if node.Type == model.Switch {
 		if len(fields) >= 2 && fields[0] == "ping" {
 			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support ping")
+		}
+		if len(fields) >= 2 && fields[0] == "traceroute" {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support traceroute")
+		}
+		if len(fields) >= 1 && fields[0] == "iperf" {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support iperf")
 		}
 		if len(fields) >= 2 && fields[0] == "ip" && fields[1] == "set" {
 			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch ports do not support ip assignment")
@@ -758,6 +766,30 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	}
 	if len(fields) == 2 && fields[0] == "ping" {
 		return s.runPing(ctx, command, node)
+	}
+	if len(fields) == 2 && fields[0] == "traceroute" {
+		return s.runTraceroute(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "iperf" && fields[1] == "tcp" {
+		return s.runIperfTCP(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "iperf" && fields[1] == "udp" {
+		return s.runIperfUDP(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "iperf" && fields[1] == "server" && fields[2] == "start" {
+		return s.runIperfServerStart(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "iperf" && fields[1] == "server" && fields[2] == "stop" {
+		return s.runIperfServerStop(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "iperf" && fields[1] == "server" && fields[2] == "status" {
+		return s.runIperfServerStatus(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "iperf" && fields[1] == "server" && fields[2] == "log" {
+		return s.runIperfServerLog(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "iperf" && fields[1] == "server" && fields[2] == "logclear" {
+		return s.runIperfServerLogClear(ctx, command, node)
 	}
 	if len(fields) == 2 && fields[0] == "ip" && fields[1] == "route" {
 		return runIPRouteList(command, node), nil
@@ -775,15 +807,29 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "unsupported command: "+command)
 }
 
-func runHelp(command string) commandResponse {
+func runHelp(command string, nodeType model.NodeType) commandResponse {
 	lines := []string{
 		"help",
-		"ip addr",
-		"ip set [interface] [ip/prefix]",
-		"ip route",
-		"ip route default [next-hop]",
-		"ip route add [destination/prefix] via [next-hop]",
-		"ping [target-ip]",
+		"clear",
+	}
+
+	if nodeType != model.Switch {
+		lines = append(lines,
+			"ip addr",
+			"ip set [interface] [ip/prefix]",
+			"ip route",
+			"ip route default [next-hop]",
+			"ip route add [destination/prefix] via [next-hop]",
+			"ping [target-ip]",
+			"traceroute [target-ip]",
+			"iperf tcp [ip]",
+			"iperf udp [ip]",
+			"iperf server start",
+			"iperf server stop",
+			"iperf server status",
+			"iperf server log",
+			"iperf server logclear",
+		)
 	}
 
 	return commandResponse{
@@ -825,6 +871,141 @@ func (s *Service) runPing(ctx context.Context, command string, node model.Node) 
 		[]string{"ping", "-c", "4", targetLogicalIP},
 		command,
 	)
+}
+
+func (s *Service) runTraceroute(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	fields := strings.Fields(command)
+	targetLogicalIP := fields[1]
+	if _, err := netip.ParseAddr(targetLogicalIP); err != nil {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
+	}
+
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"traceroute", "-n", "-w", "1", "-q", "1", targetLogicalIP},
+		command,
+	)
+}
+
+func (s *Service) runIperfTCP(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	fields := strings.Fields(command)
+	targetIP := fields[2]
+	if _, err := netip.ParseAddr(targetIP); err != nil {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
+	}
+
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"iperf3", "-c", targetIP, "-t", "5"},
+		command,
+	)
+}
+
+func (s *Service) runIperfUDP(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	fields := strings.Fields(command)
+	targetIP := fields[2]
+	if _, err := netip.ParseAddr(targetIP); err != nil {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
+	}
+
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"iperf3", "-u", "-c", targetIP, "-t", "5"},
+		command,
+	)
+}
+
+func (s *Service) runIperfServerStart(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	running, err := s.iperfServerRunning(ctx, node.ContainerID)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if running {
+		return commandResponse{
+			Command:  command,
+			Stdout:   "iperf server already running",
+			Stderr:   "",
+			ExitCode: 0,
+		}, nil
+	}
+
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"sh", "-c", "mkdir -p /var/log/iperf && nohup iperf3 -s >" + iperfLogPath + " 2>&1 &"},
+		"failed to start iperf server",
+	); err != nil {
+		return commandResponse{}, err
+	}
+
+	return commandResponse{
+		Command:  command,
+		Stdout:   "iperf server started",
+		Stderr:   "",
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) runIperfServerStop(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"sh", "-c", "pkill -x iperf3 >/dev/null 2>&1 || true"},
+		command,
+	)
+}
+
+func (s *Service) runIperfServerStatus(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"sh", "-c", `pgrep -x iperf3 >/dev/null && echo "running" || echo "stopped"`},
+		command,
+	)
+}
+
+func (s *Service) runIperfServerLog(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"sh", "-c", "cat " + iperfLogPath + " 2>/dev/null || true"},
+		command,
+	)
+}
+
+func (s *Service) runIperfServerLogClear(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"sh", "-c", "mkdir -p /var/log/iperf && : >" + iperfLogPath},
+		command,
+	)
+}
+
+func (s *Service) iperfServerRunning(ctx context.Context, containerID string) (bool, error) {
+	stdout, stderr, exitCode, err := execInContainer(
+		ctx,
+		s.docker,
+		containerID,
+		[]string{"sh", "-c", "pgrep -x iperf3 >/dev/null && echo true || echo false"},
+	)
+	if err != nil {
+		return false, err
+	}
+	if exitCode != 0 {
+		message := "failed to inspect iperf server status"
+		if trimmed := strings.TrimSpace(stderr); trimmed != "" {
+			message += ": " + trimmed
+		}
+		slog.Error("Container exec failed", "message", message)
+		return false, httputil.NewAppError(http.StatusInternalServerError, message)
+	}
+
+	return strings.TrimSpace(stdout) == "true", nil
 }
 
 func (s *Service) runIPSet(ctx context.Context, command, nodeID, interfaceName, cidr string) (commandResponse, error) {
