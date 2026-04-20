@@ -120,6 +120,7 @@ export function TopologyCanvas() {
 	const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
 	const [connectionSourceNodeId, setConnectionSourceNodeId] = useState<string>("");
 	const [isCreateNodeMenuOpen, setIsCreateNodeMenuOpen] = useState<boolean>(false);
+	const [fullscreenTerminalNodeId, setFullscreenTerminalNodeId] = useState<string>("");
 	const [busyNodeIds, setBusyNodeIds] = useState<Set<string>>(new Set());
 	const [busy, setBusy] = useState<boolean>(false);
 	const [status, setStatus] = useState<string>("");
@@ -127,6 +128,7 @@ export function TopologyCanvas() {
 	const selectedLinkIdRef = useRef<string>("");
 	const importInputRef = useRef<HTMLInputElement | null>(null);
 	const connectionSourceNodeIdRef = useRef<string>("");
+	const fullscreenTerminalNodeIdRef = useRef<string>("");
 	const pendingConnectionRef = useRef<PendingConnection | null>(null);
 	const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(
 		new Map(),
@@ -135,6 +137,7 @@ export function TopologyCanvas() {
 	const terminalStateRef = useRef<Map<string, TerminalState>>(new Map());
 	const toggleNodeRunRef = useRef<(nodeID: string) => Promise<void>>(async () => { });
 	const toggleTerminalRef = useRef<(nodeID: string) => void>(() => { });
+	const toggleTerminalFullscreenRef = useRef<(nodeID: string) => void>(() => { });
 	const updateTerminalInputRef = useRef<(nodeID: string, value: string) => void>(() => { });
 	const submitTerminalInputRef = useRef<(nodeID: string) => Promise<void>>(async () => { });
 
@@ -176,10 +179,12 @@ export function TopologyCanvas() {
 					connectionSourceNodeId: connectionSourceNodeIdRef.current,
 					isTerminalOpen:
 						node.status === "running" ? (terminalState.get(node.id)?.isOpen ?? false) : false,
+					isTerminalFullscreen: fullscreenTerminalNodeIdRef.current === node.id,
 					terminalInput: terminalState.get(node.id)?.input ?? "",
 					terminalLines: terminalState.get(node.id)?.lines ?? [],
 					onToggleRun: () => void toggleNodeRunRef.current(node.id),
 					onToggleTerminal: () => toggleTerminalRef.current(node.id),
+					onToggleTerminalFullscreen: () => toggleTerminalFullscreenRef.current(node.id),
 					onTerminalInputChange: (value: string) => updateTerminalInputRef.current(node.id, value),
 					onTerminalSubmit: () => submitTerminalInputRef.current(node.id),
 				},
@@ -313,6 +318,19 @@ export function TopologyCanvas() {
 	}, [connectionSourceNodeId]);
 
 	useEffect(() => {
+		fullscreenTerminalNodeIdRef.current = fullscreenTerminalNodeId;
+		setNodes((curr) =>
+			curr.map((node) => ({
+				...node,
+				data: {
+					...node.data,
+					isTerminalFullscreen: fullscreenTerminalNodeId === node.id,
+				},
+			})),
+		);
+	}, [fullscreenTerminalNodeId]);
+
+	useEffect(() => {
 		setEdges((curr) => applySelectedEdge(curr, selectedLinkId));
 	}, [selectedLinkId]);
 
@@ -335,6 +353,11 @@ export function TopologyCanvas() {
 					: node,
 			),
 		);
+		setFullscreenTerminalNodeId((current) => (current === nodeID ? "" : current));
+	}, []);
+
+	const toggleTerminalFullscreen = useCallback((nodeID: string) => {
+		setFullscreenTerminalNodeId((current) => (current === nodeID ? "" : nodeID));
 	}, []);
 
 	const updateTerminalInput = useCallback((nodeID: string, value: string) => {
@@ -454,6 +477,10 @@ export function TopologyCanvas() {
 	}, [toggleTerminal]);
 
 	useEffect(() => {
+		toggleTerminalFullscreenRef.current = toggleTerminalFullscreen;
+	}, [toggleTerminalFullscreen]);
+
+	useEffect(() => {
 		updateTerminalInputRef.current = updateTerminalInput;
 	}, [updateTerminalInput]);
 
@@ -472,6 +499,16 @@ export function TopologyCanvas() {
 	useEffect(() => {
 		pendingConnectionRef.current = pendingConnection;
 	}, [pendingConnection]);
+
+	useEffect(() => {
+		if (fullscreenTerminalNodeId === "") {
+			return;
+		}
+		const fullscreenNode = nodes.find((node) => node.id === fullscreenTerminalNodeId);
+		if (!fullscreenNode || !fullscreenNode.data.isTerminalOpen) {
+			setFullscreenTerminalNodeId("");
+		}
+	}, [fullscreenTerminalNodeId, nodes]);
 
 	const onNodesChange: OnNodesChange = useCallback(
 		(changes) => {

@@ -15,10 +15,12 @@ export type SquareNodeData = {
 	isBusy: boolean;
 	connectionSourceNodeId: string;
 	isTerminalOpen: boolean;
+	isTerminalFullscreen: boolean;
 	terminalInput: string;
 	terminalLines: string[];
 	onToggleRun: () => void;
 	onToggleTerminal: () => void;
+	onToggleTerminalFullscreen: () => void;
 	onTerminalInputChange: (value: string) => void;
 	onTerminalSubmit: () => void;
 };
@@ -77,8 +79,10 @@ export function SquareNode({ data }: NodeProps<SquareNodeData>) {
 				<NodeTerminal
 					terminalLines={data.terminalLines}
 					terminalInput={data.terminalInput}
+					isFullscreen={data.isTerminalFullscreen}
 					onInputChange={data.onTerminalInputChange}
 					onSubmit={data.onTerminalSubmit}
+					onToggleFullscreen={data.onToggleTerminalFullscreen}
 				/>
 			) : null}
 			<SideHandles currentNodeId={data.nodeId} connectionSourceNodeId={data.connectionSourceNodeId} />
