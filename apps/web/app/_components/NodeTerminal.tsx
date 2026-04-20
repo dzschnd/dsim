@@ -12,8 +12,13 @@ export function NodeTerminal({
 	onSubmit,
 }: NodeTerminalProps) {
 	return (
-		<div className="nodrag nopan absolute bottom-full left-1/2 z-20 mb-2 flex h-44 w-64 -translate-x-1/2 flex-col overflow-hidden rounded border border-slate-800 bg-zinc-950 text-left font-mono text-[8px] text-zinc-100 shadow-lg">
-			<div className="flex-1 overflow-y-scroll px-3 py-2">
+		<div className="nodrag nopan nowheel absolute bottom-full left-1/2 z-[1000] mb-2 flex h-44 w-64 -translate-x-1/2 flex-col overflow-hidden rounded border border-slate-800 bg-zinc-950 text-left font-mono text-[8px] text-zinc-100 shadow-lg">
+			<div
+				className="node-terminal-scroll nowheel flex-1 overflow-y-auto px-3 py-2"
+				onWheel={(event) => {
+					event.stopPropagation();
+				}}
+			>
 				{terminalLines.length > 0
 					? terminalLines.map((line, index) => (
 						<div key={`${line}-${index}`} className="leading-5 text-zinc-300">

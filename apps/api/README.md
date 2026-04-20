@@ -3,12 +3,9 @@
 - Handle if docker has too many networks
 - Handle IP uniqueness
 - Make sure of node isolation between networks
-- Build containers on startup if don't exist
-- Graceful shutdown
-- ping
-- 3 node types (switch/router/host)
 - What if host docker uses 10.251.0.0/16?
-- on sigint: stop/remove containers, prune networks
+- block UI while topo is loading (OR make topo appear in real time instead of waiting for the full build before rendering the nodes: 1. return logical topo, 2. apply topo)
+- unlink/link seemingly drops route config
 
 # Sources
 

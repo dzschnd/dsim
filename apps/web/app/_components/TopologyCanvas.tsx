@@ -7,6 +7,7 @@ import ReactFlow, {
 	ConnectionLineType,
 	Controls,
 	Edge,
+	EdgeMouseHandler,
 	MiniMap,
 	Node,
 	OnConnect,
@@ -54,6 +55,15 @@ const EDGE_STYLE = {
 	strokeWidth: 3,
 };
 
+const SELECTED_EDGE_STYLE = {
+	stroke: "#2563eb",
+	strokeWidth: 4,
+};
+
+function nodeZIndex(isTerminalOpen: boolean): number {
+	return isTerminalOpen ? 900 : 10;
+}
+
 function randomPos(index: number) {
 	const row = Math.floor(index / 5);
 	const col = index % 5;
@@ -77,6 +87,14 @@ function applySelectedNode(
 	}));
 }
 
+function applySelectedEdge(edges: Edge[], selectedLinkId: string): Edge[] {
+	return edges.map((edge) => ({
+		...edge,
+		selected: edge.id === selectedLinkId,
+		style: edge.id === selectedLinkId ? SELECTED_EDGE_STYLE : EDGE_STYLE,
+	}));
+}
+
 function getAvailableInterfaces(interfaces: ApiInterface[]): ApiInterface[] {
 	return interfaces.filter((iface) => iface.linkId === "");
 }
@@ -94,16 +112,22 @@ const nodeTypes = {
 
 export function TopologyCanvas() {
 	const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
-	const [createNodeType, setCreateNodeType] = useState<"host" | "switch" | "router">("host");
 
 	const [nodes, setNodes] = useState<Node<SquareNodeData>[]>([]);
 	const [edges, setEdges] = useState<Edge[]>([]);
 	const [selectedNodeId, setSelectedNodeId] = useState<string>("");
+	const [selectedLinkId, setSelectedLinkId] = useState<string>("");
 	const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
+	const [connectionSourceNodeId, setConnectionSourceNodeId] = useState<string>("");
+	const [isCreateNodeMenuOpen, setIsCreateNodeMenuOpen] = useState<boolean>(false);
+	const [busyNodeIds, setBusyNodeIds] = useState<Set<string>>(new Set());
 	const [busy, setBusy] = useState<boolean>(false);
 	const [status, setStatus] = useState<string>("");
 	const selectedNodeIdRef = useRef<string>("");
+	const selectedLinkIdRef = useRef<string>("");
 	const importInputRef = useRef<HTMLInputElement | null>(null);
+	const connectionSourceNodeIdRef = useRef<string>("");
+	const pendingConnectionRef = useRef<PendingConnection | null>(null);
 	const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(
 		new Map(),
 	);
@@ -138,15 +162,18 @@ export function TopologyCanvas() {
 				id: node.id,
 				type: "square",
 				position: existingPositions.get(node.id) ?? node.position ?? randomPos(index),
+				zIndex: nodeZIndex(node.status === "running" ? (terminalState.get(node.id)?.isOpen ?? false) : false),
 				selected: node.id === currentSelectedNodeId,
 				data: {
-					label: `${node.name} (${node.id})`,
+					label: node.name,
+					nodeId: node.id,
 					status: node.status,
 					type: node.type,
 					containerId: node.containerId,
 					interfaces: node.interfaces,
 					isSelected: node.id === currentSelectedNodeId,
-					isBusy: false,
+					isBusy: busyNodeIds.has(node.id),
+					connectionSourceNodeId: connectionSourceNodeIdRef.current,
 					isTerminalOpen:
 						node.status === "running" ? (terminalState.get(node.id)?.isOpen ?? false) : false,
 					terminalInput: terminalState.get(node.id)?.input ?? "",
@@ -163,7 +190,7 @@ export function TopologyCanvas() {
 				type: "straight",
 				source: findNodeIDByInterfaceID(flowNodes, link.interfaceAId),
 				target: findNodeIDByInterfaceID(flowNodes, link.interfaceBId),
-				style: EDGE_STYLE,
+				style: link.id === selectedLinkIdRef.current ? SELECTED_EDGE_STYLE : EDGE_STYLE,
 				data: {
 					linkId: link.id,
 					networkId: link.networkId,
@@ -174,7 +201,7 @@ export function TopologyCanvas() {
 			}));
 
 			setNodes(applySelectedNode(flowNodes, currentSelectedNodeId));
-			setEdges(flowEdges);
+			setEdges(applySelectedEdge(flowEdges, selectedLinkIdRef.current));
 			setStatus(`Loaded ${flowNodes.length} nodes, ${flowEdges.length} links`);
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : String(err);
@@ -182,7 +209,19 @@ export function TopologyCanvas() {
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl]);
+	}, [baseUrl, busyNodeIds]);
+
+	const setNodeBusy = useCallback((nodeID: string, nextBusy: boolean) => {
+		setBusyNodeIds((current) => {
+			const updated = new Set(current);
+			if (nextBusy) {
+				updated.add(nodeID);
+			} else {
+				updated.delete(nodeID);
+			}
+			return updated;
+		});
+	}, []);
 
 	const toggleNodeRun = useCallback(
 		async (nodeID: string) => {
@@ -194,7 +233,7 @@ export function TopologyCanvas() {
 
 			const action = currentNode.data.status === "running" ? "stop" : "start";
 
-			setBusy(true);
+			setNodeBusy(nodeID, true);
 			setStatus(`${action === "start" ? "Starting" : "Stopping"} node ${nodeID}...`);
 			try {
 				if (action === "start") {
@@ -215,10 +254,10 @@ export function TopologyCanvas() {
 				const message = err instanceof Error ? err.message : String(err);
 				setStatus(`Failed to ${action} node: ${message}`);
 			} finally {
-				setBusy(false);
+				setNodeBusy(nodeID, false);
 			}
 		},
-		[baseUrl, loadTopology],
+		[baseUrl, loadTopology, setNodeBusy],
 	);
 
 	useEffect(() => {
@@ -254,11 +293,28 @@ export function TopologyCanvas() {
 				...node,
 				data: {
 					...node.data,
-					isBusy: busy,
+					isBusy: busyNodeIds.has(node.id),
 				},
 			})),
 		);
-	}, [busy]);
+	}, [busyNodeIds]);
+
+	useEffect(() => {
+		connectionSourceNodeIdRef.current = connectionSourceNodeId;
+		setNodes((curr) =>
+			curr.map((node) => ({
+				...node,
+				data: {
+					...node.data,
+					connectionSourceNodeId,
+				},
+			})),
+		);
+	}, [connectionSourceNodeId]);
+
+	useEffect(() => {
+		setEdges((curr) => applySelectedEdge(curr, selectedLinkId));
+	}, [selectedLinkId]);
 
 	useEffect(() => {
 		toggleNodeRunRef.current = toggleNodeRun;
@@ -270,6 +326,7 @@ export function TopologyCanvas() {
 				node.id === nodeID
 					? {
 						...node,
+						zIndex: nodeZIndex(node.data.status === "running" ? !node.data.isTerminalOpen : false),
 						data: {
 							...node.data,
 							isTerminalOpen: node.data.status === "running" ? !node.data.isTerminalOpen : false,
@@ -408,6 +465,14 @@ export function TopologyCanvas() {
 		selectedNodeIdRef.current = selectedNodeId;
 	}, [selectedNodeId]);
 
+	useEffect(() => {
+		selectedLinkIdRef.current = selectedLinkId;
+	}, [selectedLinkId]);
+
+	useEffect(() => {
+		pendingConnectionRef.current = pendingConnection;
+	}, [pendingConnection]);
+
 	const onNodesChange: OnNodesChange = useCallback(
 		(changes) => {
 			setNodes((curr) =>
@@ -418,14 +483,15 @@ export function TopologyCanvas() {
 	);
 
 	const onEdgesChange: OnEdgesChange = useCallback((changes) => {
-		setEdges((curr) => applyEdgeChanges(changes, curr));
+		setEdges((curr) => applySelectedEdge(applyEdgeChanges(changes, curr), selectedLinkIdRef.current));
 	}, []);
 
-	const createNode = useCallback(async () => {
+	const createNode = useCallback(async (nodeType: "host" | "switch" | "router") => {
 		setBusy(true);
-		setStatus(`Creating ${createNodeType}...`);
+		setStatus(`Creating ${nodeType}...`);
 		try {
-			await createNodeRequest(baseUrl, createNodeType, randomPos(nodesRef.current.length));
+			await createNodeRequest(baseUrl, nodeType, randomPos(nodesRef.current.length));
+			setIsCreateNodeMenuOpen(false);
 			await loadTopology();
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : String(err);
@@ -433,7 +499,28 @@ export function TopologyCanvas() {
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl, createNodeType, loadTopology]);
+	}, [baseUrl, loadTopology]);
+
+	const deleteSelectedLink = useCallback(async () => {
+		if (!selectedLinkId) {
+			setStatus("Select a link first");
+			return;
+		}
+
+		setBusy(true);
+		setStatus(`Removing link ${selectedLinkId}...`);
+		try {
+			await deleteLink(baseUrl, selectedLinkId);
+			setSelectedLinkId("");
+			await loadTopology();
+			setStatus("Link removed");
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			setStatus(message || "Failed to remove link");
+		} finally {
+			setBusy(false);
+		}
+	}, [baseUrl, loadTopology, selectedLinkId]);
 
 	const saveTopologyToFile = useCallback(async () => {
 		setBusy(true);
@@ -503,6 +590,7 @@ export function TopologyCanvas() {
 		try {
 			await deleteNode(baseUrl, selectedNodeId);
 			setSelectedNodeId("");
+			setSelectedLinkId("");
 			setNodes((curr) => applySelectedNode(curr, ""));
 			await loadTopology();
 		} catch (err: unknown) {
@@ -554,10 +642,7 @@ export function TopologyCanvas() {
 			setBusy(true);
 			try {
 				if (existing) {
-					setStatus(`Removing link ${existing.id}...`);
-					await deleteLink(baseUrl, existing.id);
-					await loadTopology();
-					setStatus("Link removed");
+					setStatus("Interface is busy");
 					return;
 				}
 
@@ -571,7 +656,7 @@ export function TopologyCanvas() {
 				const sourceInterfaces = getAvailableInterfaces(sourceNode.data.interfaces);
 				const targetInterfaces = getAvailableInterfaces(targetNode.data.interfaces);
 				if (sourceInterfaces.length === 0 || targetInterfaces.length === 0) {
-					setStatus("No available interfaces on one of the nodes");
+					setStatus("Interface is busy");
 					return;
 				}
 
@@ -589,7 +674,7 @@ export function TopologyCanvas() {
 				setBusy(false);
 			}
 		},
-		[baseUrl, edgeByPair, loadTopology],
+		[baseUrl, edgeByPair],
 	);
 
 	const confirmPendingConnection = useCallback(async () => {
@@ -606,6 +691,7 @@ export function TopologyCanvas() {
 				pendingConnection.targetInterfaceID,
 			);
 			setPendingConnection(null);
+			setConnectionSourceNodeId("");
 			await loadTopology();
 			setStatus("Link created");
 		} catch (err: unknown) {
@@ -654,8 +740,8 @@ export function TopologyCanvas() {
 		: [];
 
 	return (
-		<div className="h-screen w-screen bg-zinc-100 text-zinc-900">
-			<header className="fixed left-0 top-0 z-20 flex w-full items-center gap-3 border-b border-zinc-300 bg-white px-4 py-3">
+		<div className="relative h-screen w-screen bg-zinc-100 text-zinc-900">
+			<header className="fixed left-0 top-0 z-[2000] flex w-full items-center gap-3 border-b border-zinc-300 bg-white px-4 py-3 relative">
 				<input
 					ref={importInputRef}
 					type="file"
@@ -665,59 +751,85 @@ export function TopologyCanvas() {
 					}}
 					className="hidden"
 				/>
-				<select
-					value={createNodeType}
-					onChange={(event) =>
-						setCreateNodeType(event.target.value as "host" | "switch" | "router")
-					}
-					disabled={busy}
-					className="rounded border border-zinc-700 bg-white px-3 py-1 text-sm disabled:opacity-60"
-				>
-					<option value="host">Host</option>
-					<option value="switch">Switch</option>
-					<option value="router">Router</option>
-				</select>
-				<button
-					type="button"
-					onClick={() => void createNode()}
-					disabled={busy}
-					className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
-				>
-					Create node
-				</button>
+				<div className="relative">
+					<button
+						type="button"
+						onClick={() => {
+							setIsCreateNodeMenuOpen((current) => !current);
+						}}
+						disabled={busy}
+						className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
+					>
+						Create node
+					</button>
+					{isCreateNodeMenuOpen ? (
+						<div className="absolute left-0 top-full z-30 mt-2 flex min-w-[140px] flex-col rounded border border-zinc-300 bg-white p-1 shadow-lg">
+							<button
+								type="button"
+								onClick={() => void createNode("host")}
+								className="rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"
+							>
+								Host
+							</button>
+							<button
+								type="button"
+								onClick={() => void createNode("switch")}
+								className="rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"
+							>
+								Switch
+							</button>
+							<button
+								type="button"
+								onClick={() => void createNode("router")}
+								className="rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"
+							>
+								Router
+							</button>
+						</div>
+					) : null}
+				</div>
 				<button
 					type="button"
 					onClick={() => void deleteSelectedNode()}
-					disabled={busy}
+					disabled={busy || !selectedNodeId}
 					className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
 				>
-					Delete selected node
+					Delete node
 				</button>
 				<button
 					type="button"
-					onClick={() => void saveTopologyToFile()}
-					disabled={busy}
+					onClick={() => void deleteSelectedLink()}
+					disabled={busy || !selectedLinkId}
 					className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
 				>
-					Save
+					Unlink
 				</button>
-				<button
-					type="button"
-					onClick={openImportPicker}
-					disabled={busy}
-					className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
-				>
-					Load
-				</button>
-				<div className="ml-3 text-sm text-zinc-700">
-					{selectedNodeId ? `Selected node: ${selectedNodeId}` : "No node selected"}
+				<div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-zinc-600">
+					{status}
 				</div>
-				<div className="ml-3 text-sm text-zinc-600">{status}</div>
+				<div className="ml-auto flex items-center gap-3">
+					<button
+						type="button"
+						onClick={() => void saveTopologyToFile()}
+						disabled={busy}
+						className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
+					>
+						Save
+					</button>
+					<button
+						type="button"
+						onClick={openImportPicker}
+						disabled={busy}
+						className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
+					>
+						Load
+					</button>
+				</div>
 			</header>
 
-			<main className="h-full w-full pt-14">
+			<main className="absolute inset-x-0 bottom-0 top-14">
 				{pendingConnection ? (
-					<div className="fixed left-1/2 top-20 z-30 w-[360px] -translate-x-1/2 rounded border border-zinc-300 bg-white p-4 shadow-lg">
+					<div className="fixed left-1/2 top-1/2 z-30 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded border border-zinc-300 bg-white p-4 shadow-lg">
 						<div className="mb-3 text-sm font-semibold text-zinc-900">Choose interfaces</div>
 						<div className="mb-3 flex flex-col gap-1">
 							<label className="text-xs text-zinc-600" htmlFor="source-interface">
@@ -756,7 +868,10 @@ export function TopologyCanvas() {
 						<div className="flex justify-end gap-2">
 							<button
 								type="button"
-								onClick={() => setPendingConnection(null)}
+								onClick={() => {
+									setPendingConnection(null);
+									setConnectionSourceNodeId("");
+								}}
 								className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-100"
 							>
 								Cancel
@@ -781,10 +896,25 @@ export function TopologyCanvas() {
 					onConnect={(connection) => {
 						void onConnect(connection);
 					}}
+					onConnectStart={(_, params) => {
+						setSelectedLinkId("");
+						setConnectionSourceNodeId(params.nodeId ?? "");
+					}}
+					onConnectEnd={() => {
+						if (!pendingConnectionRef.current) {
+							setConnectionSourceNodeId("");
+						}
+					}}
 					onNodeClick={(_, node) => {
 						setSelectedNodeId(node.id);
+						setSelectedLinkId("");
 						setNodes((curr) => applySelectedNode(curr, node.id));
 					}}
+					onEdgeClick={((_, edge) => {
+						setSelectedNodeId("");
+						setSelectedLinkId(edge.id);
+						setNodes((curr) => applySelectedNode(curr, ""));
+					}) as EdgeMouseHandler}
 					onNodeDragStop={(_, node) => {
 						void persistNodePosition(node.id, {
 							x: node.position.x,
@@ -793,9 +923,10 @@ export function TopologyCanvas() {
 					}}
 					onPaneClick={() => {
 						setSelectedNodeId("");
+						setSelectedLinkId("");
 						setNodes((curr) => applySelectedNode(curr, ""));
 					}}
-					zoomOnScroll={false}
+					zoomOnScroll
 					connectionLineType={ConnectionLineType.Straight}
 					defaultEdgeOptions={{ type: "straight", style: EDGE_STYLE }}
 					nodesConnectable
