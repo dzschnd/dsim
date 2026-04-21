@@ -2,15 +2,19 @@ package links
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strings"
 
 	"github.com/docker/docker/client"
+	runtimesync "github.com/dzschnd/dsim/internal/docker"
 	"github.com/dzschnd/dsim/internal/httputil"
 	"github.com/dzschnd/dsim/internal/store"
 )
 
 type Handler struct {
+	docker  *client.Client
+	store   *store.Store
 	service *Service
 }
 
@@ -20,7 +24,11 @@ type createLinkRequest struct {
 }
 
 func NewHandler(docker *client.Client, store *store.Store) *Handler {
-	return &Handler{service: NewService(docker, store)}
+	return &Handler{
+		docker:  docker,
+		store:   store,
+		service: NewService(docker, store),
+	}
 }
 
 func (h *Handler) CreateLinkHandler(w http.ResponseWriter, r *http.Request) {
@@ -33,9 +41,26 @@ func (h *Handler) CreateLinkHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	link, err := h.service.CreateLink(ctx, strings.TrimSpace(req.InterfaceAID), strings.TrimSpace(req.InterfaceBID))
+	interfaceAID := strings.TrimSpace(req.InterfaceAID)
+	interfaceBID := strings.TrimSpace(req.InterfaceBID)
+
+	link, err := h.service.CreateLink(ctx, interfaceAID, interfaceBID)
 	if err != nil {
 		httputil.WriteAppError(w, err)
+		return
+	}
+
+	if syncErr := runtimesync.SyncRoutesForInterfaces(ctx, h.docker, h.store, []string{
+		interfaceAID,
+		interfaceBID,
+	}); syncErr != nil {
+		if rollbackErr := h.service.deleteLink(ctx, link.ID); rollbackErr != nil {
+			slog.Error("Link rollback failed after route sync failure", "link_id", link.ID, "sync_err", syncErr, "rollback_err", rollbackErr)
+			httputil.WriteJSONError(w, http.StatusInternalServerError, "link created, route sync failed, and rollback failed")
+			return
+		}
+
+		httputil.WriteAppError(w, syncErr)
 		return
 	}
 

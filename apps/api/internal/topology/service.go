@@ -10,6 +10,7 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	runtimesync "github.com/dzschnd/dsim/internal/docker"
 	"github.com/dzschnd/dsim/internal/httputil"
 	"github.com/dzschnd/dsim/internal/links"
 	"github.com/dzschnd/dsim/internal/model"
@@ -182,6 +183,9 @@ func (s *service) importTopologyUnsafe(ctx context.Context, file File) error {
 		if err := s.nodeService.StartNode(ctx, nodeID); err != nil {
 			return err
 		}
+	}
+	if err := runtimesync.SyncAllRoutes(ctx, s.docker, s.store); err != nil {
+		return err
 	}
 	return nil
 }
