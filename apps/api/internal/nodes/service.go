@@ -8,7 +8,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -33,7 +35,10 @@ type Service struct {
 	linkRepo linkRepository
 }
 
-const iperfLogPath = "/var/log/iperf/iperf.log"
+const (
+	iperfLogPath = "/var/log/iperf/iperf.log"
+	httpLogPath  = "/var/log/http/http.log"
+)
 
 func NewService(docker *client.Client, s *store.Store) *Service {
 	repo := newRepository(s)
@@ -757,6 +762,9 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 		if len(fields) >= 1 && fields[0] == "iperf" {
 			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support iperf")
 		}
+		if len(fields) >= 1 && fields[0] == "http" {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support http")
+		}
 		if len(fields) >= 2 && fields[0] == "ip" && fields[1] == "set" {
 			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch ports do not support ip assignment")
 		}
@@ -790,6 +798,24 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	}
 	if len(fields) == 3 && fields[0] == "iperf" && fields[1] == "server" && fields[2] == "logclear" {
 		return s.runIperfServerLogClear(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "http" && fields[1] == "get" {
+		return s.runHTTPGet(ctx, command, node)
+	}
+	if len(fields) == 4 && fields[0] == "http" && fields[1] == "server" && fields[2] == "start" {
+		return s.runHTTPServerStart(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "http" && fields[1] == "server" && fields[2] == "stop" {
+		return s.runHTTPServerStop(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "http" && fields[1] == "server" && fields[2] == "status" {
+		return s.runHTTPServerStatus(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "http" && fields[1] == "server" && fields[2] == "log" {
+		return s.runHTTPServerLog(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "http" && fields[1] == "server" && fields[2] == "logclear" {
+		return s.runHTTPServerLogClear(ctx, command, node)
 	}
 	if len(fields) == 2 && fields[0] == "ip" && fields[1] == "route" {
 		return runIPRouteList(command, node), nil
@@ -829,6 +855,12 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 			"iperf server status",
 			"iperf server log",
 			"iperf server logclear",
+			"http get [url]",
+			"http server start [port]",
+			"http server stop",
+			"http server status",
+			"http server log",
+			"http server logclear",
 		)
 	}
 
@@ -932,6 +964,14 @@ func (s *Service) runIperfServerStart(ctx context.Context, command string, node 
 		}, nil
 	}
 
+	portBusy, err := s.portBusy(ctx, node.ContainerID, 5201)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if portBusy {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "port 5201 is busy")
+	}
+
 	if _, err := execInContainerChecked(
 		ctx,
 		s.docker,
@@ -940,6 +980,22 @@ func (s *Service) runIperfServerStart(ctx context.Context, command string, node 
 		"failed to start iperf server",
 	); err != nil {
 		return commandResponse{}, err
+	}
+
+	running, err = s.iperfServerRunning(ctx, node.ContainerID)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if !running {
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "iperf server failed to start")
+	}
+
+	portBusy, err = s.portBusy(ctx, node.ContainerID, 5201)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if !portBusy {
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "iperf server failed to bind port 5201")
 	}
 
 	return commandResponse{
@@ -1006,6 +1062,203 @@ func (s *Service) iperfServerRunning(ctx context.Context, containerID string) (b
 	}
 
 	return strings.TrimSpace(stdout) == "true", nil
+}
+
+func (s *Service) runHTTPGet(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	fields := strings.Fields(command)
+	validURL, err := validateHTTPURL(fields[2])
+	if err != nil {
+		return commandResponse{}, err
+	}
+
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"curl", "-sS", "-i", "--connect-timeout", "2", "--max-time", "5", validURL},
+		command,
+	)
+}
+
+func (s *Service) runHTTPServerStart(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	fields := strings.Fields(command)
+	port, err := validatePort(fields[3])
+	if err != nil {
+		return commandResponse{}, err
+	}
+
+	running, err := s.httpServerRunning(ctx, node.ContainerID)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if running {
+		return commandResponse{
+			Command:  command,
+			Stdout:   "http server already running",
+			Stderr:   "",
+			ExitCode: 0,
+		}, nil
+	}
+
+	portBusy, err := s.portBusy(ctx, node.ContainerID, port)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if portBusy {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("port %d is busy", port))
+	}
+
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"sh", "-c", fmt.Sprintf("mkdir -p /srv/http /var/log/http && nohup darkhttpd /srv/http --port %d >%s 2>&1 &", port, httpLogPath)},
+		"failed to start http server",
+	); err != nil {
+		return commandResponse{}, err
+	}
+
+	running, err = s.httpServerRunning(ctx, node.ContainerID)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if !running {
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "http server failed to start")
+	}
+
+	portBusy, err = s.portBusy(ctx, node.ContainerID, port)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if !portBusy {
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, fmt.Sprintf("http server failed to bind port %d", port))
+	}
+
+	return commandResponse{
+		Command:  command,
+		Stdout:   "http server started",
+		Stderr:   "",
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) runHTTPServerStop(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"sh", "-c", "pkill -x darkhttpd >/dev/null 2>&1 || true"},
+		command,
+	)
+}
+
+func (s *Service) runHTTPServerStatus(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"sh", "-c", `pgrep -x darkhttpd >/dev/null && echo "running" || echo "stopped"`},
+		command,
+	)
+}
+
+func (s *Service) runHTTPServerLog(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"sh", "-c", "cat " + httpLogPath + " 2>/dev/null || true"},
+		command,
+	)
+}
+
+func (s *Service) runHTTPServerLogClear(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"sh", "-c", "mkdir -p /var/log/http && : >" + httpLogPath},
+		command,
+	)
+}
+
+func (s *Service) httpServerRunning(ctx context.Context, containerID string) (bool, error) {
+	stdout, stderr, exitCode, err := execInContainer(
+		ctx,
+		s.docker,
+		containerID,
+		[]string{"sh", "-c", "pgrep -x darkhttpd >/dev/null && echo true || echo false"},
+	)
+	if err != nil {
+		return false, err
+	}
+	if exitCode != 0 {
+		message := "failed to inspect http server status"
+		if trimmed := strings.TrimSpace(stderr); trimmed != "" {
+			message += ": " + trimmed
+		}
+		slog.Error("Container exec failed", "message", message)
+		return false, httputil.NewAppError(http.StatusInternalServerError, message)
+	}
+
+	return strings.TrimSpace(stdout) == "true", nil
+}
+
+func (s *Service) portBusy(ctx context.Context, containerID string, port int) (bool, error) {
+	stdout, stderr, exitCode, err := execInContainer(
+		ctx,
+		s.docker,
+		containerID,
+		[]string{"sh", "-c", fmt.Sprintf(`ss -ltnH "( sport = :%d )" | wc -l`, port)},
+	)
+	if err != nil {
+		return false, err
+	}
+	if exitCode != 0 {
+		message := fmt.Sprintf("failed to inspect port %d", port)
+		if trimmed := strings.TrimSpace(stderr); trimmed != "" {
+			message += ": " + trimmed
+		}
+		slog.Error("Container exec failed", "message", message)
+		return false, httputil.NewAppError(http.StatusInternalServerError, message)
+	}
+
+	return strings.TrimSpace(stdout) != "0", nil
+}
+
+func validateHTTPURL(raw string) (string, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", httputil.NewAppError(http.StatusBadRequest, "invalid url")
+	}
+	if parsed.Scheme != "http" {
+		return "", httputil.NewAppError(http.StatusBadRequest, "only http urls are supported")
+	}
+	if parsed.Host == "" {
+		return "", httputil.NewAppError(http.StatusBadRequest, "url host is required")
+	}
+
+	host := parsed.Hostname()
+	if host == "" {
+		return "", httputil.NewAppError(http.StatusBadRequest, "url host is required")
+	}
+	if _, err := netip.ParseAddr(host); err != nil {
+		return "", httputil.NewAppError(http.StatusBadRequest, "url host must be an ip address")
+	}
+	if parsed.Port() != "" {
+		if _, err := validatePort(parsed.Port()); err != nil {
+			return "", err
+		}
+	}
+
+	return parsed.String(), nil
+}
+
+func validatePort(raw string) (int, error) {
+	port, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, httputil.NewAppError(http.StatusBadRequest, "invalid port")
+	}
+	if port < 1 || port > 65535 {
+		return 0, httputil.NewAppError(http.StatusBadRequest, "port out of range")
+	}
+
+	return port, nil
 }
 
 func (s *Service) runIPSet(ctx context.Context, command, nodeID, interfaceName, cidr string) (commandResponse, error) {

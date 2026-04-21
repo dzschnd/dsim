@@ -7,7 +7,8 @@ RUN apk add --no-cache \
     iperf3 \
     curl \
     bash \
-    busybox-extras
+    busybox-extras \
+    darkhttpd
 
 CMD ["sleep", "infinity"]
 

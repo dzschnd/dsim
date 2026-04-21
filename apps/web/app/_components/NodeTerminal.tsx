@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 
 type NodeTerminalProps = {
@@ -19,6 +19,11 @@ export function NodeTerminal({
 	onToggleFullscreen,
 }: NodeTerminalProps) {
 	const scrollRef = useRef<HTMLDivElement | null>(null);
+	const [inputValue, setInputValue] = useState(terminalInput);
+
+	useEffect(() => {
+		setInputValue(terminalInput);
+	}, [terminalInput]);
 
 	useEffect(() => {
 		if (!scrollRef.current) {
@@ -85,9 +90,10 @@ export function NodeTerminal({
 				<span className="text-emerald-400">$</span>
 				<input
 					type="text"
-					value={terminalInput}
+					value={inputValue}
 					onChange={(event) => {
 						event.stopPropagation();
+						setInputValue(event.target.value);
 						onInputChange(event.target.value);
 					}}
 					onClick={(event) => {
