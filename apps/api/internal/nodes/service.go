@@ -863,8 +863,14 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	if len(fields) == 2 && fields[0] == "ip" && fields[1] == "route" {
 		return runIPRouteList(command, node), nil
 	}
+	if len(fields) == 3 && fields[0] == "ip" && fields[1] == "unset" {
+		return s.runIPUnset(ctx, command, nodeID, fields[2])
+	}
 	if len(fields) == 4 && fields[0] == "ip" && fields[1] == "set" {
 		return s.runIPSet(ctx, command, nodeID, fields[2], fields[3])
+	}
+	if len(fields) == 4 && fields[0] == "ip" && fields[1] == "route" && fields[2] == "delete" {
+		return s.runIPRouteDelete(ctx, command, node, fields[3])
 	}
 	if len(fields) == 4 && fields[0] == "ip" && fields[1] == "route" && fields[2] == "default" {
 		return s.runIPRoute(ctx, command, node, "0.0.0.0/0", fields[3])
@@ -886,9 +892,11 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 		lines = append(lines,
 			"ip addr",
 			"ip set [interface] [ip/prefix]",
+			"ip unset [interface]",
 			"ip route",
 			"ip route default [next-hop]",
 			"ip route add [destination/prefix] via [next-hop]",
+			"ip route delete [default|destination/prefix]",
 			"ping [target-ip]",
 			"traceroute [target-ip]",
 			"iperf tcp [ip]",
@@ -1717,6 +1725,76 @@ func (s *Service) runIPSet(ctx context.Context, command, nodeID, interfaceName, 
 	}, nil
 }
 
+func (s *Service) runIPUnset(ctx context.Context, command, nodeID, interfaceName string) (commandResponse, error) {
+	node, ok := s.repo.GetNode(nodeID)
+	if !ok {
+		return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+
+	found := false
+	targetIface := model.Interface{}
+	for _, iface := range node.Interfaces {
+		if iface.Name != interfaceName {
+			continue
+		}
+		found = true
+		targetIface = iface
+		break
+	}
+	if !found {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
+	}
+	if targetIface.IPAddr == "" || targetIface.PrefixLen == 0 {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface is already unassigned")
+	}
+
+	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
+	if err != nil {
+		if client.IsErrNotFound(err) {
+			return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "container not found")
+		}
+		slog.Error("Container inspect failed", "err", err)
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
+	}
+
+	if inspect.State != nil && inspect.State.Running && targetIface.LinkID != "" {
+		if targetIface.RuntimeName == "" {
+			s.syncRuntimeInterfaces(nodeID, node.Interfaces, inspect)
+			if err := s.syncRuntimeInterfaceNames(ctx, nodeID); err != nil {
+				return commandResponse{}, err
+			}
+
+			node, ok = s.repo.GetNode(nodeID)
+			if !ok {
+				return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+			}
+			for _, iface := range node.Interfaces {
+				if iface.Name != interfaceName {
+					continue
+				}
+				targetIface = iface
+				break
+			}
+		}
+
+		if err := s.deleteRuntimeInterfaceAddress(ctx, node, targetIface); err != nil {
+			return commandResponse{}, err
+		}
+	}
+
+	if !s.repo.ClearInterfaceAddress(nodeID, interfaceName) {
+		slog.Error("Failed to clear interface address")
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "failed to clear interface address")
+	}
+
+	return commandResponse{
+		Command:  command,
+		Stdout:   fmt.Sprintf("%s unset", interfaceName),
+		Stderr:   "",
+		ExitCode: 0,
+	}, nil
+}
+
 func (s *Service) applyRuntimeInterfaceAddress(ctx context.Context, node model.Node, iface model.Interface) error {
 	if iface.RuntimeName == "" {
 		return httputil.NewAppError(http.StatusBadRequest, "runtime interface name not resolved")
@@ -1744,6 +1822,40 @@ func (s *Service) applyRuntimeInterfaceAddress(ctx context.Context, node model.N
 		"failed to bring runtime interface up",
 	); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (s *Service) deleteRuntimeInterfaceAddress(ctx context.Context, node model.Node, iface model.Interface) error {
+	if iface.RuntimeName == "" || iface.IPAddr == "" || iface.PrefixLen == 0 {
+		return nil
+	}
+
+	cidr := fmt.Sprintf("%s/%d", iface.IPAddr, iface.PrefixLen)
+	stdout, stderr, exitCode, err := execInContainer(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"ip", "addr", "del", cidr, "dev", iface.RuntimeName},
+	)
+	if err != nil {
+		return err
+	}
+	if exitCode != 0 {
+		combined := strings.TrimSpace(stderr)
+		if combined == "" {
+			combined = strings.TrimSpace(stdout)
+		}
+		if strings.Contains(combined, "Cannot assign requested address") || strings.Contains(combined, "Cannot find device") {
+			return nil
+		}
+		message := "failed to remove runtime interface address"
+		if combined != "" {
+			message += ": " + combined
+		}
+		slog.Error("Container exec failed", "message", message)
+		return httputil.NewAppError(http.StatusInternalServerError, message)
 	}
 
 	return nil
@@ -1808,6 +1920,64 @@ func (s *Service) runIPRoute(
 	}, nil
 }
 
+func (s *Service) runIPRouteDelete(ctx context.Context, command string, node model.Node, target string) (commandResponse, error) {
+	destination := target
+	if target == "default" {
+		destination = "0.0.0.0/0"
+	} else {
+		prefix, err := netip.ParsePrefix(target)
+		if err != nil {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid route destination")
+		}
+		destination = prefix.Masked().String()
+	}
+
+	var route model.Route
+	found := false
+	for _, existing := range node.Routes {
+		if existing.Destination != destination {
+			continue
+		}
+		route = existing
+		found = true
+		break
+	}
+	if !found {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "route not found")
+	}
+
+	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
+	if err != nil {
+		if client.IsErrNotFound(err) {
+			return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "container not found")
+		}
+		slog.Error("Container inspect failed", "err", err)
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
+	}
+	if inspect.State != nil && inspect.State.Running {
+		if err := s.deleteRuntimeRoute(ctx, node, route); err != nil {
+			return commandResponse{}, err
+		}
+	}
+
+	if !s.repo.DeleteRoute(node.ID, destination) {
+		slog.Error("Failed to delete route")
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "failed to delete route")
+	}
+
+	label := route.Destination
+	if route.Destination == "0.0.0.0/0" {
+		label = "default"
+	}
+
+	return commandResponse{
+		Command:  command,
+		Stdout:   fmt.Sprintf("route %s deleted", label),
+		Stderr:   "",
+		ExitCode: 0,
+	}, nil
+}
+
 func (s *Service) applyRuntimeRoute(ctx context.Context, node model.Node, route model.Route) error {
 	s.repo.store.Mu.RLock()
 	defer s.repo.store.Mu.RUnlock()
@@ -1826,6 +1996,40 @@ func (s *Service) applyRuntimeRoute(ctx context.Context, node model.Node, route 
 
 	if _, err := execInContainerChecked(ctx, s.docker, node.ContainerID, execCmd, "failed to apply runtime route"); err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (s *Service) deleteRuntimeRoute(ctx context.Context, node model.Node, route model.Route) error {
+	destination := route.Destination
+	if destination == "0.0.0.0/0" {
+		destination = "default"
+	}
+
+	stdout, stderr, exitCode, err := execInContainer(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"ip", "route", "del", destination, "via", route.NextHop},
+	)
+	if err != nil {
+		return err
+	}
+	if exitCode != 0 {
+		combined := strings.TrimSpace(stderr)
+		if combined == "" {
+			combined = strings.TrimSpace(stdout)
+		}
+		if strings.Contains(combined, "No such process") {
+			return nil
+		}
+		message := "failed to delete runtime route"
+		if combined != "" {
+			message += ": " + combined
+		}
+		slog.Error("Container exec failed", "message", message)
+		return httputil.NewAppError(http.StatusInternalServerError, message)
 	}
 
 	return nil

@@ -99,6 +99,28 @@ func (r *repository) UpdateInterfaceAddress(nodeID, interfaceName, ipAddr string
 	return false
 }
 
+func (r *repository) ClearInterfaceAddress(nodeID, interfaceName string) bool {
+	r.store.Mu.Lock()
+	defer r.store.Mu.Unlock()
+
+	node, ok := r.store.Nodes[nodeID]
+	if !ok {
+		return false
+	}
+
+	for index, iface := range node.Interfaces {
+		if iface.Name != interfaceName {
+			continue
+		}
+		node.Interfaces[index].IPAddr = ""
+		node.Interfaces[index].PrefixLen = 0
+		r.store.Nodes[nodeID] = node
+		return true
+	}
+
+	return false
+}
+
 func (r *repository) UpdateInterfaceRuntime(nodeID, interfaceID, ipAddr string, prefixLen int) bool {
 	r.store.Mu.Lock()
 	defer r.store.Mu.Unlock()
@@ -173,6 +195,27 @@ func (r *repository) UpsertRoute(nodeID string, route model.Route) bool {
 	node.Routes = append(node.Routes, route)
 	r.store.Nodes[nodeID] = node
 	return true
+}
+
+func (r *repository) DeleteRoute(nodeID, destination string) bool {
+	r.store.Mu.Lock()
+	defer r.store.Mu.Unlock()
+
+	node, ok := r.store.Nodes[nodeID]
+	if !ok {
+		return false
+	}
+
+	for index, existing := range node.Routes {
+		if existing.Destination != destination {
+			continue
+		}
+		node.Routes = append(node.Routes[:index], node.Routes[index+1:]...)
+		r.store.Nodes[nodeID] = node
+		return true
+	}
+
+	return false
 }
 
 func (r *repository) ListNodes() []model.Node {
