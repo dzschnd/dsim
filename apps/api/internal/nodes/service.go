@@ -36,8 +36,21 @@ type Service struct {
 }
 
 const (
-	iperfLogPath = "/var/log/iperf/iperf.log"
-	httpLogPath  = "/var/log/http/http.log"
+	iperfLogPath     = "/var/log/iperf/iperf.log"
+	httpLogPath      = "/var/log/http/http.log"
+	httpPIDFilePath  = "/var/run/http-server.pid"
+	httpPortFilePath = "/var/run/http-server.port"
+	tcpPIDFilePath   = "/var/run/tcp-server.pid"
+	udpPIDFilePath   = "/var/run/udp-server.pid"
+)
+
+type listenerKind string
+
+const (
+	listenerIperf listenerKind = "iperf"
+	listenerHTTP  listenerKind = "http"
+	listenerTCP   listenerKind = "tcp"
+	listenerUDP   listenerKind = "udp"
 )
 
 func NewService(docker *client.Client, s *store.Store) *Service {
@@ -765,6 +778,12 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 		if len(fields) >= 1 && fields[0] == "http" {
 			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support http")
 		}
+		if len(fields) >= 1 && fields[0] == "tcp" {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support tcp")
+		}
+		if len(fields) >= 1 && fields[0] == "udp" {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support udp")
+		}
 		if len(fields) >= 2 && fields[0] == "ip" && fields[1] == "set" {
 			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch ports do not support ip assignment")
 		}
@@ -817,6 +836,30 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	if len(fields) == 3 && fields[0] == "http" && fields[1] == "server" && fields[2] == "logclear" {
 		return s.runHTTPServerLogClear(ctx, command, node)
 	}
+	if len(fields) == 4 && fields[0] == "tcp" && fields[1] == "server" && fields[2] == "start" {
+		return s.runTCPServerStart(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "tcp" && fields[1] == "server" && fields[2] == "stop" {
+		return s.runTCPServerStop(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "tcp" && fields[1] == "server" && fields[2] == "status" {
+		return s.runTCPServerStatus(ctx, command, node)
+	}
+	if len(fields) == 4 && fields[0] == "tcp" && fields[1] == "connect" {
+		return s.runTCPConnect(ctx, command, node)
+	}
+	if len(fields) == 4 && fields[0] == "udp" && fields[1] == "server" && fields[2] == "start" {
+		return s.runUDPServerStart(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "udp" && fields[1] == "server" && fields[2] == "stop" {
+		return s.runUDPServerStop(ctx, command, node)
+	}
+	if len(fields) == 3 && fields[0] == "udp" && fields[1] == "server" && fields[2] == "status" {
+		return s.runUDPServerStatus(ctx, command, node)
+	}
+	if len(fields) == 4 && fields[0] == "udp" && fields[1] == "probe" {
+		return s.runUDPProbe(ctx, command, node)
+	}
 	if len(fields) == 2 && fields[0] == "ip" && fields[1] == "route" {
 		return runIPRouteList(command, node), nil
 	}
@@ -861,6 +904,14 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 			"http server status",
 			"http server log",
 			"http server logclear",
+			"tcp server start [port]",
+			"tcp server stop",
+			"tcp server status",
+			"tcp connect [ip] [port]",
+			"udp server start [port]",
+			"udp server stop",
+			"udp server status",
+			"udp probe [ip] [port]",
 		)
 	}
 
@@ -964,12 +1015,8 @@ func (s *Service) runIperfServerStart(ctx context.Context, command string, node 
 		}, nil
 	}
 
-	portBusy, err := s.portBusy(ctx, node.ContainerID, 5201)
-	if err != nil {
+	if err := s.ensureListenerAvailable(ctx, node.ContainerID, listenerIperf, 5201); err != nil {
 		return commandResponse{}, err
-	}
-	if portBusy {
-		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "port 5201 is busy")
 	}
 
 	if _, err := execInContainerChecked(
@@ -990,7 +1037,7 @@ func (s *Service) runIperfServerStart(ctx context.Context, command string, node 
 		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "iperf server failed to start")
 	}
 
-	portBusy, err = s.portBusy(ctx, node.ContainerID, 5201)
+	portBusy, err := s.portBusy(ctx, node.ContainerID, 5201, "tcp")
 	if err != nil {
 		return commandResponse{}, err
 	}
@@ -1099,19 +1146,15 @@ func (s *Service) runHTTPServerStart(ctx context.Context, command string, node m
 		}, nil
 	}
 
-	portBusy, err := s.portBusy(ctx, node.ContainerID, port)
-	if err != nil {
+	if err := s.ensureListenerAvailable(ctx, node.ContainerID, listenerHTTP, port); err != nil {
 		return commandResponse{}, err
-	}
-	if portBusy {
-		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("port %d is busy", port))
 	}
 
 	if _, err := execInContainerChecked(
 		ctx,
 		s.docker,
 		node.ContainerID,
-		[]string{"sh", "-c", fmt.Sprintf("mkdir -p /srv/http /var/log/http && nohup darkhttpd /srv/http --port %d >%s 2>&1 &", port, httpLogPath)},
+		[]string{"sh", "-c", fmt.Sprintf("mkdir -p /srv/http /var/log/http /var/run && nohup darkhttpd /srv/http --port %d >%s 2>&1 & echo $! >%s && echo %d >%s", port, httpLogPath, httpPIDFilePath, port, httpPortFilePath)},
 		"failed to start http server",
 	); err != nil {
 		return commandResponse{}, err
@@ -1125,7 +1168,7 @@ func (s *Service) runHTTPServerStart(ctx context.Context, command string, node m
 		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "http server failed to start")
 	}
 
-	portBusy, err = s.portBusy(ctx, node.ContainerID, port)
+	portBusy, err := s.portBusy(ctx, node.ContainerID, port, "tcp")
 	if err != nil {
 		return commandResponse{}, err
 	}
@@ -1145,7 +1188,7 @@ func (s *Service) runHTTPServerStop(ctx context.Context, command string, node mo
 	return s.execCommand(
 		ctx,
 		node.ContainerID,
-		[]string{"sh", "-c", "pkill -x darkhttpd >/dev/null 2>&1 || true"},
+		[]string{"sh", "-c", "pkill -x darkhttpd >/dev/null 2>&1 || true; rm -f " + httpPIDFilePath + " " + httpPortFilePath},
 		command,
 	)
 }
@@ -1178,17 +1221,219 @@ func (s *Service) runHTTPServerLogClear(ctx context.Context, command string, nod
 }
 
 func (s *Service) httpServerRunning(ctx context.Context, containerID string) (bool, error) {
+	return s.execBoolCommand(ctx, containerID, "pgrep -x darkhttpd >/dev/null && echo true || echo false", "failed to inspect http server status")
+}
+
+func (s *Service) runTCPServerStart(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	fields := strings.Fields(command)
+	port, err := validatePort(fields[3])
+	if err != nil {
+		return commandResponse{}, err
+	}
+
+	running, err := s.tcpServerRunning(ctx, node.ContainerID)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if running {
+		return commandResponse{
+			Command:  command,
+			Stdout:   "tcp server already running",
+			Stderr:   "",
+			ExitCode: 0,
+		}, nil
+	}
+
+	if err := s.ensureListenerAvailable(ctx, node.ContainerID, listenerTCP, port); err != nil {
+		return commandResponse{}, err
+	}
+
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"sh", "-c", fmt.Sprintf("mkdir -p /var/run && nohup sh -c 'while true; do nc -l -p %d >/dev/null 2>&1; done' >/dev/null 2>&1 & echo $! >%s", port, tcpPIDFilePath)},
+		"failed to start tcp server",
+	); err != nil {
+		return commandResponse{}, err
+	}
+
+	running, err = s.tcpServerRunning(ctx, node.ContainerID)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if !running {
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "tcp server failed to start")
+	}
+
+	portBusy, err := s.portBusy(ctx, node.ContainerID, port, "tcp")
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if !portBusy {
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, fmt.Sprintf("tcp server failed to bind port %d", port))
+	}
+
+	return commandResponse{
+		Command:  command,
+		Stdout:   "tcp server started",
+		Stderr:   "",
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) runTCPServerStop(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"sh", "-c", fmt.Sprintf("if [ -f %s ]; then pid=$(cat %s); pkill -P \"$pid\" >/dev/null 2>&1 || true; kill \"$pid\" >/dev/null 2>&1 || true; fi; rm -f %s", tcpPIDFilePath, tcpPIDFilePath, tcpPIDFilePath)},
+		command,
+	)
+}
+
+func (s *Service) runTCPServerStatus(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	running, err := s.tcpServerRunning(ctx, node.ContainerID)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	status := "stopped"
+	if running {
+		status = "running"
+	}
+
+	return commandResponse{Command: command, Stdout: status, Stderr: "", ExitCode: 0}, nil
+}
+
+func (s *Service) runTCPConnect(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	fields := strings.Fields(command)
+	targetIP := fields[2]
+	if _, err := netip.ParseAddr(targetIP); err != nil {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
+	}
+	port, err := validatePort(fields[3])
+	if err != nil {
+		return commandResponse{}, err
+	}
+
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"sh", "-c", fmt.Sprintf("if nc -vz -w 5 %s %d; then exit 0; fi; echo 'tcp connect failed'; exit 1", targetIP, port)},
+		command,
+	)
+}
+
+func (s *Service) runUDPServerStart(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	fields := strings.Fields(command)
+	port, err := validatePort(fields[3])
+	if err != nil {
+		return commandResponse{}, err
+	}
+
+	running, err := s.udpServerRunning(ctx, node.ContainerID)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if running {
+		return commandResponse{
+			Command:  command,
+			Stdout:   "udp server already running",
+			Stderr:   "",
+			ExitCode: 0,
+		}, nil
+	}
+
+	if err := s.ensureListenerAvailable(ctx, node.ContainerID, listenerUDP, port); err != nil {
+		return commandResponse{}, err
+	}
+
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"sh", "-c", fmt.Sprintf(`mkdir -p /var/run && nohup socat -T5 UDP-RECVFROM:%d,fork SYSTEM:"printf ack" >/dev/null 2>&1 & echo $! >%s`, port, udpPIDFilePath)},
+		"failed to start udp server",
+	); err != nil {
+		return commandResponse{}, err
+	}
+
+	running, err = s.udpServerRunning(ctx, node.ContainerID)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if !running {
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "udp server failed to start")
+	}
+
+	portBusy, err := s.portBusy(ctx, node.ContainerID, port, "udp")
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if !portBusy {
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, fmt.Sprintf("udp server failed to bind port %d", port))
+	}
+
+	return commandResponse{
+		Command:  command,
+		Stdout:   "udp server started",
+		Stderr:   "",
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) runUDPServerStop(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"sh", "-c", fmt.Sprintf("if [ -f %s ]; then kill \"$(cat %s)\" >/dev/null 2>&1 || true; fi; rm -f %s", udpPIDFilePath, udpPIDFilePath, udpPIDFilePath)},
+		command,
+	)
+}
+
+func (s *Service) runUDPServerStatus(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	running, err := s.udpServerRunning(ctx, node.ContainerID)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	status := "stopped"
+	if running {
+		status = "running"
+	}
+
+	return commandResponse{Command: command, Stdout: status, Stderr: "", ExitCode: 0}, nil
+}
+
+func (s *Service) runUDPProbe(ctx context.Context, command string, node model.Node) (commandResponse, error) {
+	fields := strings.Fields(command)
+	targetIP := fields[2]
+	if _, err := netip.ParseAddr(targetIP); err != nil {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
+	}
+	port, err := validatePort(fields[3])
+	if err != nil {
+		return commandResponse{}, err
+	}
+
+	return s.execCommand(
+		ctx,
+		node.ContainerID,
+		[]string{"sh", "-c", fmt.Sprintf(`reply=$(printf probe | socat -T5 - UDP:%s:%d); if [ "$reply" = "ack" ]; then echo "udp probe succeeded"; else echo "udp probe failed"; exit 1; fi`, targetIP, port)},
+		command,
+	)
+}
+
+func (s *Service) execBoolCommand(ctx context.Context, containerID, shellCmd, failureMessage string) (bool, error) {
 	stdout, stderr, exitCode, err := execInContainer(
 		ctx,
 		s.docker,
 		containerID,
-		[]string{"sh", "-c", "pgrep -x darkhttpd >/dev/null && echo true || echo false"},
+		[]string{"sh", "-c", shellCmd},
 	)
 	if err != nil {
 		return false, err
 	}
 	if exitCode != 0 {
-		message := "failed to inspect http server status"
+		message := failureMessage
 		if trimmed := strings.TrimSpace(stderr); trimmed != "" {
 			message += ": " + trimmed
 		}
@@ -1199,18 +1444,140 @@ func (s *Service) httpServerRunning(ctx context.Context, containerID string) (bo
 	return strings.TrimSpace(stdout) == "true", nil
 }
 
-func (s *Service) portBusy(ctx context.Context, containerID string, port int) (bool, error) {
+func (s *Service) serverRunningFromPIDFile(ctx context.Context, containerID, pidFilePath, failureMessage string) (bool, error) {
+	return s.execBoolCommand(
+		ctx,
+		containerID,
+		fmt.Sprintf("if [ ! -f %s ]; then echo false; elif kill -0 \"$(cat %s)\" >/dev/null 2>&1; then echo true; else echo false; fi", pidFilePath, pidFilePath),
+		failureMessage,
+	)
+}
+
+func (s *Service) tcpServerRunning(ctx context.Context, containerID string) (bool, error) {
+	return s.serverRunningFromPIDFile(ctx, containerID, tcpPIDFilePath, "failed to inspect tcp server status")
+}
+
+func (s *Service) udpServerRunning(ctx context.Context, containerID string) (bool, error) {
+	return s.serverRunningFromPIDFile(ctx, containerID, udpPIDFilePath, "failed to inspect udp server status")
+}
+
+func (s *Service) processOwnsPort(ctx context.Context, containerID string, port int, proto, processName string) (bool, error) {
+	var shellCmd string
+	switch proto {
+	case "tcp":
+		shellCmd = fmt.Sprintf(`ss -ltnpH "( sport = :%d )" | grep -q '%s' && echo true || echo false`, port, processName)
+	case "udp":
+		shellCmd = fmt.Sprintf(`ss -lunpH "( sport = :%d )" | grep -q '%s' && echo true || echo false`, port, processName)
+	default:
+		return false, httputil.NewAppError(http.StatusInternalServerError, "unsupported transport")
+	}
+
+	return s.execBoolCommand(ctx, containerID, shellCmd, fmt.Sprintf("failed to inspect %s port %d", proto, port))
+}
+
+func (s *Service) iperfOwnsPort(ctx context.Context, containerID string, port int) (bool, error) {
+	if port != 5201 {
+		return false, nil
+	}
+	return s.iperfServerRunning(ctx, containerID)
+}
+
+func (s *Service) ensureListenerAvailable(ctx context.Context, containerID string, kind listenerKind, port int) error {
+	iperfBusy, err := s.iperfOwnsPort(ctx, containerID, port)
+	if err != nil {
+		return err
+	}
+	httpBusy, err := s.processOwnsPort(ctx, containerID, port, "tcp", "darkhttpd")
+	if err != nil {
+		return err
+	}
+	tcpBusyByNC, err := s.processOwnsPort(ctx, containerID, port, "tcp", "nc")
+	if err != nil {
+		return err
+	}
+	udpBusyByNC, err := s.processOwnsPort(ctx, containerID, port, "udp", "nc")
+	if err != nil {
+		return err
+	}
+	tcpBusy, err := s.portBusy(ctx, containerID, port, "tcp")
+	if err != nil {
+		return err
+	}
+	udpBusy, err := s.portBusy(ctx, containerID, port, "udp")
+	if err != nil {
+		return err
+	}
+
+	switch kind {
+	case listenerIperf:
+		if httpBusy {
+			return httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("port %d is busy by http server", port))
+		}
+		if tcpBusyByNC {
+			return httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("port %d is busy by tcp server", port))
+		}
+		if udpBusyByNC {
+			return httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("port %d is busy by udp server", port))
+		}
+		if tcpBusy || udpBusy {
+			return httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("port %d is busy", port))
+		}
+	case listenerHTTP:
+		if iperfBusy {
+			return httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("port %d is busy by iperf server", port))
+		}
+		if tcpBusyByNC {
+			return httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("port %d is busy by tcp server", port))
+		}
+		if httpBusy || tcpBusy {
+			return httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("tcp port %d is busy", port))
+		}
+	case listenerTCP:
+		if iperfBusy {
+			return httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("port %d is busy by iperf server", port))
+		}
+		if httpBusy {
+			return httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("port %d is busy by http server", port))
+		}
+		if tcpBusyByNC || tcpBusy {
+			return httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("tcp port %d is busy", port))
+		}
+	case listenerUDP:
+		if iperfBusy {
+			return httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("port %d is busy by iperf server", port))
+		}
+		if udpBusyByNC || udpBusy {
+			return httputil.NewAppError(http.StatusBadRequest, fmt.Sprintf("udp port %d is busy", port))
+		}
+	default:
+		return httputil.NewAppError(http.StatusInternalServerError, "unsupported listener kind")
+	}
+
+	return nil
+}
+
+func (s *Service) portBusy(ctx context.Context, containerID string, port int, proto string) (bool, error) {
+	var shellCmd string
+	switch proto {
+	case "tcp":
+		shellCmd = fmt.Sprintf(`ss -ltnH "( sport = :%d )" | wc -l`, port)
+	case "udp":
+		shellCmd = fmt.Sprintf(`ss -lunH "( sport = :%d )" | wc -l`, port)
+	default:
+		return false, httputil.NewAppError(http.StatusInternalServerError, "unsupported transport")
+	}
+
 	stdout, stderr, exitCode, err := execInContainer(
 		ctx,
 		s.docker,
 		containerID,
-		[]string{"sh", "-c", fmt.Sprintf(`ss -ltnH "( sport = :%d )" | wc -l`, port)},
+		[]string{"sh", "-c", shellCmd},
 	)
 	if err != nil {
 		return false, err
 	}
 	if exitCode != 0 {
-		message := fmt.Sprintf("failed to inspect port %d", port)
+		message := fmt.Sprintf("failed to inspect %s port %d", proto, port)
 		if trimmed := strings.TrimSpace(stderr); trimmed != "" {
 			message += ": " + trimmed
 		}
