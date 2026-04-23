@@ -43,3 +43,7 @@ body {
   border-radius: 9999px;
   border: 2px solid #1f2937;
 }
+
+.react-flow__edgelabel-renderer {
+  z-index: 100 !important;
+}

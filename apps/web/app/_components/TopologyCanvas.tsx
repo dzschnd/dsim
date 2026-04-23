@@ -18,11 +18,11 @@ import ReactFlow, {
 } from "reactflow";
 import "reactflow/dist/style.css";
 
+import { InterfaceLabelEdge, type InterfaceLabelEdgeData } from "./InterfaceLabelEdge";
 import { SquareNode, type SquareNodeData } from "./SquareNode";
 import {
 	type ApiCommandResponse,
 	type ApiInterface,
-	type ApiLink,
 	type TopologyFile,
 	createNode as createNodeRequest,
 	createLink,
@@ -106,8 +106,22 @@ function findNodeIDByInterfaceID(nodes: Node<SquareNodeData>[], interfaceID: str
 	return node?.id ?? "";
 }
 
+function findInterfaceNameByID(nodes: Node<SquareNodeData>[], interfaceID: string): string {
+	for (const node of nodes) {
+		const iface = node.data.interfaces.find((candidate) => candidate.id === interfaceID);
+		if (iface) {
+			return iface.name;
+		}
+	}
+	return "";
+}
+
 const nodeTypes = {
 	square: SquareNode,
+};
+
+const edgeTypes = {
+	interfaceLabel: InterfaceLabelEdge,
 };
 
 export function TopologyCanvas() {
@@ -188,18 +202,15 @@ export function TopologyCanvas() {
 				},
 			}));
 
-			const flowEdges: Edge[] = apiLinks.map((link) => ({
+			const flowEdges: Edge<InterfaceLabelEdgeData>[] = apiLinks.map((link) => ({
 				id: link.id,
-				type: "straight",
+				type: "interfaceLabel",
 				source: findNodeIDByInterfaceID(flowNodes, link.interfaceAId),
 				target: findNodeIDByInterfaceID(flowNodes, link.interfaceBId),
 				style: link.id === selectedLinkIdRef.current ? SELECTED_EDGE_STYLE : EDGE_STYLE,
 				data: {
-					linkId: link.id,
-					networkId: link.networkId,
-					networkName: link.networkName,
-					interfaceAId: link.interfaceAId,
-					interfaceBId: link.interfaceBId,
+					interfaceAName: findInterfaceNameByID(flowNodes, link.interfaceAId),
+					interfaceBName: findInterfaceNameByID(flowNodes, link.interfaceBId),
 				},
 			}));
 
@@ -926,6 +937,7 @@ export function TopologyCanvas() {
 					nodes={nodes}
 					edges={edges}
 					nodeTypes={nodeTypes}
+					edgeTypes={edgeTypes}
 					onNodesChange={onNodesChange}
 					onEdgesChange={onEdgesChange}
 					onConnect={(connection) => {
@@ -963,7 +975,7 @@ export function TopologyCanvas() {
 					}}
 					zoomOnScroll
 					connectionLineType={ConnectionLineType.Straight}
-					defaultEdgeOptions={{ type: "straight", style: EDGE_STYLE }}
+					defaultEdgeOptions={{ type: "interfaceLabel", style: EDGE_STYLE }}
 					nodesConnectable
 					fitView
 					defaultViewport={{ x: 0, y: 0, zoom: 1 }}
