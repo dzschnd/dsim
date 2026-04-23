@@ -1,5 +1,7 @@
 package topology
 
+import "github.com/dzschnd/dsim/internal/model"
+
 type File struct {
 	Nodes []Node `json:"nodes"`
 	Links []Link `json:"links"`
@@ -20,8 +22,9 @@ type Position struct {
 }
 
 type Interface struct {
-	Name string `json:"name"`
-	CIDR string `json:"cidr,omitempty"`
+	Name       string                  `json:"name"`
+	CIDR       string                  `json:"cidr,omitempty"`
+	Conditions model.TrafficConditions `json:"conditions"`
 }
 
 type Route struct {

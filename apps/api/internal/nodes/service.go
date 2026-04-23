@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/netip"
 	"net/url"
@@ -370,6 +371,9 @@ func (s *Service) StartNode(ctx context.Context, nodeID string) error {
 		if err := s.syncRuntimeInterfaceAddresses(ctx, nodeID); err != nil {
 			return err
 		}
+		if err := s.syncRuntimeInterfaceConditions(ctx, nodeID); err != nil {
+			return err
+		}
 		if err := s.syncRuntimeRoutes(ctx, nodeID); err != nil {
 			return err
 		}
@@ -401,6 +405,9 @@ func (s *Service) StartNode(ctx context.Context, nodeID string) error {
 		}
 	}
 	if err := s.syncRuntimeInterfaceAddresses(ctx, nodeID); err != nil {
+		return err
+	}
+	if err := s.syncRuntimeInterfaceConditions(ctx, nodeID); err != nil {
 		return err
 	}
 	if err := s.syncRuntimeRoutes(ctx, nodeID); err != nil {
@@ -597,6 +604,21 @@ func (s *Service) syncRuntimeInterfaceAddresses(ctx context.Context, nodeID stri
 			continue
 		}
 		if err := s.applyRuntimeInterfaceAddress(ctx, node, iface); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) syncRuntimeInterfaceConditions(ctx context.Context, nodeID string) error {
+	node, ok := s.repo.GetNode(nodeID)
+	if !ok {
+		return httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+
+	for _, iface := range node.Interfaces {
+		if err := s.applyRuntimeInterfaceConditions(ctx, node, iface); err != nil {
 			return err
 		}
 	}
@@ -850,6 +872,15 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	if len(fields) == 4 && fields[0] == "udp" && fields[1] == "probe" {
 		return s.runUDPProbe(ctx, command, node)
 	}
+	if len(fields) >= 3 && fields[0] == "tc" && fields[1] == "set" {
+		return s.runTCSet(ctx, command, nodeID, fields[2], fields[3:])
+	}
+	if len(fields) == 3 && fields[0] == "tc" && fields[1] == "clear" {
+		return s.runTCClear(ctx, command, nodeID, fields[2])
+	}
+	if len(fields) == 3 && fields[0] == "tc" && fields[1] == "show" {
+		return s.runTCShow(command, node, fields[2])
+	}
 	if len(fields) == 2 && fields[0] == "ip" && fields[1] == "route" {
 		return runIPRouteList(command, node), nil
 	}
@@ -912,6 +943,17 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 			"udp probe [ip] [port]",
 		)
 	}
+	lines = append(lines,
+		"tc show [interface]",
+		"tc clear [interface]",
+		"tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--bandwidth kbit]",
+		"  tc set updates only provided flags",
+		"  omitted tc flags keep their current values",
+		"  --delay: egress delay in milliseconds",
+		"  --jitter: delay variation in milliseconds",
+		"  --loss: packet loss percentage (0..100, use 100 to simulate a break)",
+		"  --bandwidth: egress bandwidth limit in kbit/s",
+	)
 
 	return commandResponse{
 		Command:  command,
@@ -1420,6 +1462,175 @@ func (s *Service) runUDPProbe(ctx context.Context, command string, node model.No
 	)
 }
 
+func (s *Service) runTCSet(ctx context.Context, command, nodeID, interfaceName string, args []string) (commandResponse, error) {
+	node, ok := s.repo.GetNode(nodeID)
+	if !ok {
+		return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+
+	var targetIface model.Interface
+	found := false
+	for _, iface := range node.Interfaces {
+		if iface.Name != interfaceName {
+			continue
+		}
+		targetIface = iface
+		found = true
+		break
+	}
+	if !found {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
+	}
+
+	previousConditions := targetIface.Conditions
+	conditions, err := parseTCSetConditions(args, targetIface.Conditions)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	if !s.repo.UpdateInterfaceConditions(nodeID, interfaceName, conditions) {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
+	}
+	targetIface.Conditions = conditions
+
+	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
+	if err != nil {
+		if client.IsErrNotFound(err) {
+			return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "container not found")
+		}
+		slog.Error("Container inspect failed", "err", err)
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
+	}
+	if inspect.State != nil && inspect.State.Running && targetIface.LinkID != "" {
+		if targetIface.RuntimeName == "" {
+			s.syncRuntimeInterfaces(nodeID, node.Interfaces, inspect)
+			if err := s.syncRuntimeInterfaceNames(ctx, nodeID); err != nil {
+				return commandResponse{}, err
+			}
+			node, ok = s.repo.GetNode(nodeID)
+			if !ok {
+				return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+			}
+			for _, iface := range node.Interfaces {
+				if iface.Name != interfaceName {
+					continue
+				}
+				targetIface = iface
+				break
+			}
+		}
+
+		if err := s.applyRuntimeInterfaceConditions(ctx, node, targetIface); err != nil {
+			_ = s.repo.UpdateInterfaceConditions(nodeID, interfaceName, previousConditions)
+			targetIface.Conditions = previousConditions
+			_ = s.applyRuntimeInterfaceConditions(ctx, node, targetIface)
+			return commandResponse{}, err
+		}
+	}
+
+	return commandResponse{
+		Command:  command,
+		Stdout:   formatTCShowLine(targetIface),
+		Stderr:   "",
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) runTCClear(ctx context.Context, command, nodeID, interfaceName string) (commandResponse, error) {
+	node, ok := s.repo.GetNode(nodeID)
+	if !ok {
+		return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+
+	var targetIface model.Interface
+	found := false
+	for _, iface := range node.Interfaces {
+		if iface.Name != interfaceName {
+			continue
+		}
+		targetIface = iface
+		found = true
+		break
+	}
+	if !found {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
+	}
+
+	previousConditions := targetIface.Conditions
+	if !s.repo.UpdateInterfaceConditions(nodeID, interfaceName, model.TrafficConditions{}) {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
+	}
+
+	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
+	if err != nil {
+		if client.IsErrNotFound(err) {
+			return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "container not found")
+		}
+		slog.Error("Container inspect failed", "err", err)
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
+	}
+	if inspect.State != nil && inspect.State.Running && targetIface.LinkID != "" {
+		if targetIface.RuntimeName == "" {
+			s.syncRuntimeInterfaces(nodeID, node.Interfaces, inspect)
+			if err := s.syncRuntimeInterfaceNames(ctx, nodeID); err != nil {
+				return commandResponse{}, err
+			}
+			node, ok = s.repo.GetNode(nodeID)
+			if !ok {
+				return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+			}
+			for _, iface := range node.Interfaces {
+				if iface.Name != interfaceName {
+					continue
+				}
+				targetIface = iface
+				break
+			}
+		}
+		if targetIface.RuntimeName != "" {
+			if err := s.clearRuntimeInterfaceConditions(ctx, node.ContainerID, targetIface.RuntimeName); err != nil {
+				_ = s.repo.UpdateInterfaceConditions(nodeID, interfaceName, previousConditions)
+				targetIface.Conditions = previousConditions
+				_ = s.applyRuntimeInterfaceConditions(ctx, node, targetIface)
+				return commandResponse{}, err
+			}
+		}
+	}
+
+	return commandResponse{
+		Command:  command,
+		Stdout:   fmt.Sprintf("%s tc conditions cleared", interfaceName),
+		Stderr:   "",
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) runTCShow(command string, node model.Node, interfaceName string) (commandResponse, error) {
+	for _, iface := range node.Interfaces {
+		if iface.Name != interfaceName {
+			continue
+		}
+		return commandResponse{
+			Command:  command,
+			Stdout:   formatTCShowLine(iface),
+			Stderr:   "",
+			ExitCode: 0,
+		}, nil
+	}
+
+	return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
+}
+
+func formatTCShowLine(iface model.Interface) string {
+	return fmt.Sprintf(
+		"%s: delay=%dms jitter=%dms loss=%s%% bandwidth=%dkbit",
+		iface.Name,
+		iface.Conditions.DelayMs,
+		iface.Conditions.JitterMs,
+		strconv.FormatFloat(iface.Conditions.LossPct, 'f', -1, 64),
+		iface.Conditions.BandwidthKbit,
+	)
+}
+
 func (s *Service) execBoolCommand(ctx context.Context, containerID, shellCmd, failureMessage string) (bool, error) {
 	stdout, stderr, exitCode, err := execInContainer(
 		ctx,
@@ -1624,6 +1835,103 @@ func validatePort(raw string) (int, error) {
 	}
 
 	return port, nil
+}
+
+func ValidateTrafficConditions(conditions model.TrafficConditions) error {
+	if conditions.DelayMs < 0 {
+		return httputil.NewAppError(http.StatusBadRequest, "delay must be non-negative")
+	}
+	if conditions.JitterMs < 0 {
+		return httputil.NewAppError(http.StatusBadRequest, "jitter must be non-negative")
+	}
+	if math.IsNaN(conditions.LossPct) || math.IsInf(conditions.LossPct, 0) {
+		return httputil.NewAppError(http.StatusBadRequest, "loss must be finite")
+	}
+	if conditions.LossPct < 0 || conditions.LossPct > 100 {
+		return httputil.NewAppError(http.StatusBadRequest, "loss must be between 0 and 100")
+	}
+	if conditions.BandwidthKbit < 0 {
+		return httputil.NewAppError(http.StatusBadRequest, "bandwidth must be non-negative")
+	}
+
+	return nil
+}
+
+func hasTrafficNetemConditions(conditions model.TrafficConditions) bool {
+	return conditions.DelayMs > 0 || conditions.JitterMs > 0 || conditions.LossPct > 0
+}
+
+func buildTrafficNetemArgs(conditions model.TrafficConditions) []string {
+	args := make([]string, 0, 6)
+	if conditions.DelayMs > 0 {
+		args = append(args, "delay", fmt.Sprintf("%dms", conditions.DelayMs))
+		if conditions.JitterMs > 0 {
+			args = append(args, fmt.Sprintf("%dms", conditions.JitterMs))
+		}
+	}
+	if conditions.LossPct > 0 {
+		args = append(args, "loss", strconv.FormatFloat(conditions.LossPct, 'f', -1, 64)+"%")
+	}
+
+	return args
+}
+
+func parseTCSetConditions(args []string, current model.TrafficConditions) (model.TrafficConditions, error) {
+	if len(args) == 0 {
+		return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "tc set requires at least one flag")
+	}
+
+	conditions := current
+	seen := make(map[string]struct{}, 4)
+
+	for index := 0; index < len(args); {
+		flagName := args[index]
+		if _, ok := seen[flagName]; ok {
+			return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "duplicate tc flag: "+flagName)
+		}
+		seen[flagName] = struct{}{}
+		if index+1 >= len(args) {
+			return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "missing tc flag value for "+flagName)
+		}
+
+		value := args[index+1]
+		switch flagName {
+		case "--delay":
+			parsed, err := strconv.Atoi(value)
+			if err != nil {
+				return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "invalid delay value")
+			}
+			conditions.DelayMs = parsed
+		case "--jitter":
+			parsed, err := strconv.Atoi(value)
+			if err != nil {
+				return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "invalid jitter value")
+			}
+			conditions.JitterMs = parsed
+		case "--loss":
+			parsed, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "invalid loss value")
+			}
+			conditions.LossPct = parsed
+		case "--bandwidth":
+			parsed, err := strconv.Atoi(value)
+			if err != nil {
+				return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "invalid bandwidth value")
+			}
+			conditions.BandwidthKbit = parsed
+		default:
+			return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "unsupported tc flag: "+flagName)
+		}
+
+		index += 2
+	}
+
+	if err := ValidateTrafficConditions(conditions); err != nil {
+		return model.TrafficConditions{}, err
+	}
+
+	return conditions, nil
 }
 
 func (s *Service) runIPSet(ctx context.Context, command, nodeID, interfaceName, cidr string) (commandResponse, error) {
@@ -1849,6 +2157,82 @@ func (s *Service) deleteRuntimeInterfaceAddress(ctx context.Context, node model.
 	}
 
 	return nil
+}
+
+func (s *Service) applyRuntimeInterfaceConditions(ctx context.Context, node model.Node, iface model.Interface) error {
+	if iface.LinkID == "" || iface.RuntimeName == "" {
+		return nil
+	}
+
+	if err := s.clearRuntimeInterfaceConditions(ctx, node.ContainerID, iface.RuntimeName); err != nil {
+		return err
+	}
+	if iface.Conditions.BandwidthKbit > 0 {
+		rate := fmt.Sprintf("%dkbit", iface.Conditions.BandwidthKbit)
+		if _, err := execInContainerChecked(
+			ctx,
+			s.docker,
+			node.ContainerID,
+			[]string{"tc", "qdisc", "replace", "dev", iface.RuntimeName, "root", "handle", "1:", "htb", "default", "1"},
+			"failed to apply tc root qdisc",
+		); err != nil {
+			return err
+		}
+		if _, err := execInContainerChecked(
+			ctx,
+			s.docker,
+			node.ContainerID,
+			[]string{"tc", "class", "replace", "dev", iface.RuntimeName, "parent", "1:", "classid", "1:1", "htb", "rate", rate, "ceil", rate},
+			"failed to apply tc bandwidth class",
+		); err != nil {
+			return err
+		}
+		if hasTrafficNetemConditions(iface.Conditions) {
+			execCmd := append([]string{"tc", "qdisc", "replace", "dev", iface.RuntimeName, "parent", "1:1", "handle", "10:", "netem"}, buildTrafficNetemArgs(iface.Conditions)...)
+			if _, err := execInContainerChecked(ctx, s.docker, node.ContainerID, execCmd, "failed to apply tc netem conditions"); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if hasTrafficNetemConditions(iface.Conditions) {
+		execCmd := append([]string{"tc", "qdisc", "replace", "dev", iface.RuntimeName, "root", "netem"}, buildTrafficNetemArgs(iface.Conditions)...)
+		if _, err := execInContainerChecked(ctx, s.docker, node.ContainerID, execCmd, "failed to apply tc netem conditions"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) clearRuntimeInterfaceConditions(ctx context.Context, containerID, runtimeName string) error {
+	stdout, stderr, exitCode, err := execInContainer(
+		ctx,
+		s.docker,
+		containerID,
+		[]string{"tc", "qdisc", "del", "dev", runtimeName, "root"},
+	)
+	if err != nil {
+		return err
+	}
+	if exitCode == 0 {
+		return nil
+	}
+
+	combined := strings.TrimSpace(stderr)
+	if combined == "" {
+		combined = strings.TrimSpace(stdout)
+	}
+	if strings.Contains(combined, "No such file or directory") || strings.Contains(combined, "Cannot delete qdisc with handle of zero") {
+		return nil
+	}
+
+	message := "failed to clear tc conditions"
+	if combined != "" {
+		message += ": " + combined
+	}
+	slog.Error("Container exec failed", "message", message)
+	return httputil.NewAppError(http.StatusInternalServerError, message)
 }
 
 func runIPRouteList(command string, node model.Node) commandResponse {

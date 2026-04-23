@@ -152,11 +152,11 @@ func (s *Service) CreateLink(ctx context.Context, interfaceAID, interfaceBID str
 	s.repo.SetInterfaceLink(interfaceBID, linkID)
 	s.repo.SetInterfaceRuntime(interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen)
 	s.repo.SetInterfaceRuntime(interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen)
-	if err := s.realizeLinkedInterface(ctx, nodeA, interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen, ifaceA.IPAddr, ifaceA.PrefixLen); err != nil {
+	if err := s.realizeLinkedInterface(ctx, nodeA, interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen, ifaceA.IPAddr, ifaceA.PrefixLen, ifaceA.Conditions); err != nil {
 		s.rollbackPersistedLinkCreate(ctx, link)
 		return model.Link{}, err
 	}
-	if err := s.realizeLinkedInterface(ctx, nodeB, interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen, ifaceB.IPAddr, ifaceB.PrefixLen); err != nil {
+	if err := s.realizeLinkedInterface(ctx, nodeB, interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen, ifaceB.IPAddr, ifaceB.PrefixLen, ifaceB.Conditions); err != nil {
 		s.rollbackPersistedLinkCreate(ctx, link)
 		return model.Link{}, err
 	}
@@ -253,6 +253,7 @@ func (s *Service) realizeLinkedInterface(
 	runtimePrefixLen int,
 	logicalIP string,
 	logicalPrefixLen int,
+	conditions model.TrafficConditions,
 ) error {
 	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
 	if err != nil {
@@ -275,33 +276,34 @@ func (s *Service) realizeLinkedInterface(
 		return httputil.NewAppError(http.StatusInternalServerError, "failed to persist runtime interface name")
 	}
 	if node.Type == model.Switch {
-		return s.attachSwitchPort(ctx, node, runtimeName)
+		if err := s.attachSwitchPort(ctx, node, runtimeName); err != nil {
+			return err
+		}
+		return s.applyRuntimeInterfaceConditions(ctx, node.ContainerID, runtimeName, conditions)
 	}
-	if logicalIP == "" || logicalPrefixLen == 0 {
-		return nil
+	if logicalIP != "" && logicalPrefixLen != 0 {
+		cidr := logicalIP + "/" + strconv.Itoa(logicalPrefixLen)
+		if _, err := execInContainerChecked(
+			ctx,
+			s.docker,
+			node.ContainerID,
+			[]string{"ip", "addr", "replace", cidr, "dev", runtimeName},
+			"failed to apply runtime interface address",
+		); err != nil {
+			return err
+		}
+		if _, err := execInContainerChecked(
+			ctx,
+			s.docker,
+			node.ContainerID,
+			[]string{"ip", "link", "set", runtimeName, "up"},
+			"failed to bring runtime interface up",
+		); err != nil {
+			return err
+		}
 	}
 
-	cidr := logicalIP + "/" + strconv.Itoa(logicalPrefixLen)
-	if _, err := execInContainerChecked(
-		ctx,
-		s.docker,
-		node.ContainerID,
-		[]string{"ip", "addr", "replace", cidr, "dev", runtimeName},
-		"failed to apply runtime interface address",
-	); err != nil {
-		return err
-	}
-	if _, err := execInContainerChecked(
-		ctx,
-		s.docker,
-		node.ContainerID,
-		[]string{"ip", "link", "set", runtimeName, "up"},
-		"failed to bring runtime interface up",
-	); err != nil {
-		return err
-	}
-
-	return nil
+	return s.applyRuntimeInterfaceConditions(ctx, node.ContainerID, runtimeName, conditions)
 }
 
 func resolveRuntimeInterfaceName(
@@ -476,4 +478,94 @@ func (s *Service) detachSwitchPortIfRunning(ctx context.Context, node model.Node
 	}
 
 	return nil
+}
+
+func hasTrafficNetemConditions(conditions model.TrafficConditions) bool {
+	return conditions.DelayMs > 0 || conditions.JitterMs > 0 || conditions.LossPct > 0
+}
+
+func buildTrafficNetemArgs(conditions model.TrafficConditions) []string {
+	args := make([]string, 0, 6)
+	if conditions.DelayMs > 0 {
+		args = append(args, "delay", fmt.Sprintf("%dms", conditions.DelayMs))
+		if conditions.JitterMs > 0 {
+			args = append(args, fmt.Sprintf("%dms", conditions.JitterMs))
+		}
+	}
+	if conditions.LossPct > 0 {
+		args = append(args, "loss", strconv.FormatFloat(conditions.LossPct, 'f', -1, 64)+"%")
+	}
+
+	return args
+}
+
+func (s *Service) applyRuntimeInterfaceConditions(ctx context.Context, containerID, runtimeName string, conditions model.TrafficConditions) error {
+	if runtimeName == "" {
+		return nil
+	}
+
+	if err := s.clearRuntimeInterfaceConditions(ctx, containerID, runtimeName); err != nil {
+		return err
+	}
+	if conditions.BandwidthKbit > 0 {
+		rate := fmt.Sprintf("%dkbit", conditions.BandwidthKbit)
+		if _, err := execInContainerChecked(
+			ctx,
+			s.docker,
+			containerID,
+			[]string{"tc", "qdisc", "replace", "dev", runtimeName, "root", "handle", "1:", "htb", "default", "1"},
+			"failed to apply tc root qdisc",
+		); err != nil {
+			return err
+		}
+		if _, err := execInContainerChecked(
+			ctx,
+			s.docker,
+			containerID,
+			[]string{"tc", "class", "replace", "dev", runtimeName, "parent", "1:", "classid", "1:1", "htb", "rate", rate, "ceil", rate},
+			"failed to apply tc bandwidth class",
+		); err != nil {
+			return err
+		}
+		if hasTrafficNetemConditions(conditions) {
+			execCmd := append([]string{"tc", "qdisc", "replace", "dev", runtimeName, "parent", "1:1", "handle", "10:", "netem"}, buildTrafficNetemArgs(conditions)...)
+			if _, err := execInContainerChecked(ctx, s.docker, containerID, execCmd, "failed to apply tc netem conditions"); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if hasTrafficNetemConditions(conditions) {
+		execCmd := append([]string{"tc", "qdisc", "replace", "dev", runtimeName, "root", "netem"}, buildTrafficNetemArgs(conditions)...)
+		if _, err := execInContainerChecked(ctx, s.docker, containerID, execCmd, "failed to apply tc netem conditions"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) clearRuntimeInterfaceConditions(ctx context.Context, containerID, runtimeName string) error {
+	stdout, stderr, exitCode, err := execInContainer(ctx, s.docker, containerID, []string{"tc", "qdisc", "del", "dev", runtimeName, "root"})
+	if err != nil {
+		return err
+	}
+	if exitCode == 0 {
+		return nil
+	}
+
+	combined := strings.TrimSpace(stderr)
+	if combined == "" {
+		combined = strings.TrimSpace(stdout)
+	}
+	if strings.Contains(combined, "No such file or directory") || strings.Contains(combined, "Cannot delete qdisc with handle of zero") {
+		return nil
+	}
+
+	message := "failed to clear tc conditions"
+	if combined != "" {
+		message += ": " + combined
+	}
+	slog.Error("Container exec failed", "message", message)
+	return httputil.NewAppError(http.StatusInternalServerError, message)
 }

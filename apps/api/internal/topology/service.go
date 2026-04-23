@@ -54,7 +54,10 @@ func (s *service) ExportTopology() (File, error) {
 
 		exportedNode.Interfaces = make([]Interface, 0, len(node.Interfaces))
 		for _, iface := range node.Interfaces {
-			exportedInterface := Interface{Name: iface.Name}
+			exportedInterface := Interface{
+				Name:       iface.Name,
+				Conditions: iface.Conditions,
+			}
 			if iface.IPAddr != "" && iface.PrefixLen > 0 {
 				exportedInterface.CIDR = iface.IPAddr + "/" + strconv.Itoa(iface.PrefixLen)
 			}
@@ -278,22 +281,23 @@ func (s *service) applyNodeConfig(nodeID string, topologyNode Node) error {
 	node.Routes = make([]model.Route, 0, len(topologyNode.Routes))
 
 	for _, topologyInterface := range topologyNode.Interfaces {
-		if topologyInterface.CIDR == "" {
-			continue
-		}
-
-		prefix, err := netip.ParsePrefix(topologyInterface.CIDR)
-		if err != nil {
-			return httputil.NewAppError(http.StatusBadRequest, "invalid interface cidr")
-		}
-
 		found := false
 		for index, iface := range node.Interfaces {
 			if iface.Name != topologyInterface.Name {
 				continue
 			}
-			node.Interfaces[index].IPAddr = prefix.Addr().String()
-			node.Interfaces[index].PrefixLen = prefix.Bits()
+			if err := nodes.ValidateTrafficConditions(topologyInterface.Conditions); err != nil {
+				return err
+			}
+			if topologyInterface.CIDR != "" {
+				prefix, err := netip.ParsePrefix(topologyInterface.CIDR)
+				if err != nil {
+					return httputil.NewAppError(http.StatusBadRequest, "invalid interface cidr")
+				}
+				node.Interfaces[index].IPAddr = prefix.Addr().String()
+				node.Interfaces[index].PrefixLen = prefix.Bits()
+			}
+			node.Interfaces[index].Conditions = topologyInterface.Conditions
 			found = true
 			break
 		}
