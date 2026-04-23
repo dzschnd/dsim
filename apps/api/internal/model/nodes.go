@@ -8,11 +8,11 @@ import (
 
 type Node struct {
 	ID          string      `json:"id"`
-	Name        string      `json:"name"`
+	Name        string      `json:"-"`
 	Position    Position    `json:"position"`
 	Status      NodeState   `json:"status"`
 	Type        NodeType    `json:"type"`
-	ContainerID string      `json:"containerId"`
+	ContainerID string      `json:"-"`
 	NetworkID   string      `json:"networkId"`
 	NetworkName string      `json:"networkName"`
 	Subnet      string      `json:"subnet"`

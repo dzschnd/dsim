@@ -5,11 +5,9 @@ import { NodeTerminal } from "./NodeTerminal";
 import { SideHandles } from "./SideHandles";
 
 export type SquareNodeData = {
-	label: string;
 	nodeId: string;
 	type: string;
 	status: string;
-	containerId: string;
 	interfaces: ApiInterface[];
 	isSelected: boolean;
 	isBusy: boolean;
@@ -72,8 +70,7 @@ export function SquareNode({ data }: NodeProps<SquareNodeData>) {
 				)}
 			</button>
 			<div className="pointer-events-none flex flex-col items-center gap-4 -translate-y-0.75">
-				<div className="text-[13px] font-semibold leading-tight text-zinc-900">{data.label}</div>
-				<div className="text-[11px] leading-tight text-zinc-500">{data.type}</div>
+				<div className="text-[13px] mt-8 font-semibold leading-tight text-zinc-900">{data.type}</div>
 			</div>
 			{isRunning && data.isTerminalOpen ? (
 				<NodeTerminal

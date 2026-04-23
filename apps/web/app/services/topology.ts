@@ -8,11 +8,9 @@ export type ApiInterface = {
 
 export type ApiNode = {
 	id: string;
-	name: string;
 	position: TopologyPosition;
 	status: string;
 	type: string;
-	containerId: string;
 	createdAt: string;
 	interfaces: ApiInterface[];
 };
@@ -54,7 +52,6 @@ export type TopologyRoute = {
 
 export type TopologyNode = {
 	id: string;
-	name: string;
 	type: string;
 	position: TopologyPosition;
 	interfaces: TopologyInterface[];

@@ -168,11 +168,9 @@ export function TopologyCanvas() {
 				zIndex: nodeZIndex(node.status === "running" ? (terminalState.get(node.id)?.isOpen ?? false) : false),
 				selected: node.id === currentSelectedNodeId,
 				data: {
-					label: node.name,
 					nodeId: node.id,
 					status: node.status,
 					type: node.type,
-					containerId: node.containerId,
 					interfaces: node.interfaces,
 					isSelected: node.id === currentSelectedNodeId,
 					isBusy: busyNodeIds.has(node.id),

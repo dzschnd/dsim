@@ -46,7 +46,6 @@ func (s *service) ExportTopology() (File, error) {
 	for _, node := range nodesSnapshot {
 		exportedNode := Node{
 			ID:       node.ID,
-			Name:     node.Name,
 			Type:     model.NodeTypeName[node.Type],
 			Position: Position{X: node.Position.X, Y: node.Position.Y},
 			Running:  node.Status == model.Running,
@@ -276,7 +275,6 @@ func (s *service) applyNodeConfig(nodeID string, topologyNode Node) error {
 		return httputil.NewAppError(http.StatusNotFound, "node not found during topology import")
 	}
 
-	node.Name = topologyNode.Name
 	node.Routes = make([]model.Route, 0, len(topologyNode.Routes))
 
 	for _, topologyInterface := range topologyNode.Interfaces {

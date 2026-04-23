@@ -21,11 +21,9 @@ type createNodeRequest struct {
 }
 
 type createNodeResponse struct {
-	ID          string         `json:"id"`
-	Name        string         `json:"name"`
-	Position    model.Position `json:"position"`
-	Type        model.NodeType `json:"type"`
-	ContainerID string         `json:"containerId"`
+	ID       string         `json:"id"`
+	Position model.Position `json:"position"`
+	Type     model.NodeType `json:"type"`
 }
 
 type updateNodePositionRequest struct {
@@ -66,11 +64,9 @@ func (h *Handler) CreateNodeHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(createNodeResponse{
-		ID:          node.ID,
-		Name:        node.Name,
-		Position:    node.Position,
-		Type:        node.Type,
-		ContainerID: node.ContainerID,
+		ID:       node.ID,
+		Position: node.Position,
+		Type:     node.Type,
 	})
 }
 

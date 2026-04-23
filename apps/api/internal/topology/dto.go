@@ -7,7 +7,6 @@ type File struct {
 
 type Node struct {
 	ID         string      `json:"id"`
-	Name       string      `json:"name"`
 	Type       string      `json:"type"`
 	Position   Position    `json:"position"`
 	Interfaces []Interface `json:"interfaces"`

@@ -157,19 +157,9 @@ func (s *Service) CreateNode(ctx context.Context, reqNodeType string, position m
 		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "container create failed")
 	}
 
-	inspect, err := s.docker.ContainerInspect(ctx, createResp.ID)
-	if err != nil {
-		_ = s.docker.ContainerRemove(ctx, createResp.ID, container.RemoveOptions{Force: true})
-		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
-		s.repo.store.IsolatedSubnets.Release(subnet)
-		slog.Error("Container inspect failed", "err", err)
-		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
-	}
-
-	name := strings.TrimPrefix(inspect.Name, "/")
 	node := model.Node{
 		ID:          nodeID,
-		Name:        name,
+		Name:        "",
 		Position:    position,
 		Status:      model.Idle,
 		Type:        nodeType,
