@@ -129,6 +129,11 @@ func (s *service) ImportTopology(ctx context.Context, file File) error {
 	return nil
 }
 
+func (s *service) ClearTopology(ctx context.Context) error {
+	CleanupRuntime(ctx, s.docker, s.store)
+	return ClearStore(ctx, s.docker, s.store)
+}
+
 func (s *service) importTopologyUnsafe(ctx context.Context, file File) error {
 	CleanupRuntime(ctx, s.docker, s.store)
 	if err := ClearStore(ctx, s.docker, s.store); err != nil {

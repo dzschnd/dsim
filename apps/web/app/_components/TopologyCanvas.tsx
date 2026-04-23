@@ -24,6 +24,7 @@ import {
 	type ApiCommandResponse,
 	type ApiInterface,
 	type TopologyFile,
+	clearTopology,
 	createNode as createNodeRequest,
 	createLink,
 	deleteLink,
@@ -59,10 +60,6 @@ const SELECTED_EDGE_STYLE = {
 	stroke: "#2563eb",
 	strokeWidth: 4,
 };
-
-function nodeZIndex(isTerminalOpen: boolean): number {
-	return isTerminalOpen ? 900 : 10;
-}
 
 function randomPos(index: number) {
 	const row = Math.floor(index / 5);
@@ -179,7 +176,7 @@ export function TopologyCanvas() {
 				id: node.id,
 				type: "square",
 				position: existingPositions.get(node.id) ?? node.position ?? randomPos(index),
-				zIndex: nodeZIndex(node.status === "running" ? (terminalState.get(node.id)?.isOpen ?? false) : false),
+				zIndex: 10,
 				selected: node.id === currentSelectedNodeId,
 				data: {
 					nodeId: node.id,
@@ -353,7 +350,6 @@ export function TopologyCanvas() {
 				node.id === nodeID
 					? {
 						...node,
-						zIndex: nodeZIndex(node.data.status === "running" ? !node.data.isTerminalOpen : false),
 						data: {
 							...node.data,
 							isTerminalOpen: node.data.status === "running" ? !node.data.isTerminalOpen : false,
@@ -625,6 +621,37 @@ export function TopologyCanvas() {
 		[baseUrl, loadTopology],
 	);
 
+	const clearCurrentTopology = useCallback(async () => {
+		setBusy(true);
+		setStatus("Clearing topology...");
+		try {
+			await clearTopology(baseUrl);
+			nodePositionsRef.current = new Map();
+			terminalStateRef.current = new Map();
+			nodesRef.current = [];
+			selectedNodeIdRef.current = "";
+			selectedLinkIdRef.current = "";
+			connectionSourceNodeIdRef.current = "";
+			fullscreenTerminalNodeIdRef.current = "";
+			pendingConnectionRef.current = null;
+			setNodes([]);
+			setEdges([]);
+			setSelectedNodeId("");
+			setSelectedLinkId("");
+			setConnectionSourceNodeId("");
+			setFullscreenTerminalNodeId("");
+			setPendingConnection(null);
+			setBusyNodeIds(new Set());
+			setIsCreateNodeMenuOpen(false);
+			setStatus("Topology cleared");
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			setStatus(message || "Failed to clear topology");
+		} finally {
+			setBusy(false);
+		}
+	}, [baseUrl]);
+
 	const deleteSelectedNode = useCallback(async () => {
 		if (!selectedNodeId) {
 			setStatus("Select a node first");
@@ -857,7 +884,7 @@ export function TopologyCanvas() {
 					<button
 						type="button"
 						onClick={() => void saveTopologyToFile()}
-						disabled={busy}
+						disabled={busy || nodes.length === 0}
 						className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
 					>
 						Save
@@ -869,6 +896,14 @@ export function TopologyCanvas() {
 						className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
 					>
 						Load
+					</button>
+					<button
+						type="button"
+						onClick={() => void clearCurrentTopology()}
+						disabled={busy}
+						className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
+					>
+						Clear
 					</button>
 				</div>
 			</header>

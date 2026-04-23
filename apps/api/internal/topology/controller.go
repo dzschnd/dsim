@@ -49,3 +49,15 @@ func (h *Handler) ImportTopologyHandler(w http.ResponseWriter, r *http.Request) 
 
 	w.WriteHeader(http.StatusNoContent)
 }
+
+func (h *Handler) ClearTopologyHandler(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := httputil.WithRequestTimeout(r.Context())
+	defer cancel()
+
+	if err := h.service.ClearTopology(ctx); err != nil {
+		httputil.WriteAppError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}

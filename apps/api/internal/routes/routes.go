@@ -39,6 +39,7 @@ func NewRouter(s *Server) http.Handler {
 
 	r.HandleFunc("GET /api/v1/topology", t.ExportTopologyHandler)
 	r.HandleFunc("POST /api/v1/topology", t.ImportTopologyHandler)
+	r.HandleFunc("DELETE /api/v1/topology", t.ClearTopologyHandler)
 
 	return requestLogger(corsHeader(jsonHeader(r)))
 }

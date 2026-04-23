@@ -136,6 +136,16 @@ export async function importTopology(baseUrl: string, topology: TopologyFile): P
 	}
 }
 
+export async function clearTopology(baseUrl: string): Promise<void> {
+	const res = await fetch(`${baseUrl}/api/v1/topology`, {
+		method: "DELETE",
+	});
+
+	if (!res.ok) {
+		throw new Error(await parseApiError(res));
+	}
+}
+
 export async function createNode(
 	baseUrl: string,
 	type: "host" | "switch" | "router",
