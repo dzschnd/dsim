@@ -9,7 +9,6 @@ import (
 	"math"
 	"net/http"
 	"net/netip"
-	"net/url"
 	"os"
 	"regexp"
 	"strconv"
@@ -47,6 +46,10 @@ const (
 
 	minIperfUDPPacketLength = 16
 	maxIperfUDPPacketLength = 65507
+
+	httpDefaultPort = 8080
+	tcpDefaultPort  = 3000
+	udpDefaultPort  = 4000
 )
 
 var iperfBitratePattern = regexp.MustCompile(`^[1-9][0-9]*(\.[0-9]+)?[KMGkmg]?$`)
@@ -833,13 +836,13 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	if len(fields) == 3 && fields[0] == "iperf" && fields[1] == "server" && fields[2] == "log" {
 		return s.runIperfServerLog(ctx, command, node)
 	}
-	if len(fields) == 3 && fields[0] == "iperf" && fields[1] == "server" && fields[2] == "logclear" {
+	if len(fields) == 4 && fields[0] == "iperf" && fields[1] == "server" && fields[2] == "log" && fields[3] == "clear" {
 		return s.runIperfServerLogClear(ctx, command, node)
 	}
 	if len(fields) == 3 && fields[0] == "http" && fields[1] == "get" {
 		return s.runHTTPGet(ctx, command, node)
 	}
-	if len(fields) == 4 && fields[0] == "http" && fields[1] == "server" && fields[2] == "start" {
+	if len(fields) == 3 && fields[0] == "http" && fields[1] == "server" && fields[2] == "start" {
 		return s.runHTTPServerStart(ctx, command, node)
 	}
 	if len(fields) == 3 && fields[0] == "http" && fields[1] == "server" && fields[2] == "stop" {
@@ -851,10 +854,10 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	if len(fields) == 3 && fields[0] == "http" && fields[1] == "server" && fields[2] == "log" {
 		return s.runHTTPServerLog(ctx, command, node)
 	}
-	if len(fields) == 3 && fields[0] == "http" && fields[1] == "server" && fields[2] == "logclear" {
+	if len(fields) == 4 && fields[0] == "http" && fields[1] == "server" && fields[2] == "log" && fields[3] == "clear" {
 		return s.runHTTPServerLogClear(ctx, command, node)
 	}
-	if len(fields) == 4 && fields[0] == "tcp" && fields[1] == "server" && fields[2] == "start" {
+	if len(fields) == 3 && fields[0] == "tcp" && fields[1] == "server" && fields[2] == "start" {
 		return s.runTCPServerStart(ctx, command, node)
 	}
 	if len(fields) == 3 && fields[0] == "tcp" && fields[1] == "server" && fields[2] == "stop" {
@@ -863,10 +866,10 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	if len(fields) == 3 && fields[0] == "tcp" && fields[1] == "server" && fields[2] == "status" {
 		return s.runTCPServerStatus(ctx, command, node)
 	}
-	if len(fields) == 4 && fields[0] == "tcp" && fields[1] == "connect" {
+	if len(fields) == 3 && fields[0] == "tcp" && fields[1] == "connect" {
 		return s.runTCPConnect(ctx, command, node)
 	}
-	if len(fields) == 4 && fields[0] == "udp" && fields[1] == "server" && fields[2] == "start" {
+	if len(fields) == 3 && fields[0] == "udp" && fields[1] == "server" && fields[2] == "start" {
 		return s.runUDPServerStart(ctx, command, node)
 	}
 	if len(fields) == 3 && fields[0] == "udp" && fields[1] == "server" && fields[2] == "stop" {
@@ -875,7 +878,7 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	if len(fields) == 3 && fields[0] == "udp" && fields[1] == "server" && fields[2] == "status" {
 		return s.runUDPServerStatus(ctx, command, node)
 	}
-	if len(fields) == 4 && fields[0] == "udp" && fields[1] == "probe" {
+	if len(fields) == 3 && fields[0] == "udp" && fields[1] == "probe" {
 		return s.runUDPProbe(ctx, command, node)
 	}
 	if len(fields) >= 3 && fields[0] == "tc" && fields[1] == "set" {
@@ -1044,14 +1047,14 @@ func iperfCommandUsage(fields []string) string {
 		"iperf server stop",
 		"iperf server status",
 		"iperf server log",
-		"iperf server logclear",
+		"iperf server log clear",
 	}
 	iperfServerCommands := []string{
 		"iperf server start",
 		"iperf server stop",
 		"iperf server status",
 		"iperf server log",
-		"iperf server logclear",
+		"iperf server log clear",
 	}
 
 	if len(fields) == 1 {
@@ -1075,9 +1078,13 @@ func iperfCommandUsage(fields []string) string {
 		case "status":
 			return "iperf server status"
 		case "log":
-			return "iperf server log"
-		case "logclear":
-			return "iperf server logclear"
+			if len(fields) == 3 {
+				return "iperf server log"
+			}
+			if fields[3] == "clear" {
+				return "iperf server log clear"
+			}
+			return "iperf server log clear"
 		default:
 			return strings.Join(iperfServerCommands, "\n")
 		}
@@ -1088,19 +1095,19 @@ func iperfCommandUsage(fields []string) string {
 
 func httpCommandUsage(fields []string) string {
 	httpCommands := []string{
-		"http get [url]",
-		"http server start [port]",
+		"http get [ip]",
+		"http server start",
 		"http server stop",
 		"http server status",
 		"http server log",
-		"http server logclear",
+		"http server log clear",
 	}
 	httpServerCommands := []string{
-		"http server start [port]",
+		"http server start",
 		"http server stop",
 		"http server status",
 		"http server log",
-		"http server logclear",
+		"http server log clear",
 	}
 
 	if len(fields) == 1 {
@@ -1109,22 +1116,26 @@ func httpCommandUsage(fields []string) string {
 
 	switch fields[1] {
 	case "get":
-		return "http get [url]"
+		return "http get [ip]"
 	case "server":
 		if len(fields) == 2 {
 			return strings.Join(httpServerCommands, "\n")
 		}
 		switch fields[2] {
 		case "start":
-			return "http server start [port]"
+			return "http server start"
 		case "stop":
 			return "http server stop"
 		case "status":
 			return "http server status"
 		case "log":
-			return "http server log"
-		case "logclear":
-			return "http server logclear"
+			if len(fields) == 3 {
+				return "http server log"
+			}
+			if fields[3] == "clear" {
+				return "http server log clear"
+			}
+			return "http server log clear"
 		default:
 			return strings.Join(httpServerCommands, "\n")
 		}
@@ -1135,13 +1146,13 @@ func httpCommandUsage(fields []string) string {
 
 func tcpCommandUsage(fields []string) string {
 	tcpCommands := []string{
-		"tcp server start [port]",
+		"tcp server start",
 		"tcp server stop",
 		"tcp server status",
-		"tcp connect [ip] [port]",
+		"tcp connect [ip]",
 	}
 	tcpServerCommands := []string{
-		"tcp server start [port]",
+		"tcp server start",
 		"tcp server stop",
 		"tcp server status",
 	}
@@ -1152,14 +1163,14 @@ func tcpCommandUsage(fields []string) string {
 
 	switch fields[1] {
 	case "connect":
-		return "tcp connect [ip] [port]"
+		return "tcp connect [ip]"
 	case "server":
 		if len(fields) == 2 {
 			return strings.Join(tcpServerCommands, "\n")
 		}
 		switch fields[2] {
 		case "start":
-			return "tcp server start [port]"
+			return "tcp server start"
 		case "stop":
 			return "tcp server stop"
 		case "status":
@@ -1174,13 +1185,13 @@ func tcpCommandUsage(fields []string) string {
 
 func udpCommandUsage(fields []string) string {
 	udpCommands := []string{
-		"udp server start [port]",
+		"udp server start",
 		"udp server stop",
 		"udp server status",
-		"udp probe [ip] [port]",
+		"udp probe [ip]",
 	}
 	udpServerCommands := []string{
-		"udp server start [port]",
+		"udp server start",
 		"udp server stop",
 		"udp server status",
 	}
@@ -1191,14 +1202,14 @@ func udpCommandUsage(fields []string) string {
 
 	switch fields[1] {
 	case "probe":
-		return "udp probe [ip] [port]"
+		return "udp probe [ip]"
 	case "server":
 		if len(fields) == 2 {
 			return strings.Join(udpServerCommands, "\n")
 		}
 		switch fields[2] {
 		case "start":
-			return "udp server start [port]"
+			return "udp server start"
 		case "stop":
 			return "udp server stop"
 		case "status":
@@ -1234,21 +1245,21 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 			"iperf server stop",
 			"iperf server status",
 			"iperf server log",
-			"iperf server logclear",
-			"http get [url]",
-			"http server start [port]",
+			"iperf server log clear",
+			"http get [ip]",
+			"http server start",
 			"http server stop",
 			"http server status",
 			"http server log",
-			"http server logclear",
-			"tcp server start [port]",
+			"http server log clear",
+			"tcp server start",
 			"tcp server stop",
 			"tcp server status",
-			"tcp connect [ip] [port]",
-			"udp server start [port]",
+			"tcp connect [ip]",
+			"udp server start",
 			"udp server stop",
 			"udp server status",
-			"udp probe [ip] [port]",
+			"udp probe [ip]",
 		)
 	}
 	lines = append(lines,
@@ -1463,25 +1474,22 @@ func (s *Service) iperfServerRunning(ctx context.Context, containerID string) (b
 
 func (s *Service) runHTTPGet(ctx context.Context, command string, node model.Node) (commandResponse, error) {
 	fields := strings.Fields(command)
-	validURL, err := validateHTTPURL(fields[2])
-	if err != nil {
-		return commandResponse{}, err
+	targetIP := fields[2]
+	if _, err := netip.ParseAddr(targetIP); err != nil {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
 	}
+	targetURL := fmt.Sprintf("http://%s:%d", targetIP, httpDefaultPort)
 
 	return s.execCommand(
 		ctx,
 		node.ContainerID,
-		[]string{"curl", "-sS", "-i", "--connect-timeout", "2", "--max-time", "5", validURL},
+		[]string{"curl", "-sS", "-i", "--connect-timeout", "2", "--max-time", "5", targetURL},
 		command,
 	)
 }
 
 func (s *Service) runHTTPServerStart(ctx context.Context, command string, node model.Node) (commandResponse, error) {
-	fields := strings.Fields(command)
-	port, err := validatePort(fields[3])
-	if err != nil {
-		return commandResponse{}, err
-	}
+	port := httpDefaultPort
 
 	running, err := s.httpServerRunning(ctx, node.ContainerID)
 	if err != nil {
@@ -1575,11 +1583,7 @@ func (s *Service) httpServerRunning(ctx context.Context, containerID string) (bo
 }
 
 func (s *Service) runTCPServerStart(ctx context.Context, command string, node model.Node) (commandResponse, error) {
-	fields := strings.Fields(command)
-	port, err := validatePort(fields[3])
-	if err != nil {
-		return commandResponse{}, err
-	}
+	port := tcpDefaultPort
 
 	running, err := s.tcpServerRunning(ctx, node.ContainerID)
 	if err != nil {
@@ -1660,10 +1664,7 @@ func (s *Service) runTCPConnect(ctx context.Context, command string, node model.
 	if _, err := netip.ParseAddr(targetIP); err != nil {
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
 	}
-	port, err := validatePort(fields[3])
-	if err != nil {
-		return commandResponse{}, err
-	}
+	port := tcpDefaultPort
 
 	return s.execCommand(
 		ctx,
@@ -1674,11 +1675,7 @@ func (s *Service) runTCPConnect(ctx context.Context, command string, node model.
 }
 
 func (s *Service) runUDPServerStart(ctx context.Context, command string, node model.Node) (commandResponse, error) {
-	fields := strings.Fields(command)
-	port, err := validatePort(fields[3])
-	if err != nil {
-		return commandResponse{}, err
-	}
+	port := udpDefaultPort
 
 	running, err := s.udpServerRunning(ctx, node.ContainerID)
 	if err != nil {
@@ -1759,10 +1756,7 @@ func (s *Service) runUDPProbe(ctx context.Context, command string, node model.No
 	if _, err := netip.ParseAddr(targetIP); err != nil {
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
 	}
-	port, err := validatePort(fields[3])
-	if err != nil {
-		return commandResponse{}, err
-	}
+	port := udpDefaultPort
 
 	return s.execCommand(
 		ctx,
@@ -2105,34 +2099,6 @@ func (s *Service) portBusy(ctx context.Context, containerID string, port int, pr
 	}
 
 	return strings.TrimSpace(stdout) != "0", nil
-}
-
-func validateHTTPURL(raw string) (string, error) {
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return "", httputil.NewAppError(http.StatusBadRequest, "invalid url")
-	}
-	if parsed.Scheme != "http" {
-		return "", httputil.NewAppError(http.StatusBadRequest, "only http urls are supported")
-	}
-	if parsed.Host == "" {
-		return "", httputil.NewAppError(http.StatusBadRequest, "url host is required")
-	}
-
-	host := parsed.Hostname()
-	if host == "" {
-		return "", httputil.NewAppError(http.StatusBadRequest, "url host is required")
-	}
-	if _, err := netip.ParseAddr(host); err != nil {
-		return "", httputil.NewAppError(http.StatusBadRequest, "url host must be an ip address")
-	}
-	if parsed.Port() != "" {
-		if _, err := validatePort(parsed.Port()); err != nil {
-			return "", err
-		}
-	}
-
-	return parsed.String(), nil
 }
 
 func validatePort(raw string) (int, error) {
