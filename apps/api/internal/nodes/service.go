@@ -44,6 +44,9 @@ const (
 	httpPortFilePath = "/var/run/http-server.port"
 	tcpPIDFilePath   = "/var/run/tcp-server.pid"
 	udpPIDFilePath   = "/var/run/udp-server.pid"
+
+	minIperfUDPPacketLength = 16
+	maxIperfUDPPacketLength = 65507
 )
 
 var iperfBitratePattern = regexp.MustCompile(`^[1-9][0-9]*(\.[0-9]+)?[KMGkmg]?$`)
@@ -903,7 +906,309 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 		return s.runIPRoute(ctx, command, node, fields[3], fields[5])
 	}
 
+	if usage, ok := commandUsage(fields, node.Type); ok {
+		return commandResponse{
+			Command:  command,
+			Stdout:   usage,
+			Stderr:   "",
+			ExitCode: 2,
+		}, nil
+	}
+
 	return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "unsupported command: "+command)
+}
+
+func commandUsage(fields []string, nodeType model.NodeType) (string, bool) {
+	if len(fields) == 0 {
+		return "", false
+	}
+
+	switch fields[0] {
+	case "ip":
+		if nodeType == model.Switch {
+			return "switch does not support ip commands", true
+		}
+		return ipCommandUsage(fields)
+	case "tc":
+		return tcCommandUsage(fields)
+	case "iperf":
+		if nodeType == model.Switch {
+			return "switch does not support iperf", true
+		}
+		return iperfCommandUsage(fields), true
+	case "http":
+		if nodeType == model.Switch {
+			return "switch does not support http", true
+		}
+		return httpCommandUsage(fields), true
+	case "tcp":
+		if nodeType == model.Switch {
+			return "switch does not support tcp", true
+		}
+		return tcpCommandUsage(fields), true
+	case "udp":
+		if nodeType == model.Switch {
+			return "switch does not support udp", true
+		}
+		return udpCommandUsage(fields), true
+	case "ping":
+		if nodeType == model.Switch {
+			return "switch does not support ping", true
+		}
+		return "ping [target-ip]", true
+	case "traceroute":
+		if nodeType == model.Switch {
+			return "switch does not support traceroute", true
+		}
+		return "traceroute [target-ip]", true
+	}
+
+	return "", false
+}
+
+func ipCommandUsage(fields []string) (string, bool) {
+	ipCommands := []string{
+		"ip addr",
+		"ip set [interface] [ip/prefix]",
+		"ip unset [interface]",
+		"ip route",
+		"ip route default [next-hop]",
+		"ip route add [destination/prefix] via [next-hop]",
+		"ip route delete [default|destination/prefix]",
+	}
+	ipRouteCommands := []string{
+		"ip route",
+		"ip route default [next-hop]",
+		"ip route add [destination/prefix] via [next-hop]",
+		"ip route delete [default|destination/prefix]",
+	}
+
+	if len(fields) == 1 {
+		return strings.Join(ipCommands, "\n"), true
+	}
+
+	switch fields[1] {
+	case "addr":
+		return "ip addr", true
+	case "set":
+		return "ip set [interface] [ip/prefix]", true
+	case "unset":
+		return "ip unset [interface]", true
+	case "route":
+		if len(fields) == 2 {
+			return "", false
+		}
+		switch fields[2] {
+		case "default":
+			return "ip route default [next-hop]", true
+		case "add":
+			return "ip route add [destination/prefix] via [next-hop]", true
+		case "delete":
+			return "ip route delete [default|destination/prefix]", true
+		default:
+			return strings.Join(ipRouteCommands, "\n"), true
+		}
+	default:
+		return strings.Join(ipCommands, "\n"), true
+	}
+}
+
+func tcCommandUsage(fields []string) (string, bool) {
+	tcCommands := []string{
+		"tc show [interface]",
+		"tc clear [interface]",
+		"tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--bandwidth kbit]",
+	}
+
+	if len(fields) == 1 {
+		return strings.Join(tcCommands, "\n"), true
+	}
+
+	switch fields[1] {
+	case "show":
+		return "tc show [interface]", true
+	case "clear":
+		return "tc clear [interface]", true
+	case "set":
+		return "tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--bandwidth kbit]", true
+	default:
+		return strings.Join(tcCommands, "\n"), true
+	}
+}
+
+func iperfCommandUsage(fields []string) string {
+	iperfCommands := []string{
+		"iperf tcp [ip] [--time seconds | --bytes bytes]",
+		"iperf udp [ip] [--time seconds | --bytes bytes] [--bitrate rate[K|M|G]] [--packet-length bytes(16..65507)]",
+		"iperf server start",
+		"iperf server stop",
+		"iperf server status",
+		"iperf server log",
+		"iperf server logclear",
+	}
+	iperfServerCommands := []string{
+		"iperf server start",
+		"iperf server stop",
+		"iperf server status",
+		"iperf server log",
+		"iperf server logclear",
+	}
+
+	if len(fields) == 1 {
+		return strings.Join(iperfCommands, "\n")
+	}
+
+	switch fields[1] {
+	case "tcp":
+		return "iperf tcp [ip] [--time seconds | --bytes bytes]"
+	case "udp":
+		return "iperf udp [ip] [--time seconds | --bytes bytes] [--bitrate rate[K|M|G]] [--packet-length bytes(16..65507)]"
+	case "server":
+		if len(fields) == 2 {
+			return strings.Join(iperfServerCommands, "\n")
+		}
+		switch fields[2] {
+		case "start":
+			return "iperf server start"
+		case "stop":
+			return "iperf server stop"
+		case "status":
+			return "iperf server status"
+		case "log":
+			return "iperf server log"
+		case "logclear":
+			return "iperf server logclear"
+		default:
+			return strings.Join(iperfServerCommands, "\n")
+		}
+	default:
+		return strings.Join(iperfCommands, "\n")
+	}
+}
+
+func httpCommandUsage(fields []string) string {
+	httpCommands := []string{
+		"http get [url]",
+		"http server start [port]",
+		"http server stop",
+		"http server status",
+		"http server log",
+		"http server logclear",
+	}
+	httpServerCommands := []string{
+		"http server start [port]",
+		"http server stop",
+		"http server status",
+		"http server log",
+		"http server logclear",
+	}
+
+	if len(fields) == 1 {
+		return strings.Join(httpCommands, "\n")
+	}
+
+	switch fields[1] {
+	case "get":
+		return "http get [url]"
+	case "server":
+		if len(fields) == 2 {
+			return strings.Join(httpServerCommands, "\n")
+		}
+		switch fields[2] {
+		case "start":
+			return "http server start [port]"
+		case "stop":
+			return "http server stop"
+		case "status":
+			return "http server status"
+		case "log":
+			return "http server log"
+		case "logclear":
+			return "http server logclear"
+		default:
+			return strings.Join(httpServerCommands, "\n")
+		}
+	default:
+		return strings.Join(httpCommands, "\n")
+	}
+}
+
+func tcpCommandUsage(fields []string) string {
+	tcpCommands := []string{
+		"tcp server start [port]",
+		"tcp server stop",
+		"tcp server status",
+		"tcp connect [ip] [port]",
+	}
+	tcpServerCommands := []string{
+		"tcp server start [port]",
+		"tcp server stop",
+		"tcp server status",
+	}
+
+	if len(fields) == 1 {
+		return strings.Join(tcpCommands, "\n")
+	}
+
+	switch fields[1] {
+	case "connect":
+		return "tcp connect [ip] [port]"
+	case "server":
+		if len(fields) == 2 {
+			return strings.Join(tcpServerCommands, "\n")
+		}
+		switch fields[2] {
+		case "start":
+			return "tcp server start [port]"
+		case "stop":
+			return "tcp server stop"
+		case "status":
+			return "tcp server status"
+		default:
+			return strings.Join(tcpServerCommands, "\n")
+		}
+	default:
+		return strings.Join(tcpCommands, "\n")
+	}
+}
+
+func udpCommandUsage(fields []string) string {
+	udpCommands := []string{
+		"udp server start [port]",
+		"udp server stop",
+		"udp server status",
+		"udp probe [ip] [port]",
+	}
+	udpServerCommands := []string{
+		"udp server start [port]",
+		"udp server stop",
+		"udp server status",
+	}
+
+	if len(fields) == 1 {
+		return strings.Join(udpCommands, "\n")
+	}
+
+	switch fields[1] {
+	case "probe":
+		return "udp probe [ip] [port]"
+	case "server":
+		if len(fields) == 2 {
+			return strings.Join(udpServerCommands, "\n")
+		}
+		switch fields[2] {
+		case "start":
+			return "udp server start [port]"
+		case "stop":
+			return "udp server stop"
+		case "status":
+			return "udp server status"
+		default:
+			return strings.Join(udpServerCommands, "\n")
+		}
+	default:
+		return strings.Join(udpCommands, "\n")
+	}
 }
 
 func runHelp(command string, nodeType model.NodeType) commandResponse {
@@ -924,11 +1229,7 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 			"ping [target-ip]",
 			"traceroute [target-ip]",
 			"iperf tcp [ip] [--time seconds | --bytes bytes]",
-			"iperf udp [ip] [--time seconds | --bytes bytes] [--bitrate rate] [--packet-length bytes]",
-			"  iperf defaults to --time 5 when --time and --bytes are omitted",
-			"  --time and --bytes are mutually exclusive",
-			"  udp --bitrate maps to iperf3 -b and accepts values like 500K, 10M, 1G",
-			"  udp --packet-length maps to iperf3 -l and sets datagram payload size in bytes",
+			"iperf udp [ip] [--time seconds | --bytes bytes] [--bitrate rate[K|M|G]] [--packet-length bytes(16..65507)]",
 			"iperf server start",
 			"iperf server stop",
 			"iperf server status",
@@ -954,12 +1255,6 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 		"tc show [interface]",
 		"tc clear [interface]",
 		"tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--bandwidth kbit]",
-		"  tc set updates only provided flags",
-		"  omitted tc flags keep their current values",
-		"  --delay: egress delay in milliseconds",
-		"  --jitter: delay variation in milliseconds",
-		"  --loss: packet loss percentage (0..100, use 100 to simulate a break)",
-		"  --bandwidth: egress bandwidth limit in kbit/s",
 	)
 
 	return commandResponse{
@@ -1912,6 +2207,9 @@ func parseIperfClientArgs(args []string, allowUDPOptions bool) ([]string, error)
 			parsed, err := strconv.Atoi(value)
 			if err != nil || parsed <= 0 {
 				return nil, httputil.NewAppError(http.StatusBadRequest, "packet length must be a positive integer")
+			}
+			if parsed < minIperfUDPPacketLength || parsed > maxIperfUDPPacketLength {
+				return nil, httputil.NewAppError(http.StatusBadRequest, "packet length must be between 16 and 65507 bytes")
 			}
 			hasPacketLength = true
 			packetLength = parsed

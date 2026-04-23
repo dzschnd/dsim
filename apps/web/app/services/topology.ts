@@ -92,6 +92,20 @@ export async function parseApiError(res: Response): Promise<string> {
 	}
 }
 
+async function parseCommandError(res: Response): Promise<string> {
+	const text = await res.text();
+	if (!text) {
+		return res.statusText;
+	}
+
+	try {
+		const parsed = JSON.parse(text) as ApiError;
+		return parsed.error || res.statusText;
+	} catch {
+		return res.statusText;
+	}
+}
+
 export async function fetchTopology(baseUrl: string): Promise<{
 	nodes: ApiNode[];
 	links: ApiLink[];
@@ -248,7 +262,7 @@ export async function runNodeCommand(
 	});
 
 	if (!res.ok) {
-		throw new Error(await parseApiError(res));
+		throw new Error(await parseCommandError(res));
 	}
 
 	return (await res.json()) as ApiCommandResponse;
