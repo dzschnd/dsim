@@ -11,6 +11,7 @@ import (
 	"net/netip"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -44,6 +45,8 @@ const (
 	tcpPIDFilePath   = "/var/run/tcp-server.pid"
 	udpPIDFilePath   = "/var/run/udp-server.pid"
 )
+
+var iperfBitratePattern = regexp.MustCompile(`^[1-9][0-9]*(\.[0-9]+)?[KMGkmg]?$`)
 
 type listenerKind string
 
@@ -809,10 +812,10 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	if len(fields) == 2 && fields[0] == "traceroute" {
 		return s.runTraceroute(ctx, command, node)
 	}
-	if len(fields) == 3 && fields[0] == "iperf" && fields[1] == "tcp" {
+	if len(fields) >= 3 && fields[0] == "iperf" && fields[1] == "tcp" {
 		return s.runIperfTCP(ctx, command, node)
 	}
-	if len(fields) == 3 && fields[0] == "iperf" && fields[1] == "udp" {
+	if len(fields) >= 3 && fields[0] == "iperf" && fields[1] == "udp" {
 		return s.runIperfUDP(ctx, command, node)
 	}
 	if len(fields) == 3 && fields[0] == "iperf" && fields[1] == "server" && fields[2] == "start" {
@@ -920,8 +923,12 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 			"ip route delete [default|destination/prefix]",
 			"ping [target-ip]",
 			"traceroute [target-ip]",
-			"iperf tcp [ip]",
-			"iperf udp [ip]",
+			"iperf tcp [ip] [--time seconds | --bytes bytes]",
+			"iperf udp [ip] [--time seconds | --bytes bytes] [--bitrate rate] [--packet-length bytes]",
+			"  iperf defaults to --time 5 when --time and --bytes are omitted",
+			"  --time and --bytes are mutually exclusive",
+			"  udp --bitrate maps to iperf3 -b and accepts values like 500K, 10M, 1G",
+			"  udp --packet-length maps to iperf3 -l and sets datagram payload size in bytes",
 			"iperf server start",
 			"iperf server stop",
 			"iperf server status",
@@ -1017,11 +1024,15 @@ func (s *Service) runIperfTCP(ctx context.Context, command string, node model.No
 	if _, err := netip.ParseAddr(targetIP); err != nil {
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
 	}
+	iperfArgs, err := parseIperfClientArgs(fields[3:], false)
+	if err != nil {
+		return commandResponse{}, err
+	}
 
 	return s.execCommand(
 		ctx,
 		node.ContainerID,
-		[]string{"iperf3", "-c", targetIP, "-t", "5"},
+		append([]string{"iperf3", "-c", targetIP}, iperfArgs...),
 		command,
 	)
 }
@@ -1032,11 +1043,15 @@ func (s *Service) runIperfUDP(ctx context.Context, command string, node model.No
 	if _, err := netip.ParseAddr(targetIP); err != nil {
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
 	}
+	iperfArgs, err := parseIperfClientArgs(fields[3:], true)
+	if err != nil {
+		return commandResponse{}, err
+	}
 
 	return s.execCommand(
 		ctx,
 		node.ContainerID,
-		[]string{"iperf3", "-u", "-c", targetIP, "-t", "5"},
+		append([]string{"iperf3", "-u", "-c", targetIP}, iperfArgs...),
 		command,
 	)
 }
@@ -1835,6 +1850,94 @@ func validatePort(raw string) (int, error) {
 	}
 
 	return port, nil
+}
+
+func parseIperfClientArgs(args []string, allowUDPOptions bool) ([]string, error) {
+	hasTime := false
+	hasBytes := false
+	hasBitrate := false
+	hasPacketLength := false
+	timeSeconds := 5
+	byteCount := 0
+	bitrate := ""
+	packetLength := 0
+
+	for index := 0; index < len(args); {
+		flagName := args[index]
+		if index+1 >= len(args) {
+			return nil, httputil.NewAppError(http.StatusBadRequest, "missing iperf flag value for "+flagName)
+		}
+		value := args[index+1]
+
+		switch flagName {
+		case "--time":
+			if hasTime {
+				return nil, httputil.NewAppError(http.StatusBadRequest, "duplicate iperf flag: --time")
+			}
+			parsed, err := strconv.Atoi(value)
+			if err != nil || parsed <= 0 {
+				return nil, httputil.NewAppError(http.StatusBadRequest, "time must be a positive integer")
+			}
+			hasTime = true
+			timeSeconds = parsed
+		case "--bytes":
+			if hasBytes {
+				return nil, httputil.NewAppError(http.StatusBadRequest, "duplicate iperf flag: --bytes")
+			}
+			parsed, err := strconv.Atoi(value)
+			if err != nil || parsed <= 0 {
+				return nil, httputil.NewAppError(http.StatusBadRequest, "bytes must be a positive integer")
+			}
+			hasBytes = true
+			byteCount = parsed
+		case "--bitrate":
+			if !allowUDPOptions {
+				return nil, httputil.NewAppError(http.StatusBadRequest, "--bitrate is only supported for iperf udp")
+			}
+			if hasBitrate {
+				return nil, httputil.NewAppError(http.StatusBadRequest, "duplicate iperf flag: --bitrate")
+			}
+			if !iperfBitratePattern.MatchString(value) {
+				return nil, httputil.NewAppError(http.StatusBadRequest, "bitrate must be a positive number with optional K, M, or G suffix")
+			}
+			hasBitrate = true
+			bitrate = value
+		case "--packet-length":
+			if !allowUDPOptions {
+				return nil, httputil.NewAppError(http.StatusBadRequest, "--packet-length is only supported for iperf udp")
+			}
+			if hasPacketLength {
+				return nil, httputil.NewAppError(http.StatusBadRequest, "duplicate iperf flag: --packet-length")
+			}
+			parsed, err := strconv.Atoi(value)
+			if err != nil || parsed <= 0 {
+				return nil, httputil.NewAppError(http.StatusBadRequest, "packet length must be a positive integer")
+			}
+			hasPacketLength = true
+			packetLength = parsed
+		default:
+			return nil, httputil.NewAppError(http.StatusBadRequest, "unsupported iperf flag: "+flagName)
+		}
+
+		index += 2
+	}
+	if hasTime && hasBytes {
+		return nil, httputil.NewAppError(http.StatusBadRequest, "--time and --bytes are mutually exclusive")
+	}
+	out := make([]string, 0, 6)
+	if hasBytes {
+		out = append(out, "-n", strconv.Itoa(byteCount))
+	} else {
+		out = append(out, "-t", strconv.Itoa(timeSeconds))
+	}
+	if hasBitrate {
+		out = append(out, "-b", bitrate)
+	}
+	if hasPacketLength {
+		out = append(out, "-l", strconv.Itoa(packetLength))
+	}
+
+	return out, nil
 }
 
 func ValidateTrafficConditions(conditions model.TrafficConditions) error {
