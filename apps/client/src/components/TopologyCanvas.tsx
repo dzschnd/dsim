@@ -1,23 +1,19 @@
-"use client";
-
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import ReactFlow, {
 	Background,
-	Connection,
+	type Connection,
 	ConnectionLineType,
 	Controls,
-	Edge,
-	EdgeMouseHandler,
+	type Edge,
+	type EdgeMouseHandler,
 	MiniMap,
-	Node,
-	OnConnect,
-	OnEdgesChange,
-	OnNodesChange,
+	type Node,
+	type OnConnect,
+	type OnEdgesChange,
+	type OnNodesChange,
 	applyEdgeChanges,
 	applyNodeChanges,
 } from "reactflow";
-import "reactflow/dist/style.css";
-
 import { InterfaceLabelEdge, type InterfaceLabelEdgeData } from "./InterfaceLabelEdge";
 import { SquareNode, type SquareNodeData } from "./SquareNode";
 import {
@@ -122,7 +118,7 @@ const edgeTypes = {
 };
 
 export function TopologyCanvas() {
-	const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? "";
+	const baseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
 
 	const [nodes, setNodes] = useState<Node<SquareNodeData>[]>([]);
 	const [edges, setEdges] = useState<Edge[]>([]);
