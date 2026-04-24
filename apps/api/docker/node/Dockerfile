@@ -14,4 +14,4 @@ RUN apk add --no-cache \
 
 CMD ["sleep", "infinity"]
 
-# docker build --no-cache --network=host -t dsim/host:local -f apps/api/docker/host/Dockerfile apps/api/docker/host
+# docker build --no-cache --network=host -t dsim/node:local -f apps/api/docker/node/Dockerfile apps/api/docker/node

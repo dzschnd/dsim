@@ -77,19 +77,17 @@ func (s *Service) getNodes() ([]model.Node, error) {
 func nodeTypeTag(t model.NodeType) (string, int) {
 	var image string
 	var ifaceCount int
+	image = strings.TrimSpace(os.Getenv("NODE_IMAGE"))
+	if image == "" {
+		image = "dsim/node:local"
+	}
 	switch t {
 	case model.Host:
-		image = strings.TrimSpace(os.Getenv("HOST_IMAGE"))
 		ifaceCount = 1
 	case model.Switch:
-		image = strings.TrimSpace(os.Getenv("HOST_IMAGE"))
 		ifaceCount = 8
 	case model.Router:
-		image = strings.TrimSpace(os.Getenv("HOST_IMAGE"))
 		ifaceCount = 4
-	default:
-		image = strings.TrimSpace(os.Getenv("HOST_IMAGE"))
-		ifaceCount = 1
 	}
 	return image, ifaceCount
 }

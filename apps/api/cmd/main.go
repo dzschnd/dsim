@@ -14,16 +14,6 @@ import (
 )
 
 func main() {
-	port := 8080
-
-	addr := fmt.Sprintf(":%d", port)
-	cfg := config{
-		addr,
-	}
-
-	api := application{
-		config: cfg,
-	}
 
 	logger := slog.New(tint.NewHandler(os.Stdout,
 		&tint.Options{
@@ -34,12 +24,22 @@ func main() {
 	))
 	slog.SetDefault(logger)
 
+	api := application{}
+
 	if err := api.LoadEnv(); err != nil {
 		slog.Error("Failed to load env", "err", err)
 		os.Exit(1)
 	}
+	if err := api.LoadConfig(); err != nil {
+		slog.Error("Failed to load config", "err", err)
+		os.Exit(1)
+	}
 	if err := api.initDocker(); err != nil {
 		slog.Error("Failed to init docker client", "err", err)
+		os.Exit(1)
+	}
+	if err := api.ensureNodeImage(context.Background()); err != nil {
+		slog.Error("Failed to ensure node image", "err", err)
 		os.Exit(1)
 	}
 	if err := api.initStore(); err != nil {
