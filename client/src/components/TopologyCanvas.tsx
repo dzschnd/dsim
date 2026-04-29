@@ -52,6 +52,8 @@ type PendingConnection = {
 	targetInterfaceID: string;
 };
 
+type ConfirmAction = "delete-node" | "clear-topology";
+
 const EDGE_STYLE = {
 	stroke: "#334155",
 	strokeWidth: 3,
@@ -160,6 +162,7 @@ export function TopologyCanvas() {
 	const [selectedNodeId, setSelectedNodeId] = useState<string>("");
 	const [selectedLinkId, setSelectedLinkId] = useState<string>("");
 	const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
+	const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 	const [connectionSourceNodeId, setConnectionSourceNodeId] = useState<string>("");
 	const [isCreateNodeMenuOpen, setIsCreateNodeMenuOpen] = useState<boolean>(false);
 	const [fullscreenTerminalNodeId, setFullscreenTerminalNodeId] = useState<string>("");
@@ -867,7 +870,13 @@ export function TopologyCanvas() {
 	);
 
 	const clearCurrentTopology = useCallback(async () => {
+		if (!busy && confirmAction !== "clear-topology") {
+			setConfirmAction("clear-topology");
+			return;
+		}
+
 		setBusy(true);
+		setConfirmAction(null);
 		setStatus("Clearing topology...");
 		try {
 			await clearTopology(baseUrl);
@@ -902,8 +911,13 @@ export function TopologyCanvas() {
 			setStatus("Select a node first");
 			return;
 		}
+		if (!busy && confirmAction !== "delete-node") {
+			setConfirmAction("delete-node");
+			return;
+		}
 
 		setBusy(true);
+		setConfirmAction(null);
 		setStatus(`Deleting node ${selectedNodeId}...`);
 		try {
 			await deleteNode(baseUrl, selectedNodeId);
@@ -936,6 +950,10 @@ export function TopologyCanvas() {
 			}
 
 			event.preventDefault();
+			if (selectedLinkIdRef.current) {
+				void deleteSelectedLink();
+				return;
+			}
 			void deleteSelectedNode();
 		}
 
@@ -943,7 +961,7 @@ export function TopologyCanvas() {
 		return () => {
 			window.removeEventListener("keydown", onKeyDown);
 		};
-	}, [deleteSelectedNode]);
+	}, [deleteSelectedLink, deleteSelectedNode]);
 
 	const onConnect: OnConnect = useCallback(
 		async (connection: Connection) => {
@@ -1154,6 +1172,39 @@ export function TopologyCanvas() {
 			</header>
 
 			<main className="absolute inset-x-0 bottom-0 top-14">
+				{confirmAction ? (
+					<div className="fixed left-1/2 top-1/2 z-30 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded border border-zinc-300 bg-white p-4 shadow-lg">
+						<div className="mb-3 text-sm font-semibold text-zinc-900">
+							{confirmAction === "delete-node" ? "Delete node?" : "Clear topology?"}
+						</div>
+						<div className="mb-4 text-sm text-zinc-700">This action cannot be undone.</div>
+						<div className="flex justify-end gap-2">
+							<button
+								type="button"
+								onClick={() => {
+									setConfirmAction(null);
+								}}
+								className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-100"
+							>
+								Cancel
+							</button>
+							<button
+								type="button"
+								onClick={() => {
+									if (confirmAction === "delete-node") {
+										void deleteSelectedNode();
+										return;
+									}
+									void clearCurrentTopology();
+								}}
+								disabled={busy}
+								className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
+							>
+								Confirm
+							</button>
+						</div>
+					</div>
+				) : null}
 				{pendingConnection ? (
 					<div className="fixed left-1/2 top-1/2 z-30 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded border border-zinc-300 bg-white p-4 shadow-lg">
 						<div className="mb-3 text-sm font-semibold text-zinc-900">Choose interfaces</div>
