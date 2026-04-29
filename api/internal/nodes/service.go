@@ -815,6 +815,9 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	}
 
 	if command == "ip addr" {
+		if node.Type == model.Switch {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support ip addr")
+		}
 		return s.runIPAddr(command, node), nil
 	}
 	if command == "help" {
@@ -840,6 +843,9 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 		}
 		if len(fields) >= 1 && fields[0] == "udp" {
 			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support udp")
+		}
+		if len(fields) >= 2 && fields[0] == "ip" && fields[1] == "addr" {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support ip addr")
 		}
 		if len(fields) >= 2 && fields[0] == "ip" && fields[1] == "set" {
 			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch ports do not support ip assignment")

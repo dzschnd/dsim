@@ -87,17 +87,17 @@ export type TopologyFile = {
 export async function parseApiError(res: Response): Promise<string> {
 	const text = await res.text();
 	if (!text) {
-		return `${res.status} ${res.statusText}`;
+		return res.statusText || "Request failed";
 	}
 
 	try {
 		const parsed = JSON.parse(text) as ApiError;
 		if (parsed.error) {
-			return `${res.status}: ${parsed.error}`;
+			return parsed.error;
 		}
-		return `${res.status} ${res.statusText}`;
+		return res.statusText || "Request failed";
 	} catch {
-		return `${res.status} ${res.statusText}`;
+		return res.statusText || "Request failed";
 	}
 }
 
