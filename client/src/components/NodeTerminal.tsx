@@ -129,13 +129,13 @@ export function NodeTerminal({
 	);
 
 	const inlineTerminal = (
-		<div className="nodrag nopan nowheel absolute bottom-full left-1/2 z-[1000] mb-2 flex h-44 w-64 -translate-x-1/2 cursor-default flex-col overflow-hidden rounded border border-slate-800 bg-zinc-950 text-left font-mono text-[8px] text-zinc-100 shadow-lg">
+		<div className="nodrag nopan nowheel absolute bottom-full left-1/2 z-[10000] mb-2 flex h-44 w-64 -translate-x-1/2 cursor-default flex-col overflow-hidden rounded border border-slate-800 bg-zinc-950 text-left font-mono text-[8px] text-zinc-100 shadow-lg">
 			{terminalBody}
 		</div>
 	);
 
 	const fullscreenTerminal = (
-		<div className="fixed inset-0 z-[5000] flex h-screen w-screen cursor-default flex-col overflow-hidden bg-zinc-950 text-left font-mono text-[12px] text-zinc-100">
+		<div className="fixed inset-0 z-[7000] flex h-screen w-screen cursor-default flex-col overflow-hidden bg-zinc-950 text-left font-mono text-[12px] text-zinc-100">
 			{terminalBody}
 		</div>
 	);

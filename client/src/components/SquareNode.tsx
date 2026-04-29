@@ -30,23 +30,34 @@ export type SquareNodeData = {
 	onTerminalSubmit: () => void;
 };
 
+const NODE_LAYOUT = {
+	host: { width: 160, height: 141, buttonOffset: "8" },
+	switch: { width: 160, height: 160, buttonOffset: "8" },
+	router: { width: 160, height: 160, buttonOffset: "30" },
+} as const;
+
 export function SquareNode({ data }: NodeProps<SquareNodeData>) {
 	const isRunning = data.status === "running";
 	const Icon = data.type === "router" ? RouterIcon : data.type === "switch" ? SwitchIcon : HostIcon;
+	const layout = NODE_LAYOUT[data.type as keyof typeof NODE_LAYOUT] ?? NODE_LAYOUT.host;
 
 	return (
 		<div
-			className={`relative z-10 flex border border-amber-500 h-[160px] w-[160px] cursor-pointer select-none flex-col items-center justify-start text-center ${data.isTerminalOpen ? "z-[900]" : ""
-				}`}
+			className={`relative flex cursor-pointer select-none flex-col items-center justify-start text-center ${data.isTerminalOpen ? "z-[6500]" : "z-30"}`}
+			style={{ width: `${layout.width}px`, height: `${layout.height}px` }}
 		>
-			<div className="relative flex h-[160px] w-[160px] items-center justify-center">
+			<div
+				className="relative flex items-center justify-center"
+				style={{ width: `${layout.width}px`, height: `${layout.height}px` }}
+			>
 				<button
 					type="button"
 					onClick={(event) => {
 						event.stopPropagation();
 						data.onToggleTerminal();
 					}}
-					className="nodrag nopan absolute left-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded border border-slate-400 bg-white/95 font-mono text-[11px] font-semibold text-slate-800 hover:bg-slate-100"
+					className="nodrag nopan absolute z-30 flex h-7 w-7 items-center justify-center rounded border border-slate-400 bg-white/95 font-mono text-[11px] font-semibold text-slate-800 hover:bg-slate-100"
+					style={{ left: `${layout.buttonOffset}px`, top: `${layout.buttonOffset}px` }}
 					aria-label={data.isTerminalOpen ? "Hide terminal" : "Show terminal"}
 				>
 					&gt;_
@@ -58,7 +69,8 @@ export function SquareNode({ data }: NodeProps<SquareNodeData>) {
 						void data.onToggleRun();
 					}}
 					disabled={data.isBusy}
-					className="nodrag nopan absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded border border-slate-400 bg-white/95 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+					className="nodrag nopan absolute z-30 flex h-7 w-7 items-center justify-center rounded border border-slate-400 bg-white/95 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+					style={{ right: `${layout.buttonOffset}px`, top: `${layout.buttonOffset}px` }}
 					aria-label={isRunning ? "Pause node" : "Run node"}
 				>
 					{isRunning ? (
@@ -83,7 +95,11 @@ export function SquareNode({ data }: NodeProps<SquareNodeData>) {
 					onToggleFullscreen={data.onToggleTerminalFullscreen}
 				/>
 			) : null}
-			<SideHandles currentNodeId={data.nodeId} connectionSourceNodeId={data.connectionSourceNodeId} />
+			<SideHandles
+				currentNodeId={data.nodeId}
+				connectionSourceNodeId={data.connectionSourceNodeId}
+				nodeType={data.type}
+			/>
 		</div>
 	);
 }

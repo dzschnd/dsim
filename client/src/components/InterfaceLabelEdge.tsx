@@ -98,14 +98,14 @@ export function InterfaceLabelEdge({
 			<EdgeLabelRenderer>
 				<div
 					style={endpointLabelStyle(sourceLabelPoint.x, sourceLabelPoint.y)}
-					className="pointer-events-none rounded border border-slate-300 bg-white/90 px-1.5 py-0.5 font-mono text-[10px] text-slate-700 shadow-sm"
+					className="pointer-events-none z-0 rounded border border-slate-300 bg-white/90 px-1.5 py-0.5 font-mono text-[10px] text-slate-700 shadow-sm"
 				>
 					<div>{data?.interfaceAName}</div>
 					{data?.interfaceAIP ? <div className="text-[9px] text-slate-500">{data.interfaceAIP}</div> : null}
 				</div>
 				<div
 					style={endpointLabelStyle(targetLabelPoint.x, targetLabelPoint.y)}
-					className="pointer-events-none rounded border border-slate-300 bg-white/90 px-1.5 py-0.5 font-mono text-[10px] text-slate-700 shadow-sm"
+					className="pointer-events-none z-0 rounded border border-slate-300 bg-white/90 px-1.5 py-0.5 font-mono text-[10px] text-slate-700 shadow-sm"
 				>
 					<div>{data?.interfaceBName}</div>
 					{data?.interfaceBIP ? <div className="text-[9px] text-slate-500">{data.interfaceBIP}</div> : null}

@@ -5,7 +5,7 @@ export default function SwitchIcon(props: SVGProps<SVGSVGElement>) {
 		<svg
 			version="1.1"
 			xmlns="http://www.w3.org/2000/svg"
-			viewBox="0 0 512 512"
+			viewBox="6 6 500 500"
 			preserveAspectRatio="xMidYMid meet"
 			aria-hidden="true"
 			{...props}
