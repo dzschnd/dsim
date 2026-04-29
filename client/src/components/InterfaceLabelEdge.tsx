@@ -6,6 +6,9 @@ import {
 } from "reactflow";
 import type { CSSProperties } from "react";
 
+const NODE_WIDTH = 160;
+const ENDPOINT_LABEL_DISTANCE = NODE_WIDTH / 2;
+
 export type InterfaceLabelEdgeData = {
 	interfaceAId?: string;
 	interfaceAName: string;
@@ -22,6 +25,38 @@ function endpointLabelStyle(x: number, y: number): CSSProperties {
 	};
 }
 
+function pointAlongLine(
+	sourceX: number,
+	sourceY: number,
+	targetX: number,
+	targetY: number,
+	distance: number,
+	from: "source" | "target",
+) {
+	const dx = targetX - sourceX;
+	const dy = targetY - sourceY;
+	const length = Math.hypot(dx, dy);
+
+	if (length === 0) {
+		return { x: sourceX, y: sourceY };
+	}
+
+	const ux = dx / length;
+	const uy = dy / length;
+
+	if (from === "source") {
+		return {
+			x: sourceX + ux * distance,
+			y: sourceY + uy * distance,
+		};
+	}
+
+	return {
+		x: targetX - ux * distance,
+		y: targetY - uy * distance,
+	};
+}
+
 export function InterfaceLabelEdge({
 	id,
 	sourceX,
@@ -32,25 +67,44 @@ export function InterfaceLabelEdge({
 	markerEnd,
 	data,
 }: EdgeProps<InterfaceLabelEdgeData>) {
-	const [edgePath] = getStraightPath({ sourceX, sourceY, targetX, targetY });
-	const sourceLabelX = sourceX + (targetX - sourceX) * 0.18;
-	const sourceLabelY = sourceY + (targetY - sourceY) * 0.18;
-	const targetLabelX = sourceX + (targetX - sourceX) * 0.82;
-	const targetLabelY = sourceY + (targetY - sourceY) * 0.82;
+	const adjustedSourceY = sourceY + 8;
+	const adjustedTargetY = targetY + 8;
+	const [edgePath] = getStraightPath({
+		sourceX,
+		sourceY: adjustedSourceY,
+		targetX,
+		targetY: adjustedTargetY,
+	});
+	const sourceLabelPoint = pointAlongLine(
+		sourceX,
+		adjustedSourceY,
+		targetX,
+		adjustedTargetY,
+		ENDPOINT_LABEL_DISTANCE,
+		"source",
+	);
+	const targetLabelPoint = pointAlongLine(
+		sourceX,
+		adjustedSourceY,
+		targetX,
+		adjustedTargetY,
+		ENDPOINT_LABEL_DISTANCE,
+		"target",
+	);
 
 	return (
 		<>
 			<BaseEdge id={id} path={edgePath} style={style} markerEnd={markerEnd} />
 			<EdgeLabelRenderer>
 				<div
-					style={endpointLabelStyle(sourceLabelX, sourceLabelY)}
+					style={endpointLabelStyle(sourceLabelPoint.x, sourceLabelPoint.y)}
 					className="pointer-events-none rounded border border-slate-300 bg-white/90 px-1.5 py-0.5 font-mono text-[10px] text-slate-700 shadow-sm"
 				>
 					<div>{data?.interfaceAName}</div>
 					{data?.interfaceAIP ? <div className="text-[9px] text-slate-500">{data.interfaceAIP}</div> : null}
 				</div>
 				<div
-					style={endpointLabelStyle(targetLabelX, targetLabelY)}
+					style={endpointLabelStyle(targetLabelPoint.x, targetLabelPoint.y)}
 					className="pointer-events-none rounded border border-slate-300 bg-white/90 px-1.5 py-0.5 font-mono text-[10px] text-slate-700 shadow-sm"
 				>
 					<div>{data?.interfaceBName}</div>

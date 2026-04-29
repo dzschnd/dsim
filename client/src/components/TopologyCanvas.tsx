@@ -1254,6 +1254,7 @@ export function TopologyCanvas() {
 						setNodes((curr) => applySelectedNode(curr, ""));
 					}}
 					zoomOnScroll
+					elevateNodesOnSelect={false}
 					connectionLineType={ConnectionLineType.Straight}
 					defaultEdgeOptions={{ type: "interfaceLabel", style: EDGE_STYLE }}
 					nodesConnectable
