@@ -1,6 +1,12 @@
 import type { SVGProps } from "react";
 
-export default function HostIcon(props: SVGProps<SVGSVGElement>) {
+type HostIconProps = SVGProps<SVGSVGElement> & {
+	isSelected?: boolean;
+};
+
+export default function HostIcon({ isSelected = false, ...props }: HostIconProps) {
+	const iconColor = isSelected ? "#2563eb" : "#000000";
+
 	return (
 		<svg
 			version="1.1"
@@ -11,7 +17,7 @@ export default function HostIcon(props: SVGProps<SVGSVGElement>) {
 			{...props}
 		>
 			<path
-				fill="#000000"
+				fill={iconColor}
 				fillRule="evenodd"
 				d="M56 56
 					H456
@@ -31,7 +37,7 @@ export default function HostIcon(props: SVGProps<SVGSVGElement>) {
 				clipRule="evenodd"
 			/>
 			<path
-				fill="#000000"
+				fill={iconColor}
 				d="M226 336 H286 V404 H226 Z
 					M156 404 H356
 					C367.045695 404 376 412.954305 376 424
