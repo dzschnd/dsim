@@ -1,6 +1,9 @@
-import type { ApiInterface } from "../services/topology";
 import type { NodeProps } from "reactflow";
 
+import HostIcon from "../assets/icons/host";
+import RouterIcon from "../assets/icons/router";
+import type { ApiInterface } from "../services/topology";
+import SwitchIcon from "../assets/icons/switch";
 import { NodeTerminal } from "./NodeTerminal";
 import { SideHandles } from "./SideHandles";
 
@@ -27,54 +30,59 @@ export type SquareNodeData = {
 	onTerminalSubmit: () => void;
 };
 
+const NODE_LAYOUT = {
+	host: { width: 160, height: 141, buttonOffset: "8" },
+	switch: { width: 160, height: 160, buttonOffset: "8" },
+	router: { width: 160, height: 160, buttonOffset: "30" },
+} as const;
+
 export function SquareNode({ data }: NodeProps<SquareNodeData>) {
 	const isRunning = data.status === "running";
-	const nodeClass = data.isSelected
-		? `relative z-10 flex h-[160px] w-[160px] cursor-pointer select-none items-center justify-center border-2 p-3 text-center shadow-sm ring-4 ring-blue-500/20 ${data.isTerminalOpen ? "z-[900]" : ""} ${isRunning
-			? "border-blue-600 bg-emerald-50 shadow-emerald-700/10"
-			: "border-blue-600 bg-zinc-100 shadow-slate-500/10"
-		}`
-		: `relative z-10 flex h-[160px] w-[160px] cursor-pointer select-none items-center justify-center border-2 p-3 text-center shadow-sm ${data.isTerminalOpen ? "z-[900]" : ""} ${isRunning
-			? "border-emerald-700 bg-emerald-50 shadow-emerald-700/10"
-			: "border-slate-500 bg-zinc-100 shadow-slate-500/10"
-		}`;
+	const Icon = data.type === "router" ? RouterIcon : data.type === "switch" ? SwitchIcon : HostIcon;
+	const layout = NODE_LAYOUT[data.type as keyof typeof NODE_LAYOUT] ?? NODE_LAYOUT.host;
 
 	return (
-		<div className={nodeClass}>
-			{isRunning ? (
+		<div
+			className={`relative flex cursor-pointer select-none flex-col items-center justify-start text-center ${data.isTerminalOpen ? "z-[6500]" : "z-30"}`}
+			style={{ width: `${layout.width}px`, height: `${layout.height}px` }}
+		>
+			<div
+				className="relative flex items-center justify-center"
+				style={{ width: `${layout.width}px`, height: `${layout.height}px` }}
+			>
 				<button
 					type="button"
 					onClick={(event) => {
 						event.stopPropagation();
 						data.onToggleTerminal();
 					}}
-					className="nodrag nopan absolute left-2 top-2 flex h-7 w-7 items-center justify-center rounded border border-slate-400 bg-white/90 font-mono text-[11px] font-semibold text-slate-800 hover:bg-slate-100"
+					className="nodrag nopan absolute z-30 flex h-7 w-7 items-center justify-center rounded border border-slate-400 bg-white/95 font-mono text-[11px] font-semibold text-slate-800 hover:bg-slate-100"
+					style={{ left: `${layout.buttonOffset}px`, top: `${layout.buttonOffset}px` }}
 					aria-label={data.isTerminalOpen ? "Hide terminal" : "Show terminal"}
 				>
 					&gt;_
 				</button>
-			) : null}
-			<button
-				type="button"
-				onClick={(event) => {
-					event.stopPropagation();
-					void data.onToggleRun();
-				}}
-				disabled={data.isBusy}
-				className="nodrag nopan absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded border border-slate-400 bg-white/90 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
-				aria-label={isRunning ? "Pause node" : "Run node"}
-			>
-				{isRunning ? (
-					<div className="flex gap-[3px]">
-						<span className="block h-3.5 w-1 bg-slate-800" />
-						<span className="block h-3.5 w-1 bg-slate-800" />
-					</div>
-				) : (
-					<div className="h-0 w-0 border-y-[7px] border-l-[11px] border-r-0 border-y-transparent border-l-slate-800" />
-				)}
-			</button>
-			<div className="pointer-events-none flex flex-col items-center gap-4 -translate-y-0.75">
-				<div className="text-[13px] mt-8 font-semibold leading-tight text-zinc-900">{data.type}</div>
+				<button
+					type="button"
+					onClick={(event) => {
+						event.stopPropagation();
+						void data.onToggleRun();
+					}}
+					disabled={data.isBusy}
+					className="nodrag nopan absolute z-30 flex h-7 w-7 items-center justify-center rounded border border-slate-400 bg-white/95 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+					style={{ right: `${layout.buttonOffset}px`, top: `${layout.buttonOffset}px` }}
+					aria-label={isRunning ? "Pause node" : "Run node"}
+				>
+					{isRunning ? (
+						<div className="flex gap-[3px]">
+							<span className="block h-3.5 w-1 bg-slate-800" />
+							<span className="block h-3.5 w-1 bg-slate-800" />
+						</div>
+					) : (
+						<div className="h-0 w-0 border-b-[7px] border-l-[10px] border-t-[7px] border-b-transparent border-l-slate-800 border-t-transparent" />
+					)}
+				</button>
+				<Icon className="relative z-0 h-full w-full drop-shadow-sm" isSelected={data.isSelected} isRunning={isRunning} />
 			</div>
 			{isRunning && data.isTerminalOpen ? (
 				<NodeTerminal
@@ -87,7 +95,11 @@ export function SquareNode({ data }: NodeProps<SquareNodeData>) {
 					onToggleFullscreen={data.onToggleTerminalFullscreen}
 				/>
 			) : null}
-			<SideHandles currentNodeId={data.nodeId} connectionSourceNodeId={data.connectionSourceNodeId} />
+			<SideHandles
+				currentNodeId={data.nodeId}
+				connectionSourceNodeId={data.connectionSourceNodeId}
+				nodeType={data.type}
+			/>
 		</div>
 	);
 }

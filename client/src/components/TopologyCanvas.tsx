@@ -58,7 +58,7 @@ const EDGE_STYLE = {
 };
 
 const SELECTED_EDGE_STYLE = {
-	stroke: "#2563eb",
+	stroke: "#6b8fd6",
 	strokeWidth: 4,
 };
 
@@ -1254,6 +1254,7 @@ export function TopologyCanvas() {
 						setNodes((curr) => applySelectedNode(curr, ""));
 					}}
 					zoomOnScroll
+					elevateNodesOnSelect={false}
 					connectionLineType={ConnectionLineType.Straight}
 					defaultEdgeOptions={{ type: "interfaceLabel", style: EDGE_STYLE }}
 					nodesConnectable
