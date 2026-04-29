@@ -28,6 +28,15 @@ type ApiError = {
 	error: string;
 };
 
+export class ApiRequestError extends Error {
+	status: number;
+
+	constructor(status: number, message: string) {
+		super(message);
+		this.status = status;
+	}
+}
+
 export type ApiCommandResponse = {
 	command: string;
 	stdout: string;
@@ -272,7 +281,7 @@ export async function runNodeCommand(
 	});
 
 	if (!res.ok) {
-		throw new Error(await parseCommandError(res));
+		throw new ApiRequestError(res.status, await parseCommandError(res));
 	}
 
 	return (await res.json()) as ApiCommandResponse;

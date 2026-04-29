@@ -33,12 +33,16 @@ import {
 	startNode,
 	stopNode,
 	updateNodePosition,
+	ApiRequestError,
 } from "../services/topology";
 
 type TerminalState = {
 	isOpen: boolean;
 	input: string;
 	lines: string[];
+	history: string[];
+	historyIndex: number | null;
+	historyDraft: string | null;
 };
 
 type PendingConnection = {
@@ -126,6 +130,20 @@ function isInterfaceAddressCommand(command: string): boolean {
 		|| (fields.length === 3 && fields[0] === "ip" && fields[1] === "unset");
 }
 
+function appendTerminalHistory(history: string[], command: string): string[] {
+	const normalizedCommand = command.trim();
+	if (normalizedCommand === "") {
+		return history;
+	}
+
+	const previousCommand = history.at(-1)?.trim() ?? "";
+	if (previousCommand === normalizedCommand) {
+		return history;
+	}
+
+	return [...history, normalizedCommand];
+}
+
 const nodeTypes = {
 	square: SquareNode,
 };
@@ -163,6 +181,7 @@ export function TopologyCanvas() {
 	const toggleTerminalRef = useRef<(nodeID: string) => void>(() => { });
 	const toggleTerminalFullscreenRef = useRef<(nodeID: string) => void>(() => { });
 	const updateTerminalInputRef = useRef<(nodeID: string, value: string) => void>(() => { });
+	const navigateTerminalHistoryRef = useRef<(nodeID: string, direction: "up" | "down") => void>(() => { });
 	const submitTerminalInputRef = useRef<(nodeID: string) => Promise<void>>(async () => { });
 
 	const buildFlowNode = useCallback(
@@ -195,10 +214,15 @@ export function TopologyCanvas() {
 				isTerminalFullscreen: fullscreenTerminalNodeIdRef.current === node.id,
 				terminalInput: terminalState.get(node.id)?.input ?? "",
 				terminalLines: terminalState.get(node.id)?.lines ?? [],
+				terminalHistory: terminalState.get(node.id)?.history ?? [],
+				terminalHistoryIndex: terminalState.get(node.id)?.historyIndex ?? null,
+				terminalHistoryDraft: terminalState.get(node.id)?.historyDraft ?? null,
 				onToggleRun: () => void toggleNodeRunRef.current(node.id),
 				onToggleTerminal: () => toggleTerminalRef.current(node.id),
 				onToggleTerminalFullscreen: () => toggleTerminalFullscreenRef.current(node.id),
 				onTerminalInputChange: (value: string) => updateTerminalInputRef.current(node.id, value),
+				onTerminalHistoryNavigate: (direction: "up" | "down") =>
+					navigateTerminalHistoryRef.current(node.id, direction),
 				onTerminalSubmit: () => submitTerminalInputRef.current(node.id),
 			},
 		}),
@@ -382,6 +406,9 @@ export function TopologyCanvas() {
 					isOpen: node.data.isTerminalOpen,
 					input: node.data.terminalInput,
 					lines: node.data.terminalLines,
+					history: node.data.terminalHistory,
+					historyIndex: node.data.terminalHistoryIndex,
+					historyDraft: node.data.terminalHistoryDraft,
 				},
 			]),
 		);
@@ -470,6 +497,79 @@ export function TopologyCanvas() {
 		);
 	}, []);
 
+	const navigateTerminalHistory = useCallback((nodeID: string, direction: "up" | "down") => {
+		setNodes((curr) =>
+			curr.map((node) => {
+				if (node.id !== nodeID) {
+					return node;
+				}
+
+				const history = node.data.terminalHistory;
+				if (history.length === 0 && node.data.terminalHistoryDraft === null) {
+					return node;
+				}
+
+				if (direction === "up") {
+					if (history.length === 0) {
+						return node;
+					}
+
+					if (node.data.terminalHistoryIndex === null) {
+						return {
+							...node,
+							data: {
+								...node.data,
+								terminalInput: history[history.length - 1],
+								terminalHistoryIndex: history.length - 1,
+								terminalHistoryDraft: node.data.terminalInput,
+							},
+						};
+					}
+
+					if (node.data.terminalHistoryIndex === 0) {
+						return node;
+					}
+
+					const previousIndex = node.data.terminalHistoryIndex - 1;
+					return {
+						...node,
+						data: {
+							...node.data,
+							terminalInput: history[previousIndex],
+							terminalHistoryIndex: previousIndex,
+						},
+					};
+				}
+
+				if (node.data.terminalHistoryIndex === null) {
+					return node;
+				}
+
+				const nextIndex = node.data.terminalHistoryIndex + 1;
+				if (nextIndex < history.length) {
+					return {
+						...node,
+						data: {
+							...node.data,
+							terminalInput: history[nextIndex],
+							terminalHistoryIndex: nextIndex,
+						},
+					};
+				}
+
+				return {
+					...node,
+					data: {
+						...node.data,
+						terminalInput: node.data.terminalHistoryDraft ?? "",
+						terminalHistoryIndex: null,
+						terminalHistoryDraft: null,
+					},
+				};
+			}),
+		);
+	}, []);
+
 	const submitTerminalInput = useCallback(
 		async (nodeID: string) => {
 			const currentNode = nodesRef.current.find((node) => node.id === nodeID);
@@ -493,6 +593,34 @@ export function TopologyCanvas() {
 									...node.data,
 									terminalInput: "",
 									terminalLines: [],
+									terminalHistory: appendTerminalHistory(node.data.terminalHistory, command),
+									terminalHistoryIndex: null,
+									terminalHistoryDraft: null,
+								},
+							}
+							: node,
+					),
+				);
+				return;
+			}
+
+			if (command === "history") {
+				setNodes((curr) =>
+					curr.map((node) =>
+						node.id === nodeID
+							? {
+								...node,
+								data: {
+									...node.data,
+									terminalInput: "",
+									terminalHistory: appendTerminalHistory(node.data.terminalHistory, command),
+									terminalHistoryIndex: null,
+									terminalHistoryDraft: null,
+									terminalLines: [
+										...node.data.terminalLines,
+										"$ history",
+										...node.data.terminalHistory,
+									],
 								},
 							}
 							: node,
@@ -509,6 +637,8 @@ export function TopologyCanvas() {
 							data: {
 								...node.data,
 								terminalInput: "",
+								terminalHistoryIndex: null,
+								terminalHistoryDraft: null,
 							},
 						}
 						: node,
@@ -516,6 +646,7 @@ export function TopologyCanvas() {
 			);
 
 			setBusy(true);
+			let shouldPersistHistory = true;
 			try {
 				const result: ApiCommandResponse = await runNodeCommand(baseUrl, nodeID, command);
 				const outputLines = [
@@ -548,6 +679,9 @@ export function TopologyCanvas() {
 				setStatus(`Executed ${result.command} on ${nodeID}`);
 			} catch (err: unknown) {
 				const message = err instanceof Error ? err.message : String(err);
+				if (err instanceof ApiRequestError && err.status === 400) {
+					shouldPersistHistory = false;
+				}
 				setNodes((curr) =>
 					curr.map((node) =>
 						node.id === nodeID
@@ -563,6 +697,21 @@ export function TopologyCanvas() {
 				);
 				setStatus(`Failed to execute command: ${message}`);
 			} finally {
+				if (shouldPersistHistory) {
+					setNodes((curr) =>
+						curr.map((node) =>
+							node.id === nodeID
+								? {
+									...node,
+									data: {
+										...node.data,
+										terminalHistory: appendTerminalHistory(node.data.terminalHistory, command),
+									},
+								}
+								: node,
+						),
+					);
+				}
 				setBusy(false);
 			}
 		},
@@ -580,6 +729,10 @@ export function TopologyCanvas() {
 	useEffect(() => {
 		updateTerminalInputRef.current = updateTerminalInput;
 	}, [updateTerminalInput]);
+
+	useEffect(() => {
+		navigateTerminalHistoryRef.current = navigateTerminalHistory;
+	}, [navigateTerminalHistory]);
 
 	useEffect(() => {
 		submitTerminalInputRef.current = submitTerminalInput;

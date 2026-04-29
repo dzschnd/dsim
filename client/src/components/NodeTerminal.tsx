@@ -6,6 +6,7 @@ type NodeTerminalProps = {
 	terminalInput: string;
 	isFullscreen: boolean;
 	onInputChange: (value: string) => void;
+	onHistoryNavigate: (direction: "up" | "down") => void;
 	onSubmit: () => void;
 	onToggleFullscreen: () => void;
 };
@@ -15,6 +16,7 @@ export function NodeTerminal({
 	terminalInput,
 	isFullscreen,
 	onInputChange,
+	onHistoryNavigate,
 	onSubmit,
 	onToggleFullscreen,
 }: NodeTerminalProps) {
@@ -107,6 +109,16 @@ export function NodeTerminal({
 						if (event.key === "Enter") {
 							event.preventDefault();
 							onSubmit();
+							return;
+						}
+						if (event.key === "ArrowUp") {
+							event.preventDefault();
+							onHistoryNavigate("up");
+							return;
+						}
+						if (event.key === "ArrowDown") {
+							event.preventDefault();
+							onHistoryNavigate("down");
 						}
 					}}
 					className="nodrag nopan w-full select-text border-none bg-transparent p-0 text-zinc-100 outline-none placeholder:text-zinc-600"

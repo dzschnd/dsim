@@ -1265,6 +1265,7 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 	lines := []string{
 		"help",
 		"clear",
+		"history",
 	}
 
 	if nodeType != model.Switch {

@@ -16,10 +16,14 @@ export type SquareNodeData = {
 	isTerminalFullscreen: boolean;
 	terminalInput: string;
 	terminalLines: string[];
+	terminalHistory: string[];
+	terminalHistoryIndex: number | null;
+	terminalHistoryDraft: string | null;
 	onToggleRun: () => void;
 	onToggleTerminal: () => void;
 	onToggleTerminalFullscreen: () => void;
 	onTerminalInputChange: (value: string) => void;
+	onTerminalHistoryNavigate: (direction: "up" | "down") => void;
 	onTerminalSubmit: () => void;
 };
 
@@ -78,6 +82,7 @@ export function SquareNode({ data }: NodeProps<SquareNodeData>) {
 					terminalInput={data.terminalInput}
 					isFullscreen={data.isTerminalFullscreen}
 					onInputChange={data.onTerminalInputChange}
+					onHistoryNavigate={data.onTerminalHistoryNavigate}
 					onSubmit={data.onTerminalSubmit}
 					onToggleFullscreen={data.onToggleTerminalFullscreen}
 				/>
