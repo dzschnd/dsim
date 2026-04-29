@@ -31,7 +31,9 @@ func (h *Handler) ImportTopologyHandler(w http.ResponseWriter, r *http.Request) 
 	ctx := r.Context()
 
 	var file File
-	if err := json.NewDecoder(r.Body).Decode(&file); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&file); err != nil {
 		httputil.WriteJSONError(w, http.StatusBadRequest, "invalid topology payload")
 		return
 	}
