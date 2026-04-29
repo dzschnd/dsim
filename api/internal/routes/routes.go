@@ -27,6 +27,7 @@ func NewRouter(s *Server) http.Handler {
 
 	r.HandleFunc("POST /api/v1/nodes", n.CreateNodeHandler)
 	r.HandleFunc("GET /api/v1/nodes", n.ListNodesHandler)
+	r.HandleFunc("GET /api/v1/nodes/{id}", n.GetNodeHandler)
 	r.HandleFunc("DELETE /api/v1/nodes/{id}", n.DeleteNodeHandler)
 	r.HandleFunc("PATCH /api/v1/nodes/{id}/position", n.UpdateNodePositionHandler)
 	r.HandleFunc("POST /api/v1/nodes/{id}/start", n.StartNodeHandler)

@@ -26,6 +26,7 @@ import {
 	deleteLink,
 	deleteNode,
 	exportTopology,
+	fetchNode,
 	fetchTopology,
 	importTopology,
 	runNodeCommand,
@@ -109,6 +110,22 @@ function findInterfaceNameByID(nodes: Node<SquareNodeData>[], interfaceID: strin
 	return "";
 }
 
+function findInterfaceCIDRByID(nodes: Node<SquareNodeData>[], interfaceID: string): string {
+	for (const node of nodes) {
+		const iface = node.data.interfaces.find((candidate) => candidate.id === interfaceID);
+		if (iface && iface.ipAddress !== "" && iface.prefixLength > 0) {
+			return `${iface.ipAddress}/${iface.prefixLength}`;
+		}
+	}
+	return "";
+}
+
+function isInterfaceAddressCommand(command: string): boolean {
+	const fields = command.trim().split(/\s+/);
+	return (fields.length === 4 && fields[0] === "ip" && fields[1] === "set")
+		|| (fields.length === 3 && fields[0] === "ip" && fields[1] === "unset");
+}
+
 const nodeTypes = {
 	square: SquareNode,
 };
@@ -148,6 +165,46 @@ export function TopologyCanvas() {
 	const updateTerminalInputRef = useRef<(nodeID: string, value: string) => void>(() => { });
 	const submitTerminalInputRef = useRef<(nodeID: string) => Promise<void>>(async () => { });
 
+	const buildFlowNode = useCallback(
+		(
+			node: {
+				id: string;
+				position: { x: number; y: number };
+				status: string;
+				type: string;
+				interfaces: ApiInterface[];
+			},
+			position: { x: number; y: number },
+			selectedNodeId: string,
+			terminalState: Map<string, TerminalState>,
+		): Node<SquareNodeData> => ({
+			id: node.id,
+			type: "square",
+			position,
+			zIndex: 10,
+			selected: node.id === selectedNodeId,
+			data: {
+				nodeId: node.id,
+				status: node.status,
+				type: node.type,
+				interfaces: node.interfaces,
+				isSelected: node.id === selectedNodeId,
+				isBusy: busyNodeIds.has(node.id),
+				connectionSourceNodeId: connectionSourceNodeIdRef.current,
+				isTerminalOpen: node.status === "running" ? (terminalState.get(node.id)?.isOpen ?? false) : false,
+				isTerminalFullscreen: fullscreenTerminalNodeIdRef.current === node.id,
+				terminalInput: terminalState.get(node.id)?.input ?? "",
+				terminalLines: terminalState.get(node.id)?.lines ?? [],
+				onToggleRun: () => void toggleNodeRunRef.current(node.id),
+				onToggleTerminal: () => toggleTerminalRef.current(node.id),
+				onToggleTerminalFullscreen: () => toggleTerminalFullscreenRef.current(node.id),
+				onTerminalInputChange: (value: string) => updateTerminalInputRef.current(node.id, value),
+				onTerminalSubmit: () => submitTerminalInputRef.current(node.id),
+			},
+		}),
+		[busyNodeIds],
+	);
+
 	const edgeByPair = useMemo(() => {
 		const map = new Map<string, Edge>();
 		for (const edge of edges) {
@@ -168,32 +225,14 @@ export function TopologyCanvas() {
 			const currentSelectedNodeId = selectedNodeIdRef.current;
 			const terminalState = terminalStateRef.current;
 
-			const flowNodes: Node<SquareNodeData>[] = apiNodes.map((node, index) => ({
-				id: node.id,
-				type: "square",
-				position: existingPositions.get(node.id) ?? node.position ?? randomPos(index),
-				zIndex: 10,
-				selected: node.id === currentSelectedNodeId,
-				data: {
-					nodeId: node.id,
-					status: node.status,
-					type: node.type,
-					interfaces: node.interfaces,
-					isSelected: node.id === currentSelectedNodeId,
-					isBusy: busyNodeIds.has(node.id),
-					connectionSourceNodeId: connectionSourceNodeIdRef.current,
-					isTerminalOpen:
-						node.status === "running" ? (terminalState.get(node.id)?.isOpen ?? false) : false,
-					isTerminalFullscreen: fullscreenTerminalNodeIdRef.current === node.id,
-					terminalInput: terminalState.get(node.id)?.input ?? "",
-					terminalLines: terminalState.get(node.id)?.lines ?? [],
-					onToggleRun: () => void toggleNodeRunRef.current(node.id),
-					onToggleTerminal: () => toggleTerminalRef.current(node.id),
-					onToggleTerminalFullscreen: () => toggleTerminalFullscreenRef.current(node.id),
-					onTerminalInputChange: (value: string) => updateTerminalInputRef.current(node.id, value),
-					onTerminalSubmit: () => submitTerminalInputRef.current(node.id),
-				},
-			}));
+			const flowNodes: Node<SquareNodeData>[] = apiNodes.map((node, index) =>
+				buildFlowNode(
+					node,
+					existingPositions.get(node.id) ?? node.position ?? randomPos(index),
+					currentSelectedNodeId,
+					terminalState,
+				),
+			);
 
 			const flowEdges: Edge<InterfaceLabelEdgeData>[] = apiLinks.map((link) => ({
 				id: link.id,
@@ -202,8 +241,12 @@ export function TopologyCanvas() {
 				target: findNodeIDByInterfaceID(flowNodes, link.interfaceBId),
 				style: link.id === selectedLinkIdRef.current ? SELECTED_EDGE_STYLE : EDGE_STYLE,
 				data: {
+					interfaceAId: link.interfaceAId,
 					interfaceAName: findInterfaceNameByID(flowNodes, link.interfaceAId),
+					interfaceAIP: findInterfaceCIDRByID(flowNodes, link.interfaceAId),
+					interfaceBId: link.interfaceBId,
 					interfaceBName: findInterfaceNameByID(flowNodes, link.interfaceBId),
+					interfaceBIP: findInterfaceCIDRByID(flowNodes, link.interfaceBId),
 				},
 			}));
 
@@ -216,7 +259,57 @@ export function TopologyCanvas() {
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl, busyNodeIds]);
+	}, [baseUrl, buildFlowNode]);
+
+	const refreshNode = useCallback(
+		async (nodeID: string) => {
+			const apiNode = await fetchNode(baseUrl, nodeID);
+			const currentSelectedNodeId = selectedNodeIdRef.current;
+			const terminalState = terminalStateRef.current;
+			const currentNode = nodesRef.current.find((node) => node.id === nodeID);
+			const position = currentNode?.position ?? nodePositionsRef.current.get(nodeID) ?? apiNode.position;
+
+			let nextNodes: Node<SquareNodeData>[] = [];
+			setNodes((curr) => {
+				nextNodes = curr.map((node) =>
+					node.id === nodeID
+						? buildFlowNode(
+							apiNode,
+							position,
+							currentSelectedNodeId,
+							terminalState,
+						)
+						: node,
+				);
+				return applySelectedNode(nextNodes, currentSelectedNodeId);
+			});
+			if (nextNodes.length === 0) {
+				return;
+			}
+			setEdges((curr) =>
+				applySelectedEdge(
+					curr.map((edge) => {
+						const edgeData = edge.data as InterfaceLabelEdgeData | undefined;
+						if (!edgeData?.interfaceAId || !edgeData.interfaceBId) {
+							return edge;
+						}
+						return {
+							...edge,
+							data: {
+								...edgeData,
+								interfaceAName: findInterfaceNameByID(nextNodes, edgeData.interfaceAId),
+								interfaceAIP: findInterfaceCIDRByID(nextNodes, edgeData.interfaceAId),
+								interfaceBName: findInterfaceNameByID(nextNodes, edgeData.interfaceBId),
+								interfaceBIP: findInterfaceCIDRByID(nextNodes, edgeData.interfaceBId),
+							},
+						};
+					}),
+					selectedLinkIdRef.current,
+				),
+			);
+		},
+		[baseUrl, buildFlowNode],
+	);
 
 	const setNodeBusy = useCallback((nodeID: string, nextBusy: boolean) => {
 		setBusyNodeIds((current) => {
@@ -449,6 +542,9 @@ export function TopologyCanvas() {
 							: node,
 					),
 				);
+				if (isInterfaceAddressCommand(command)) {
+					await refreshNode(nodeID);
+				}
 				setStatus(`Executed ${result.command} on ${nodeID}`);
 			} catch (err: unknown) {
 				const message = err instanceof Error ? err.message : String(err);
@@ -470,7 +566,7 @@ export function TopologyCanvas() {
 				setBusy(false);
 			}
 		},
-		[baseUrl],
+		[baseUrl, refreshNode],
 	);
 
 	useEffect(() => {

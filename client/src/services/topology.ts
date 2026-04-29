@@ -128,6 +128,16 @@ export async function fetchTopology(baseUrl: string): Promise<{
 	};
 }
 
+export async function fetchNode(baseUrl: string, nodeID: string): Promise<ApiNode> {
+	const res = await fetch(`${baseUrl}/api/v1/nodes/${nodeID}`);
+
+	if (!res.ok) {
+		throw new Error(await parseApiError(res));
+	}
+
+	return (await res.json()) as ApiNode;
+}
+
 export async function exportTopology(baseUrl: string): Promise<TopologyFile> {
 	const res = await fetch(`${baseUrl}/api/v1/topology`);
 

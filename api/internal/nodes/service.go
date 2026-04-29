@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -53,6 +54,8 @@ const (
 )
 
 var iperfBitratePattern = regexp.MustCompile(`^[1-9][0-9]*(\.[0-9]+)?[KMGkmg]?$`)
+var iperfErrorPrefixPattern = regexp.MustCompile(`(^|\n)iperf3:\s*`)
+var curlErrorPrefixPattern = regexp.MustCompile(`(^|\n)curl: \([0-9]+\)\s*`)
 
 type listenerKind string
 
@@ -71,6 +74,19 @@ func NewService(docker *client.Client, s *store.Store) *Service {
 
 func (s *Service) getNodes() ([]model.Node, error) {
 	return s.repo.ListNodes(), nil
+}
+
+func (s *Service) getNode(nodeID string) (model.Node, error) {
+	if strings.TrimSpace(nodeID) == "" {
+		return model.Node{}, httputil.NewAppError(http.StatusBadRequest, "node id required")
+	}
+
+	node, ok := s.repo.GetNode(nodeID)
+	if !ok {
+		return model.Node{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+
+	return node, nil
 }
 
 // TODO: add error handling for invalid type
@@ -687,12 +703,18 @@ func execInContainer(ctx context.Context, docker *client.Client, containerID str
 		Cmd:          execCmd,
 	})
 	if err != nil {
+		if timeoutErr := execContextError(ctx, err); timeoutErr != nil {
+			return "", "", 0, timeoutErr
+		}
 		slog.Error("Exec create failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec create failed")
 	}
 
 	attachResp, err := docker.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
 	if err != nil {
+		if timeoutErr := execContextError(ctx, err); timeoutErr != nil {
+			return "", "", 0, timeoutErr
+		}
 		slog.Error("Exec attach failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec attach failed")
 	}
@@ -701,17 +723,33 @@ func execInContainer(ctx context.Context, docker *client.Client, containerID str
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	if _, err := stdcopy.StdCopy(&stdout, &stderr, attachResp.Reader); err != nil {
+		if timeoutErr := execContextError(ctx, err); timeoutErr != nil {
+			return "", "", 0, timeoutErr
+		}
 		slog.Error("Exec read failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec read failed")
 	}
 
 	execInspect, err := docker.ContainerExecInspect(ctx, execResp.ID)
 	if err != nil {
+		if timeoutErr := execContextError(ctx, err); timeoutErr != nil {
+			return "", "", 0, timeoutErr
+		}
 		slog.Error("Exec inspect failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec inspect failed")
 	}
 
 	return stdout.String(), stderr.String(), execInspect.ExitCode, nil
+}
+
+func execContextError(ctx context.Context, err error) error {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return httputil.NewAppError(http.StatusRequestTimeout, "command timed out")
+	}
+	if errors.Is(err, context.Canceled) || errors.Is(ctx.Err(), context.Canceled) {
+		return httputil.NewAppError(http.StatusRequestTimeout, "command canceled")
+	}
+	return nil
 }
 
 func execInContainerChecked(
@@ -814,6 +852,9 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 		return s.runPing(ctx, command, node)
 	}
 	if len(fields) == 2 && fields[0] == "traceroute" {
+		return s.runTraceroute(ctx, command, node)
+	}
+	if len(fields) == 4 && fields[0] == "traceroute" && fields[2] == "--max-hops" {
 		return s.runTraceroute(ctx, command, node)
 	}
 	if len(fields) >= 3 && fields[0] == "iperf" && fields[1] == "tcp" {
@@ -961,7 +1002,7 @@ func commandUsage(fields []string, nodeType model.NodeType) (string, bool) {
 		if nodeType == model.Switch {
 			return "switch does not support traceroute", true
 		}
-		return "traceroute [target-ip]", true
+		return "traceroute [target-ip] [--max-hops count(1..255)]", true
 	}
 
 	return "", false
@@ -1236,7 +1277,7 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 			"ip route add [destination/prefix] via [next-hop]",
 			"ip route delete [default|destination/prefix]",
 			"ping [target-ip]",
-			"traceroute [target-ip]",
+			"traceroute [target-ip] [--max-hops count(1..255)]",
 			"iperf tcp [ip] [--time seconds | --bytes bytes]",
 			"iperf udp [ip] [--time seconds | --bytes bytes] [--bitrate rate[K|M|G]] [--packet-length bytes(16..65507)]",
 			"iperf server start",
@@ -1302,7 +1343,7 @@ func (s *Service) runPing(ctx context.Context, command string, node model.Node) 
 	return s.execCommand(
 		ctx,
 		node.ContainerID,
-		[]string{"ping", "-c", "4", targetLogicalIP},
+		[]string{"ping", "-c", "2", targetLogicalIP},
 		command,
 	)
 }
@@ -1313,11 +1354,25 @@ func (s *Service) runTraceroute(ctx context.Context, command string, node model.
 	if _, err := netip.ParseAddr(targetLogicalIP); err != nil {
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
 	}
+	maxHops := 30
+	if len(fields) != 2 {
+		if len(fields) != 4 || fields[2] != "--max-hops" {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid traceroute syntax")
+		}
+		parsedMaxHops, err := strconv.Atoi(fields[3])
+		if err != nil {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "max hops must be an integer")
+		}
+		if parsedMaxHops < 1 || parsedMaxHops > 255 {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "max hops must be between 1 and 255")
+		}
+		maxHops = parsedMaxHops
+	}
 
 	return s.execCommand(
 		ctx,
 		node.ContainerID,
-		[]string{"traceroute", "-n", "-w", "1", "-q", "1", targetLogicalIP},
+		[]string{"traceroute", "-n", "-w", "1", "-q", "1", "-m", strconv.Itoa(maxHops), targetLogicalIP},
 		command,
 	)
 }
@@ -1333,12 +1388,17 @@ func (s *Service) runIperfTCP(ctx context.Context, command string, node model.No
 		return commandResponse{}, err
 	}
 
-	return s.execCommand(
+	response, err := s.execCommand(
 		ctx,
 		node.ContainerID,
 		append([]string{"iperf3", "-c", targetIP}, iperfArgs...),
 		command,
 	)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	response.Stderr = sanitizeIperfError(response.Stderr)
+	return response, nil
 }
 
 func (s *Service) runIperfUDP(ctx context.Context, command string, node model.Node) (commandResponse, error) {
@@ -1352,12 +1412,17 @@ func (s *Service) runIperfUDP(ctx context.Context, command string, node model.No
 		return commandResponse{}, err
 	}
 
-	return s.execCommand(
+	response, err := s.execCommand(
 		ctx,
 		node.ContainerID,
 		append([]string{"iperf3", "-u", "-c", targetIP}, iperfArgs...),
 		command,
 	)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	response.Stderr = sanitizeIperfError(response.Stderr)
+	return response, nil
 }
 
 func (s *Service) runIperfServerStart(ctx context.Context, command string, node model.Node) (commandResponse, error) {
@@ -1478,12 +1543,17 @@ func (s *Service) runHTTPGet(ctx context.Context, command string, node model.Nod
 	}
 	targetURL := fmt.Sprintf("http://%s:%d", targetIP, httpDefaultPort)
 
-	return s.execCommand(
+	response, err := s.execCommand(
 		ctx,
 		node.ContainerID,
 		[]string{"curl", "-sS", "-i", "--connect-timeout", "2", "--max-time", "5", targetURL},
 		command,
 	)
+	if err != nil {
+		return commandResponse{}, err
+	}
+	response.Stderr = sanitizeCurlError(response.Stderr)
+	return response, nil
 }
 
 func (s *Service) runHTTPServerStart(ctx context.Context, command string, node model.Node) (commandResponse, error) {
@@ -1667,7 +1737,7 @@ func (s *Service) runTCPConnect(ctx context.Context, command string, node model.
 	return s.execCommand(
 		ctx,
 		node.ContainerID,
-		[]string{"sh", "-c", fmt.Sprintf("if nc -vz -w 5 %s %d; then exit 0; fi; echo 'tcp connect failed'; exit 1", targetIP, port)},
+		[]string{"sh", "-c", fmt.Sprintf("if nc -vz -w 5 %s %d >/dev/null 2>&1; then echo 'tcp connect succeeded'; exit 0; fi; echo 'tcp connect failed'; exit 1", targetIP, port)},
 		command,
 	)
 }
@@ -1759,9 +1829,17 @@ func (s *Service) runUDPProbe(ctx context.Context, command string, node model.No
 	return s.execCommand(
 		ctx,
 		node.ContainerID,
-		[]string{"sh", "-c", fmt.Sprintf(`reply=$(printf probe | socat -T5 - UDP:%s:%d); if [ "$reply" = "ack" ]; then echo "udp probe succeeded"; else echo "udp probe failed"; exit 1; fi`, targetIP, port)},
+		[]string{"sh", "-c", fmt.Sprintf(`reply=$(printf probe | socat -T5 - UDP:%s:%d 2>/dev/null); if [ "$reply" = "ack" ]; then echo "udp probe succeeded"; else echo "udp probe failed"; exit 1; fi`, targetIP, port)},
 		command,
 	)
+}
+
+func sanitizeIperfError(stderr string) string {
+	return strings.TrimSpace(iperfErrorPrefixPattern.ReplaceAllString(stderr, "${1}"))
+}
+
+func sanitizeCurlError(stderr string) string {
+	return strings.TrimSpace(curlErrorPrefixPattern.ReplaceAllString(stderr, "${1}"))
 }
 
 func (s *Service) runTCSet(ctx context.Context, command, nodeID, interfaceName string, args []string) (commandResponse, error) {

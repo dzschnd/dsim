@@ -80,6 +80,17 @@ func (h *Handler) ListNodesHandler(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(nodes)
 }
 
+func (h *Handler) GetNodeHandler(w http.ResponseWriter, r *http.Request) {
+	nodeID := strings.TrimSpace(r.PathValue("id"))
+	node, err := h.service.getNode(nodeID)
+	if err != nil {
+		httputil.WriteAppError(w, err)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(node)
+}
+
 func (h *Handler) DeleteNodeHandler(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := httputil.WithRequestTimeout(r.Context())
 	defer cancel()
