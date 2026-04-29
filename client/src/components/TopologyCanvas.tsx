@@ -58,7 +58,7 @@ const EDGE_STYLE = {
 };
 
 const SELECTED_EDGE_STYLE = {
-	stroke: "#2563eb",
+	stroke: "#6b8fd6",
 	strokeWidth: 4,
 };
 

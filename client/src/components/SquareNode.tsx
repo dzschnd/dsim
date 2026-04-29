@@ -82,7 +82,7 @@ export function SquareNode({ data }: NodeProps<SquareNodeData>) {
 						<div className="h-0 w-0 border-b-[7px] border-l-[10px] border-t-[7px] border-b-transparent border-l-slate-800 border-t-transparent" />
 					)}
 				</button>
-				<Icon className="relative z-0 h-full w-full drop-shadow-sm" isSelected={data.isSelected} />
+				<Icon className="relative z-0 h-full w-full drop-shadow-sm" isSelected={data.isSelected} isRunning={isRunning} />
 			</div>
 			{isRunning && data.isTerminalOpen ? (
 				<NodeTerminal
