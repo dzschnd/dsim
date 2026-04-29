@@ -18,11 +18,6 @@ func NewHandler(docker *client.Client, store *store.Store) *Handler {
 }
 
 func (h *Handler) ExportTopologyHandler(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := httputil.WithRequestTimeout(r.Context())
-	defer cancel()
-
-	_ = ctx
-
 	topology, err := h.service.ExportTopology()
 	if err != nil {
 		httputil.WriteAppError(w, err)
@@ -33,8 +28,7 @@ func (h *Handler) ExportTopologyHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handler) ImportTopologyHandler(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := httputil.WithRequestTimeout(r.Context())
-	defer cancel()
+	ctx := r.Context()
 
 	var file File
 	if err := json.NewDecoder(r.Body).Decode(&file); err != nil {
@@ -51,8 +45,7 @@ func (h *Handler) ImportTopologyHandler(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handler) ClearTopologyHandler(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := httputil.WithRequestTimeout(r.Context())
-	defer cancel()
+	ctx := r.Context()
 
 	if err := h.service.ClearTopology(ctx); err != nil {
 		httputil.WriteAppError(w, err)

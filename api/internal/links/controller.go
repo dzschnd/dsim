@@ -32,8 +32,7 @@ func NewHandler(docker *client.Client, store *store.Store) *Handler {
 }
 
 func (h *Handler) CreateLinkHandler(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := httputil.WithRequestTimeout(r.Context())
-	defer cancel()
+	ctx := r.Context()
 
 	var req createLinkRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -79,8 +78,7 @@ func (h *Handler) ListLinksHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteLinkHandler(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := httputil.WithRequestTimeout(r.Context())
-	defer cancel()
+	ctx := r.Context()
 
 	linkID := strings.TrimSpace(r.PathValue("id"))
 	if err := h.service.deleteLink(ctx, linkID); err != nil {

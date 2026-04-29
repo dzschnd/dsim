@@ -47,8 +47,7 @@ func NewHandler(docker *client.Client, store *store.Store) *Handler {
 }
 
 func (h *Handler) CreateNodeHandler(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := httputil.WithRequestTimeout(r.Context())
-	defer cancel()
+	ctx := r.Context()
 
 	var req createNodeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -92,8 +91,7 @@ func (h *Handler) GetNodeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) DeleteNodeHandler(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := httputil.WithRequestTimeout(r.Context())
-	defer cancel()
+	ctx := r.Context()
 
 	nodeID := strings.TrimSpace(r.PathValue("id"))
 	if err := h.service.deleteNode(ctx, nodeID); err != nil {
@@ -105,8 +103,7 @@ func (h *Handler) DeleteNodeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) UpdateNodePositionHandler(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := httputil.WithRequestTimeout(r.Context())
-	defer cancel()
+	ctx := r.Context()
 
 	nodeID := strings.TrimSpace(r.PathValue("id"))
 
@@ -125,8 +122,7 @@ func (h *Handler) UpdateNodePositionHandler(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *Handler) StartNodeHandler(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := httputil.WithRequestTimeout(r.Context())
-	defer cancel()
+	ctx := r.Context()
 
 	nodeID := strings.TrimSpace(r.PathValue("id"))
 	if err := h.service.StartNode(ctx, nodeID); err != nil {
@@ -138,8 +134,7 @@ func (h *Handler) StartNodeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) StopNodeHandler(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := httputil.WithRequestTimeout(r.Context())
-	defer cancel()
+	ctx := r.Context()
 
 	nodeID := strings.TrimSpace(r.PathValue("id"))
 	if err := h.service.stopNode(ctx, nodeID); err != nil {
@@ -151,8 +146,7 @@ func (h *Handler) StopNodeHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) CLIHandler(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := httputil.WithRequestTimeout(r.Context())
-	defer cancel()
+	ctx := r.Context()
 
 	nodeID := strings.TrimSpace(r.PathValue("id"))
 

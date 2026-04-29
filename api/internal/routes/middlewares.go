@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/dzschnd/dsim/internal/httputil"
 	"log/slog"
 	"net/http"
 	"os"
@@ -28,6 +29,15 @@ func jsonHeader(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		next.ServeHTTP(w, r)
+	})
+}
+
+func requestTimeout(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ctx, cancel := httputil.WithRequestTimeout(r.Context())
+		defer cancel()
+
+		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
