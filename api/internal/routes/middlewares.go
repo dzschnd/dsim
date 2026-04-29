@@ -37,8 +37,57 @@ func requestTimeout(next http.Handler) http.Handler {
 		ctx, cancel := httputil.WithRequestTimeout(r.Context())
 		defer cancel()
 
-		next.ServeHTTP(w, r.WithContext(ctx))
+		tw := &timeoutWriter{
+			header: make(http.Header),
+			status: http.StatusOK,
+		}
+		done := make(chan struct{})
+
+		go func() {
+			defer close(done)
+			next.ServeHTTP(tw, r.WithContext(ctx))
+		}()
+
+		select {
+		case <-done:
+			tw.writeTo(w)
+		case <-ctx.Done():
+			httputil.WriteJSONError(w, http.StatusRequestTimeout, "request timed out")
+		}
 	})
+}
+
+type timeoutWriter struct {
+	header http.Header
+	body   bytes.Buffer
+	status int
+}
+
+func (w *timeoutWriter) Header() http.Header {
+	return w.header
+}
+
+func (w *timeoutWriter) Write(b []byte) (int, error) {
+	w.body.Write(b)
+	return len(b), nil
+}
+
+func (w *timeoutWriter) WriteHeader(status int) {
+	w.status = status
+}
+
+func (w *timeoutWriter) writeTo(dst http.ResponseWriter) {
+	for key, values := range w.header {
+		for _, value := range values {
+			dst.Header().Add(key, value)
+		}
+	}
+	if w.status != 0 {
+		dst.WriteHeader(w.status)
+	}
+	if w.body.Len() > 0 {
+		_, _ = dst.Write(w.body.Bytes())
+	}
 }
 
 type statusRecorder struct {

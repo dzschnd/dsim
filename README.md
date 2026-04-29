@@ -8,4 +8,5 @@ docker run --rm -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock dsim/a
 
 docker buildx build --platform linux/amd64,linux/arm64 -f infra/app/Dockerfile -t dzschnd/dsim:latest --push .
 
+docker pull dzschnd/dsim:latest
 docker run --rm -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock dzschnd/dsim:latest
