@@ -19,7 +19,7 @@
 + Stop validating route rules (can set unavailble routes)
 - Node freeze
 - highlight active links
-- remove request timeout
++ remove request timeout
 - UI overhaul
 
 

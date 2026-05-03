@@ -37,7 +37,7 @@ const NODE_LAYOUT = {
 } as const;
 
 export function SquareNode({ data }: NodeProps<SquareNodeData>) {
-	const isRunning = data.status === "running";
+	const isRunning = data.status === "running" || data.status === "frozen";
 	const Icon = data.type === "router" ? RouterIcon : data.type === "switch" ? SwitchIcon : HostIcon;
 	const layout = NODE_LAYOUT[data.type as keyof typeof NODE_LAYOUT] ?? NODE_LAYOUT.host;
 

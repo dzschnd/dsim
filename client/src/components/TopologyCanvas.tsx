@@ -131,6 +131,10 @@ function isInterfaceAddressCommand(command: string): boolean {
 		|| (fields.length === 3 && fields[0] === "ip" && fields[1] === "unset");
 }
 
+function isNodeStateCommand(command: string): boolean {
+	return command.trim() === "freeze" || command.trim() === "unfreeze";
+}
+
 function appendTerminalHistory(history: string[], command: string): string[] {
 	const normalizedCommand = command.trim();
 	if (normalizedCommand === "") {
@@ -212,7 +216,9 @@ export function TopologyCanvas() {
 				isSelected: node.id === selectedNodeId,
 				isBusy: busyNodeIds.has(node.id),
 				connectionSourceNodeId: connectionSourceNodeIdRef.current,
-				isTerminalOpen: node.status === "running" ? (terminalState.get(node.id)?.isOpen ?? false) : false,
+				isTerminalOpen: node.status === "running" || node.status === "frozen"
+					? (terminalState.get(node.id)?.isOpen ?? false)
+					: false,
 				isTerminalFullscreen: fullscreenTerminalNodeIdRef.current === node.id,
 				terminalInput: terminalState.get(node.id)?.input ?? "",
 				terminalLines: terminalState.get(node.id)?.lines ?? [],
@@ -357,7 +363,7 @@ export function TopologyCanvas() {
 				return;
 			}
 
-			const action = currentNode.data.status === "running" ? "stop" : "start";
+			const action = currentNode.data.status === "running" || currentNode.data.status === "frozen" ? "stop" : "start";
 
 			setNodeBusy(nodeID, true);
 			setStatus(`${action === "start" ? "Starting" : "Stopping"} node ${nodeID}...`);
@@ -470,7 +476,9 @@ export function TopologyCanvas() {
 						...node,
 						data: {
 							...node.data,
-							isTerminalOpen: node.data.status === "running" ? !node.data.isTerminalOpen : false,
+							isTerminalOpen: node.data.status === "running" || node.data.status === "frozen"
+								? !node.data.isTerminalOpen
+								: false,
 						},
 					}
 					: node,
@@ -674,7 +682,7 @@ export function TopologyCanvas() {
 							: node,
 					),
 				);
-				if (isInterfaceAddressCommand(command)) {
+				if (isInterfaceAddressCommand(command) || isNodeStateCommand(command)) {
 					await refreshNode(nodeID);
 				}
 				setStatus(`Executed ${result.command} on ${nodeID}`);

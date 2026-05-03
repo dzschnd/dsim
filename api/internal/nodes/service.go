@@ -382,6 +382,12 @@ func (s *Service) StartNode(ctx context.Context, nodeID string) error {
 		return httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 	if inspect.State != nil && inspect.State.Running {
+		if inspect.State.Paused {
+			if err := s.docker.ContainerUnpause(ctx, node.ContainerID); err != nil {
+				slog.Error("Failed to unfreeze node before start sync", "err", err)
+				return httputil.NewAppError(http.StatusInternalServerError, "failed to unfreeze node before start sync")
+			}
+		}
 		s.syncRuntimeInterfaces(nodeID, node.Interfaces, inspect)
 		if err := s.syncRuntimeInterfaceNames(ctx, nodeID); err != nil {
 			return err
@@ -686,6 +692,12 @@ func (s *Service) stopNode(ctx context.Context, nodeID string) error {
 		s.repo.UpdateNodeStatus(nodeID, model.Idle)
 		return nil
 	}
+	if inspect.State != nil && inspect.State.Paused {
+		if err := s.docker.ContainerUnpause(ctx, node.ContainerID); err != nil {
+			slog.Error("Failed to unfreeze node before stop", "err", err)
+			return httputil.NewAppError(http.StatusInternalServerError, "failed to unfreeze node before stop")
+		}
+	}
 
 	if err := s.docker.ContainerStop(ctx, node.ContainerID, container.StopOptions{}); err != nil {
 		slog.Error("Failed to stop node", "err", err)
@@ -796,10 +808,15 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	if command == "" {
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "command is required")
 	}
+	fields := strings.Fields(command)
 
 	node, ok := s.repo.GetNode(nodeID)
 	if !ok {
 		return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+
+	if command == "help" {
+		return runHelp(command, node.Type), nil
 	}
 
 	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
@@ -810,8 +827,20 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 		slog.Error("Container inspect failed", "err", err)
 		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
+
+	if command == "freeze" {
+		return s.runFreeze(ctx, command, node, inspect)
+	}
+	if command == "unfreeze" {
+		return s.runUnfreeze(ctx, command, node, inspect)
+	}
+
 	if inspect.State == nil || !inspect.State.Running {
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "node is not running")
+	}
+	if inspect.State.Paused {
+		s.repo.UpdateNodeStatus(nodeID, model.Frozen)
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "node is frozen")
 	}
 
 	if command == "ip addr" {
@@ -820,11 +849,7 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 		}
 		return s.runIPAddr(command, node), nil
 	}
-	if command == "help" {
-		return runHelp(command, node.Type), nil
-	}
 
-	fields := strings.Fields(command)
 	if node.Type == model.Switch {
 		if len(fields) >= 2 && fields[0] == "ping" {
 			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support ping")
@@ -975,6 +1000,10 @@ func commandUsage(fields []string, nodeType model.NodeType) (string, bool) {
 	}
 
 	switch fields[0] {
+	case "freeze":
+		return "freeze", true
+	case "unfreeze":
+		return "unfreeze", true
 	case "ip":
 		if nodeType == model.Switch {
 			return "switch does not support ip commands", true
@@ -1279,6 +1308,8 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 		"help",
 		"clear",
 		"history",
+		"freeze",
+		"unfreeze",
 	}
 
 	if nodeType != model.Switch {
@@ -1847,6 +1878,42 @@ func (s *Service) runUDPProbe(ctx context.Context, command string, node model.No
 		[]string{"sh", "-c", fmt.Sprintf(`reply=$(printf probe | socat -T5 - UDP:%s:%d 2>/dev/null); if [ "$reply" = "ack" ]; then echo "udp probe succeeded"; else echo "udp probe failed"; exit 1; fi`, targetIP, port)},
 		command,
 	)
+}
+
+func (s *Service) runFreeze(ctx context.Context, command string, node model.Node, inspect types.ContainerJSON) (commandResponse, error) {
+	if inspect.State == nil || !inspect.State.Running {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "node is not running")
+	}
+	if inspect.State.Paused {
+		s.repo.UpdateNodeStatus(node.ID, model.Frozen)
+		return commandResponse{Command: command, Stdout: "node already frozen", Stderr: "", ExitCode: 0}, nil
+	}
+
+	if err := s.docker.ContainerPause(ctx, node.ContainerID); err != nil {
+		slog.Error("Failed to freeze node", "err", err)
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "failed to freeze node")
+	}
+	s.repo.UpdateNodeStatus(node.ID, model.Frozen)
+
+	return commandResponse{Command: command, Stdout: "node frozen", Stderr: "", ExitCode: 0}, nil
+}
+
+func (s *Service) runUnfreeze(ctx context.Context, command string, node model.Node, inspect types.ContainerJSON) (commandResponse, error) {
+	if inspect.State == nil || !inspect.State.Running {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "node is not running")
+	}
+	if !inspect.State.Paused {
+		s.repo.UpdateNodeStatus(node.ID, model.Running)
+		return commandResponse{Command: command, Stdout: "node already running", Stderr: "", ExitCode: 0}, nil
+	}
+
+	if err := s.docker.ContainerUnpause(ctx, node.ContainerID); err != nil {
+		slog.Error("Failed to unfreeze node", "err", err)
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "failed to unfreeze node")
+	}
+	s.repo.UpdateNodeStatus(node.ID, model.Running)
+
+	return commandResponse{Command: command, Stdout: "node unfrozen", Stderr: "", ExitCode: 0}, nil
 }
 
 func sanitizeIperfError(stderr string) string {

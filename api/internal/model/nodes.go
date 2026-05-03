@@ -59,12 +59,14 @@ type NodeState int
 const (
 	Idle NodeState = iota
 	Running
+	Frozen
 	Error
 )
 
 var NodeStateName = map[NodeState]string{
 	Idle:    "idle",
 	Running: "running",
+	Frozen:  "frozen",
 	Error:   "error",
 }
 
