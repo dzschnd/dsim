@@ -29,7 +29,8 @@ type Interface struct {
 
 type Route struct {
 	Destination string `json:"destination"`
-	NextHop     string `json:"nextHop"`
+	NextHop     string `json:"nextHop,omitempty"`
+	Kind        string `json:"kind"`
 }
 
 type Link struct {

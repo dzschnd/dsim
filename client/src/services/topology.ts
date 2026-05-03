@@ -56,7 +56,8 @@ export type TopologyInterface = {
 
 export type TopologyRoute = {
 	destination: string;
-	gateway: string;
+	nextHop?: string;
+	kind: "via" | "blackhole";
 };
 
 export type TopologyNode = {

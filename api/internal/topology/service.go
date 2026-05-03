@@ -68,6 +68,7 @@ func (s *service) ExportTopology() (File, error) {
 			exportedNode.Routes = append(exportedNode.Routes, Route{
 				Destination: route.Destination,
 				NextHop:     route.NextHop,
+				Kind:        string(route.Kind),
 			})
 		}
 
@@ -312,9 +313,26 @@ func (s *service) applyNodeConfig(nodeID string, topologyNode Node) error {
 	}
 
 	for _, topologyRoute := range topologyNode.Routes {
+		routeKind := model.RouteKind(topologyRoute.Kind)
+		if routeKind == "" {
+			routeKind = model.RouteKindVia
+		}
+		switch routeKind {
+		case model.RouteKindVia:
+			if topologyRoute.NextHop == "" {
+				return httputil.NewAppError(http.StatusBadRequest, "route next hop required")
+			}
+		case model.RouteKindBlackhole:
+			if topologyRoute.NextHop != "" {
+				return httputil.NewAppError(http.StatusBadRequest, "blackhole route cannot have next hop")
+			}
+		default:
+			return httputil.NewAppError(http.StatusBadRequest, "invalid route kind")
+		}
 		node.Routes = append(node.Routes, model.Route{
 			Destination: topologyRoute.Destination,
 			NextHop:     topologyRoute.NextHop,
+			Kind:        routeKind,
 		})
 	}
 

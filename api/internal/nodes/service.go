@@ -947,6 +947,9 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	if len(fields) == 4 && fields[0] == "ip" && fields[1] == "route" && fields[2] == "delete" {
 		return s.runIPRouteDelete(ctx, command, node, fields[3])
 	}
+	if len(fields) == 4 && fields[0] == "ip" && fields[1] == "route" && fields[2] == "blackhole" {
+		return s.runIPRouteBlackhole(ctx, command, node, fields[3])
+	}
 	if len(fields) == 4 && fields[0] == "ip" && fields[1] == "route" && fields[2] == "default" {
 		return s.runIPRoute(ctx, command, node, "0.0.0.0/0", fields[3])
 	}
@@ -1022,12 +1025,14 @@ func ipCommandUsage(fields []string) (string, bool) {
 		"ip route",
 		"ip route default [next-hop]",
 		"ip route add [destination/prefix] via [next-hop]",
+		"ip route blackhole [destination/prefix]",
 		"ip route delete [default|destination/prefix]",
 	}
 	ipRouteCommands := []string{
 		"ip route",
 		"ip route default [next-hop]",
 		"ip route add [destination/prefix] via [next-hop]",
+		"ip route blackhole [destination/prefix]",
 		"ip route delete [default|destination/prefix]",
 	}
 
@@ -1051,6 +1056,8 @@ func ipCommandUsage(fields []string) (string, bool) {
 			return "ip route default [next-hop]", true
 		case "add":
 			return "ip route add [destination/prefix] via [next-hop]", true
+		case "blackhole":
+			return "ip route blackhole [destination/prefix]", true
 		case "delete":
 			return "ip route delete [default|destination/prefix]", true
 		default:
@@ -1282,6 +1289,7 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 			"ip route",
 			"ip route default [next-hop]",
 			"ip route add [destination/prefix] via [next-hop]",
+			"ip route blackhole [destination/prefix]",
 			"ip route delete [default|destination/prefix]",
 			"ping [target-ip]",
 			"traceroute [target-ip] [--max-hops count(1..255)]",
@@ -2688,6 +2696,10 @@ func (s *Service) clearRuntimeInterfaceConditions(ctx context.Context, container
 func runIPRouteList(command string, node model.Node) commandResponse {
 	lines := make([]string, 0, len(node.Routes))
 	for _, route := range node.Routes {
+		if route.Kind == model.RouteKindBlackhole {
+			lines = append(lines, fmt.Sprintf("blackhole %s", route.Destination))
+			continue
+		}
 		if route.Destination == "0.0.0.0/0" {
 			lines = append(lines, fmt.Sprintf("default via %s", route.NextHop))
 			continue
@@ -2725,6 +2737,7 @@ func (s *Service) runIPRoute(
 	route := model.Route{
 		Destination: destination,
 		NextHop:     nextHop,
+		Kind:        model.RouteKindVia,
 	}
 
 	if err := s.applyRuntimeRoute(ctx, node, route); err != nil {
@@ -2739,6 +2752,34 @@ func (s *Service) runIPRoute(
 	return commandResponse{
 		Command:  command,
 		Stdout:   fmt.Sprintf("route %s via %s configured", route.Destination, route.NextHop),
+		Stderr:   "",
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) runIPRouteBlackhole(ctx context.Context, command string, node model.Node, destination string) (commandResponse, error) {
+	prefix, err := netip.ParsePrefix(destination)
+	if err != nil {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid route destination")
+	}
+
+	route := model.Route{
+		Destination: prefix.Masked().String(),
+		Kind:        model.RouteKindBlackhole,
+	}
+
+	if err := s.applyRuntimeRoute(ctx, node, route); err != nil {
+		return commandResponse{}, err
+	}
+
+	if !s.repo.UpsertRoute(node.ID, route) {
+		slog.Error("Failed to persist route")
+		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "failed to persist route")
+	}
+
+	return commandResponse{
+		Command:  command,
+		Stdout:   fmt.Sprintf("blackhole route %s configured", route.Destination),
 		Stderr:   "",
 		ExitCode: 0,
 	}, nil
@@ -2803,15 +2844,20 @@ func (s *Service) runIPRouteDelete(ctx context.Context, command string, node mod
 }
 
 func (s *Service) applyRuntimeRoute(ctx context.Context, node model.Node, route model.Route) error {
-	s.repo.store.Mu.RLock()
-	defer s.repo.store.Mu.RUnlock()
-
 	destination := route.Destination
 	if destination == "0.0.0.0/0" {
 		destination = "default"
 	}
 
-	execCmd := []string{"ip", "route", "replace", destination, "via", route.NextHop}
+	var execCmd []string
+	switch route.Kind {
+	case model.RouteKindVia:
+		execCmd = []string{"ip", "route", "replace", destination, "via", route.NextHop}
+	case model.RouteKindBlackhole:
+		execCmd = []string{"ip", "route", "replace", "blackhole", destination}
+	default:
+		return httputil.NewAppError(http.StatusBadRequest, "invalid route kind")
+	}
 
 	if _, err := execInContainerChecked(ctx, s.docker, node.ContainerID, execCmd, "failed to apply runtime route"); err != nil {
 		return err
@@ -2826,12 +2872,18 @@ func (s *Service) deleteRuntimeRoute(ctx context.Context, node model.Node, route
 		destination = "default"
 	}
 
-	stdout, stderr, exitCode, err := execInContainer(
-		ctx,
-		s.docker,
-		node.ContainerID,
-		[]string{"ip", "route", "del", destination, "via", route.NextHop},
-	)
+	var execCmd []string
+	switch route.Kind {
+	case model.RouteKindVia:
+		execCmd = []string{"ip", "route", "del", destination}
+		execCmd = append(execCmd, "via", route.NextHop)
+	case model.RouteKindBlackhole:
+		execCmd = []string{"ip", "route", "del", "blackhole", destination}
+	default:
+		return httputil.NewAppError(http.StatusBadRequest, "invalid route kind")
+	}
+
+	stdout, stderr, exitCode, err := execInContainer(ctx, s.docker, node.ContainerID, execCmd)
 	if err != nil {
 		return err
 	}

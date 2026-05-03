@@ -5,7 +5,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"net/netip"
 	"strings"
 
 	"github.com/docker/docker/api/types/container"
@@ -71,7 +70,7 @@ func syncNodeRoutes(ctx context.Context, docker *client.Client, topologyStore *s
 	}
 
 	for _, route := range node.Routes {
-		if err := applyRuntimeRoute(ctx, docker, topologyStore, node, route); err != nil {
+		if err := applyRuntimeRoute(ctx, docker, node, route); err != nil {
 			return err
 		}
 	}
@@ -79,136 +78,33 @@ func syncNodeRoutes(ctx context.Context, docker *client.Client, topologyStore *s
 	return nil
 }
 
-func applyRuntimeRoute(ctx context.Context, docker *client.Client, topologyStore *store.Store, node model.Node, route model.Route) error {
-	topologyStore.Mu.RLock()
-	_, _, ok := findReachableNextHopLocked(topologyStore, node, route.NextHop)
-	topologyStore.Mu.RUnlock()
-	if !ok {
-		return httputil.NewAppError(http.StatusBadRequest, "next hop is not directly reachable")
-	}
-
+func applyRuntimeRoute(ctx context.Context, docker *client.Client, node model.Node, route model.Route) error {
 	destination := route.Destination
 	if destination == "0.0.0.0/0" {
 		destination = "default"
+	}
+
+	var execCmd []string
+	switch route.Kind {
+	case model.RouteKindVia:
+		execCmd = []string{"ip", "route", "replace", destination, "via", route.NextHop}
+	case model.RouteKindBlackhole:
+		execCmd = []string{"ip", "route", "replace", "blackhole", destination}
+	default:
+		return httputil.NewAppError(http.StatusBadRequest, "invalid route kind")
 	}
 
 	if _, err := execInContainerChecked(
 		ctx,
 		docker,
 		node.ContainerID,
-		[]string{"ip", "route", "replace", destination, "via", route.NextHop},
+		execCmd,
 		"failed to apply runtime route",
 	); err != nil {
 		return err
 	}
 
 	return nil
-}
-
-func findReachableNextHopLocked(topologyStore *store.Store, node model.Node, nextHop string) (model.Node, model.Interface, bool) {
-	nextHopAddr, err := netip.ParseAddr(nextHop)
-	if err != nil {
-		return model.Node{}, model.Interface{}, false
-	}
-
-	for _, sourceIface := range node.Interfaces {
-		if sourceIface.LinkID == "" || sourceIface.IPAddr == "" || sourceIface.PrefixLen == 0 {
-			continue
-		}
-
-		sourceAddr, err := netip.ParseAddr(sourceIface.IPAddr)
-		if err != nil {
-			continue
-		}
-
-		prefix := netip.PrefixFrom(sourceAddr, sourceIface.PrefixLen)
-		if !prefix.Contains(nextHopAddr) {
-			continue
-		}
-
-		peerNode, peerIface, ok := findInterfaceThroughSwitchesLocked(topologyStore, sourceIface.ID, map[string]struct{}{}, func(candidateNode model.Node, candidateIface model.Interface) bool {
-			return candidateNode.Type != model.Switch && candidateIface.IPAddr == nextHop
-		})
-		if ok {
-			return peerNode, peerIface, true
-		}
-	}
-
-	return model.Node{}, model.Interface{}, false
-}
-
-func findInterfaceThroughSwitchesLocked(
-	topologyStore *store.Store,
-	interfaceID string,
-	visited map[string]struct{},
-	match func(model.Node, model.Interface) bool,
-) (model.Node, model.Interface, bool) {
-	if _, ok := visited[interfaceID]; ok {
-		return model.Node{}, model.Interface{}, false
-	}
-	visited[interfaceID] = struct{}{}
-
-	_, iface, ok := findInterfaceOwnerLocked(topologyStore, interfaceID)
-	if !ok || iface.LinkID == "" {
-		return model.Node{}, model.Interface{}, false
-	}
-
-	link, ok := topologyStore.Links[iface.LinkID]
-	if !ok {
-		return model.Node{}, model.Interface{}, false
-	}
-
-	peerInterfaceID := link.InterfaceAID
-	if peerInterfaceID == iface.ID {
-		peerInterfaceID = link.InterfaceBID
-	}
-	if _, ok := visited[peerInterfaceID]; ok {
-		return model.Node{}, model.Interface{}, false
-	}
-	visited[peerInterfaceID] = struct{}{}
-
-	peerNode, peerIface, ok := findInterfaceOwnerLocked(topologyStore, peerInterfaceID)
-	if !ok {
-		return model.Node{}, model.Interface{}, false
-	}
-	if peerNode.Type != model.Switch {
-		if match(peerNode, peerIface) {
-			return peerNode, peerIface, true
-		}
-		return model.Node{}, model.Interface{}, false
-	}
-
-	for _, switchIface := range peerNode.Interfaces {
-		if switchIface.ID == peerIface.ID || switchIface.LinkID == "" {
-			continue
-		}
-		foundNode, foundIface, found := findInterfaceThroughSwitchesLocked(topologyStore, switchIface.ID, visited, match)
-		if found {
-			return foundNode, foundIface, true
-		}
-	}
-
-	return model.Node{}, model.Interface{}, false
-}
-
-func findInterfaceOwnerLocked(topologyStore *store.Store, interfaceID string) (model.Node, model.Interface, bool) {
-	nodeID, ok := topologyStore.InterfaceOwnerIndex[interfaceID]
-	if !ok {
-		return model.Node{}, model.Interface{}, false
-	}
-
-	node, ok := topologyStore.Nodes[nodeID]
-	if !ok {
-		return model.Node{}, model.Interface{}, false
-	}
-
-	for _, iface := range node.Interfaces {
-		if iface.ID == interfaceID {
-			return node, iface, true
-		}
-	}
-
-	return model.Node{}, model.Interface{}, false
 }
 
 func execInContainer(ctx context.Context, docker *client.Client, containerID string, execCmd []string) (string, string, int, error) {
