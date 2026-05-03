@@ -142,6 +142,48 @@ func (r *repository) UpdateInterfaceConditions(nodeID, interfaceName string, con
 	return false
 }
 
+func (r *repository) UpdateInterfaceAdminDown(nodeID, interfaceName string, adminDown bool) bool {
+	r.store.Mu.Lock()
+	defer r.store.Mu.Unlock()
+
+	node, ok := r.store.Nodes[nodeID]
+	if !ok {
+		return false
+	}
+
+	for index, iface := range node.Interfaces {
+		if iface.Name != interfaceName {
+			continue
+		}
+		node.Interfaces[index].AdminDown = adminDown
+		r.store.Nodes[nodeID] = node
+		return true
+	}
+
+	return false
+}
+
+func (r *repository) UpdateInterfaceFlap(nodeID, interfaceName string, flap model.InterfaceFlap) bool {
+	r.store.Mu.Lock()
+	defer r.store.Mu.Unlock()
+
+	node, ok := r.store.Nodes[nodeID]
+	if !ok {
+		return false
+	}
+
+	for index, iface := range node.Interfaces {
+		if iface.Name != interfaceName {
+			continue
+		}
+		node.Interfaces[index].Flap = flap
+		r.store.Nodes[nodeID] = node
+		return true
+	}
+
+	return false
+}
+
 func (r *repository) UpdateInterfaceRuntime(nodeID, interfaceID, ipAddr string, prefixLen int) bool {
 	r.store.Mu.Lock()
 	defer r.store.Mu.Unlock()

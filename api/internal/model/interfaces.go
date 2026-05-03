@@ -1,10 +1,19 @@
 package model
 
 type TrafficConditions struct {
-	DelayMs       int     `json:"delayMs"`
-	JitterMs      int     `json:"jitterMs"`
-	LossPct       float64 `json:"lossPct"`
-	BandwidthKbit int     `json:"bandwidthKbit"`
+	DelayMs            int     `json:"delayMs"`
+	JitterMs           int     `json:"jitterMs"`
+	LossPct            float64 `json:"lossPct"`
+	LossCorrelationPct float64 `json:"lossCorrelationPct"`
+	BandwidthKbit      int     `json:"bandwidthKbit"`
+	QueueLimitPackets  int     `json:"queueLimitPackets"`
+}
+
+type InterfaceFlap struct {
+	Enabled  bool `json:"enabled"`
+	DownMs   int  `json:"downMs"`
+	UpMs     int  `json:"upMs"`
+	JitterMs int  `json:"jitterMs"`
 }
 
 type Interface struct {
@@ -17,4 +26,6 @@ type Interface struct {
 	RuntimePrefixLen int               `json:"runtimePrefixLength"`
 	RuntimeName      string            `json:"runtimeName"`
 	Conditions       TrafficConditions `json:"conditions"`
+	AdminDown        bool              `json:"adminDown"`
+	Flap             InterfaceFlap     `json:"flap"`
 }

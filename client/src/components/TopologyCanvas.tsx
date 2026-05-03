@@ -248,9 +248,13 @@ export function TopologyCanvas() {
 		return map;
 	}, [edges]);
 
+	const setRequestStatus = useCallback((message = "Loading...") => {
+		setStatus(message);
+	}, []);
+
 	const loadTopology = useCallback(async () => {
 		setBusy(true);
-		setStatus("Loading topology...");
+		setRequestStatus("Loading topology...");
 		try {
 			const { nodes: apiNodes, links: apiLinks } = await fetchTopology(baseUrl);
 			const existingPositions = nodePositionsRef.current;
@@ -291,10 +295,11 @@ export function TopologyCanvas() {
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl, buildFlowNode]);
+	}, [baseUrl, buildFlowNode, setRequestStatus]);
 
 	const refreshNode = useCallback(
 		async (nodeID: string) => {
+			setRequestStatus(`Refreshing node ${nodeID}...`);
 			const apiNode = await fetchNode(baseUrl, nodeID);
 			const currentSelectedNodeId = selectedNodeIdRef.current;
 			const terminalState = terminalStateRef.current;
@@ -340,7 +345,7 @@ export function TopologyCanvas() {
 				),
 			);
 		},
-		[baseUrl, buildFlowNode],
+		[baseUrl, buildFlowNode, setRequestStatus],
 	);
 
 	const setNodeBusy = useCallback((nodeID: string, nextBusy: boolean) => {
@@ -366,7 +371,7 @@ export function TopologyCanvas() {
 			const action = currentNode.data.status === "running" || currentNode.data.status === "frozen" ? "stop" : "start";
 
 			setNodeBusy(nodeID, true);
-			setStatus(`${action === "start" ? "Starting" : "Stopping"} node ${nodeID}...`);
+			setRequestStatus(`${action === "start" ? "Starting" : "Stopping"} node ${nodeID}...`);
 			try {
 				if (action === "start") {
 					await startNode(baseUrl, nodeID);
@@ -389,7 +394,7 @@ export function TopologyCanvas() {
 				setNodeBusy(nodeID, false);
 			}
 		},
-		[baseUrl, loadTopology, setNodeBusy],
+		[baseUrl, loadTopology, setNodeBusy, setRequestStatus],
 	);
 
 	useEffect(() => {
@@ -656,6 +661,7 @@ export function TopologyCanvas() {
 			);
 
 			setBusy(true);
+			setRequestStatus(`Running command on ${nodeID}...`);
 			try {
 				const result: ApiCommandResponse = await runNodeCommand(baseUrl, nodeID, command);
 				const outputLines = [
@@ -719,7 +725,7 @@ export function TopologyCanvas() {
 				setBusy(false);
 			}
 		},
-		[baseUrl, refreshNode],
+		[baseUrl, refreshNode, setRequestStatus],
 	);
 
 	useEffect(() => {
@@ -779,7 +785,7 @@ export function TopologyCanvas() {
 
 	const createNode = useCallback(async (nodeType: "host" | "switch" | "router") => {
 		setBusy(true);
-		setStatus(`Creating ${nodeType}...`);
+		setRequestStatus(`Creating ${nodeType}...`);
 		try {
 			await createNodeRequest(baseUrl, nodeType, randomPos(nodesRef.current.length));
 			setIsCreateNodeMenuOpen(false);
@@ -790,7 +796,7 @@ export function TopologyCanvas() {
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl, loadTopology]);
+	}, [baseUrl, loadTopology, setRequestStatus]);
 
 	const deleteSelectedLink = useCallback(async () => {
 		if (!selectedLinkId) {
@@ -799,7 +805,7 @@ export function TopologyCanvas() {
 		}
 
 		setBusy(true);
-		setStatus(`Removing link ${selectedLinkId}...`);
+		setRequestStatus(`Removing link ${selectedLinkId}...`);
 		try {
 			await deleteLink(baseUrl, selectedLinkId);
 			setSelectedLinkId("");
@@ -811,11 +817,11 @@ export function TopologyCanvas() {
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl, loadTopology, selectedLinkId]);
+	}, [baseUrl, loadTopology, selectedLinkId, setRequestStatus]);
 
 	const saveTopologyToFile = useCallback(async () => {
 		setBusy(true);
-		setStatus("Saving topology...");
+		setRequestStatus("Saving topology...");
 		try {
 			const topology = await exportTopology(baseUrl);
 			const blob = new Blob([JSON.stringify(topology, null, 2)], {
@@ -836,7 +842,7 @@ export function TopologyCanvas() {
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl]);
+	}, [baseUrl, setRequestStatus]);
 
 	const openImportPicker = useCallback(() => {
 		importInputRef.current?.click();
@@ -851,7 +857,7 @@ export function TopologyCanvas() {
 			}
 
 			setBusy(true);
-			setStatus(`Loading topology from ${file.name}...`);
+			setRequestStatus(`Loading topology from ${file.name}...`);
 			try {
 				const raw = await file.text();
 				const topology = JSON.parse(raw) as TopologyFile;
@@ -867,18 +873,22 @@ export function TopologyCanvas() {
 				setBusy(false);
 			}
 		},
-		[baseUrl, loadTopology],
+		[baseUrl, loadTopology, setRequestStatus],
 	);
 
-	const clearCurrentTopology = useCallback(async () => {
-		if (!busy && confirmAction !== "clear-topology") {
+	const requestClearTopology = useCallback(() => {
+		if (!busy) {
 			setConfirmAction("clear-topology");
+		}
+	}, [busy]);
+
+	const clearCurrentTopology = useCallback(async () => {
+		if (busy) {
 			return;
 		}
-
 		setBusy(true);
 		setConfirmAction(null);
-		setStatus("Clearing topology...");
+		setRequestStatus("Clearing topology...");
 		try {
 			await clearTopology(baseUrl);
 			nodePositionsRef.current = new Map();
@@ -905,21 +915,30 @@ export function TopologyCanvas() {
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl]);
+	}, [baseUrl, busy, setRequestStatus]);
 
-	const deleteSelectedNode = useCallback(async () => {
+	const requestDeleteSelectedNode = useCallback(() => {
 		if (!selectedNodeId) {
 			setStatus("Select a node first");
 			return;
 		}
-		if (!busy && confirmAction !== "delete-node") {
+		if (!busy) {
 			setConfirmAction("delete-node");
+		}
+	}, [busy, selectedNodeId]);
+
+	const deleteSelectedNode = useCallback(async () => {
+		if (busy) {
 			return;
 		}
-
+		if (!selectedNodeId) {
+			setStatus("Select a node first");
+			setConfirmAction(null);
+			return;
+		}
 		setBusy(true);
 		setConfirmAction(null);
-		setStatus(`Deleting node ${selectedNodeId}...`);
+		setRequestStatus(`Deleting node ${selectedNodeId}...`);
 		try {
 			await deleteNode(baseUrl, selectedNodeId);
 			setSelectedNodeId("");
@@ -932,7 +951,7 @@ export function TopologyCanvas() {
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl, loadTopology, selectedNodeId]);
+	}, [baseUrl, busy, loadTopology, selectedNodeId, setRequestStatus]);
 
 	useEffect(() => {
 		function onKeyDown(event: KeyboardEvent) {
@@ -955,14 +974,14 @@ export function TopologyCanvas() {
 				void deleteSelectedLink();
 				return;
 			}
-			void deleteSelectedNode();
+			requestDeleteSelectedNode();
 		}
 
 		window.addEventListener("keydown", onKeyDown);
 		return () => {
 			window.removeEventListener("keydown", onKeyDown);
 		};
-	}, [deleteSelectedLink, deleteSelectedNode]);
+	}, [deleteSelectedLink, requestDeleteSelectedNode]);
 
 	const onConnect: OnConnect = useCallback(
 		async (connection: Connection) => {
@@ -976,8 +995,9 @@ export function TopologyCanvas() {
 				source < target ? `${source}|${target}` : `${target}|${source}`;
 			const existing = edgeByPair.get(key);
 
-			setBusy(true);
-			try {
+		setBusy(true);
+		setRequestStatus("Loading...");
+		try {
 				if (existing) {
 					setStatus("Interface is busy");
 					return;
@@ -1011,7 +1031,7 @@ export function TopologyCanvas() {
 				setBusy(false);
 			}
 		},
-		[baseUrl, edgeByPair],
+		[baseUrl, edgeByPair, setRequestStatus],
 	);
 
 	const confirmPendingConnection = useCallback(async () => {
@@ -1020,7 +1040,7 @@ export function TopologyCanvas() {
 		}
 
 		setBusy(true);
-		setStatus("Creating link...");
+		setRequestStatus("Creating link...");
 		try {
 			await createLink(
 				baseUrl,
@@ -1037,7 +1057,7 @@ export function TopologyCanvas() {
 		} finally {
 			setBusy(false);
 		}
-	}, [baseUrl, loadTopology, pendingConnection]);
+	}, [baseUrl, loadTopology, pendingConnection, setRequestStatus]);
 
 	const updatePendingConnection = useCallback(
 		(key: "sourceInterfaceID" | "targetInterfaceID", value: string) => {
@@ -1127,7 +1147,7 @@ export function TopologyCanvas() {
 				</div>
 				<button
 					type="button"
-					onClick={() => void deleteSelectedNode()}
+					onClick={requestDeleteSelectedNode}
 					disabled={busy || !selectedNodeId}
 					className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
 				>
@@ -1163,7 +1183,7 @@ export function TopologyCanvas() {
 					</button>
 					<button
 						type="button"
-						onClick={() => void clearCurrentTopology()}
+						onClick={requestClearTopology}
 						disabled={busy}
 						className="rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
 					>
@@ -1185,6 +1205,7 @@ export function TopologyCanvas() {
 								onClick={() => {
 									setConfirmAction(null);
 								}}
+								disabled={busy}
 								className="rounded border border-zinc-300 px-3 py-1 text-sm hover:bg-zinc-100"
 							>
 								Cancel

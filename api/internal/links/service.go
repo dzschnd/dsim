@@ -481,11 +481,11 @@ func (s *Service) detachSwitchPortIfRunning(ctx context.Context, node model.Node
 }
 
 func hasTrafficNetemConditions(conditions model.TrafficConditions) bool {
-	return conditions.DelayMs > 0 || conditions.JitterMs > 0 || conditions.LossPct > 0
+	return conditions.DelayMs > 0 || conditions.JitterMs > 0 || conditions.LossPct > 0 || conditions.QueueLimitPackets > 0
 }
 
 func buildTrafficNetemArgs(conditions model.TrafficConditions) []string {
-	args := make([]string, 0, 6)
+	args := make([]string, 0, 8)
 	if conditions.DelayMs > 0 {
 		args = append(args, "delay", fmt.Sprintf("%dms", conditions.DelayMs))
 		if conditions.JitterMs > 0 {
@@ -493,7 +493,15 @@ func buildTrafficNetemArgs(conditions model.TrafficConditions) []string {
 		}
 	}
 	if conditions.LossPct > 0 {
-		args = append(args, "loss", strconv.FormatFloat(conditions.LossPct, 'f', -1, 64)+"%")
+		loss := strconv.FormatFloat(conditions.LossPct, 'f', -1, 64) + "%"
+		if conditions.LossCorrelationPct > 0 {
+			args = append(args, "loss", loss, strconv.FormatFloat(conditions.LossCorrelationPct, 'f', -1, 64)+"%")
+		} else {
+			args = append(args, "loss", loss)
+		}
+	}
+	if conditions.QueueLimitPackets > 0 {
+		args = append(args, "limit", strconv.Itoa(conditions.QueueLimitPackets))
 	}
 
 	return args

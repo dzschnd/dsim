@@ -38,12 +38,15 @@ type Service struct {
 }
 
 const (
-	iperfLogPath     = "/var/log/iperf/iperf.log"
-	httpLogPath      = "/var/log/http/http.log"
-	httpPIDFilePath  = "/var/run/http-server.pid"
-	httpPortFilePath = "/var/run/http-server.port"
-	tcpPIDFilePath   = "/var/run/tcp-server.pid"
-	udpPIDFilePath   = "/var/run/udp-server.pid"
+	iperfLogPath        = "/var/log/iperf/iperf.log"
+	httpLogPath         = "/var/log/http/http.log"
+	httpPIDFilePath     = "/var/run/http-server.pid"
+	httpPortFilePath    = "/var/run/http-server.port"
+	tcpPIDFilePath      = "/var/run/tcp-server.pid"
+	udpPIDFilePath      = "/var/run/udp-server.pid"
+	defaultFlapDownMs   = 500
+	defaultFlapUpMs     = 1000
+	defaultFlapJitterMs = 200
 
 	minIperfUDPPacketLength = 16
 	maxIperfUDPPacketLength = 65507
@@ -406,6 +409,9 @@ func (s *Service) StartNode(ctx context.Context, nodeID string) error {
 		if err := s.syncRuntimeRoutes(ctx, nodeID); err != nil {
 			return err
 		}
+		if err := s.syncRuntimeInterfaceStates(ctx, nodeID); err != nil {
+			return err
+		}
 		s.repo.UpdateNodeStatus(nodeID, model.Running)
 		return nil
 	}
@@ -440,6 +446,9 @@ func (s *Service) StartNode(ctx context.Context, nodeID string) error {
 		return err
 	}
 	if err := s.syncRuntimeRoutes(ctx, nodeID); err != nil {
+		return err
+	}
+	if err := s.syncRuntimeInterfaceStates(ctx, nodeID); err != nil {
 		return err
 	}
 
@@ -649,6 +658,30 @@ func (s *Service) syncRuntimeInterfaceConditions(ctx context.Context, nodeID str
 	for _, iface := range node.Interfaces {
 		if err := s.applyRuntimeInterfaceConditions(ctx, node, iface); err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) syncRuntimeInterfaceStates(ctx context.Context, nodeID string) error {
+	node, ok := s.repo.GetNode(nodeID)
+	if !ok {
+		return httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+
+	for _, iface := range node.Interfaces {
+		if err := s.applyRuntimeInterfaceState(ctx, node, iface); err != nil {
+			return err
+		}
+		if iface.Flap.Enabled {
+			if err := s.startRuntimeInterfaceFlap(ctx, node, iface); err != nil {
+				return err
+			}
+		} else {
+			if err := s.stopRuntimeInterfaceFlap(ctx, node, iface); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -872,7 +905,7 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 		if len(fields) >= 2 && fields[0] == "ip" && fields[1] == "addr" {
 			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support ip addr")
 		}
-		if len(fields) >= 2 && fields[0] == "ip" && fields[1] == "set" {
+		if len(fields) >= 2 && fields[0] == "ip" && fields[1] == "set" && !(len(fields) == 5 && fields[2] == "link") {
 			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch ports do not support ip assignment")
 		}
 		if len(fields) >= 2 && fields[0] == "ip" && fields[1] == "route" {
@@ -966,6 +999,18 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	if len(fields) == 3 && fields[0] == "ip" && fields[1] == "unset" {
 		return s.runIPUnset(ctx, command, nodeID, fields[2])
 	}
+	if len(fields) == 5 && fields[0] == "ip" && fields[1] == "link" && fields[2] == "set" {
+		return s.runIPLinkSet(ctx, command, nodeID, fields[3], fields[4])
+	}
+	if len(fields) >= 4 && fields[0] == "ip" && fields[1] == "flap" && fields[2] == "start" {
+		return s.runIPFlapStart(ctx, command, nodeID, fields[3], fields[4:])
+	}
+	if len(fields) == 4 && fields[0] == "ip" && fields[1] == "flap" && fields[2] == "stop" {
+		return s.runIPFlapStop(ctx, command, nodeID, fields[3])
+	}
+	if len(fields) == 4 && fields[0] == "ip" && fields[1] == "flap" && fields[2] == "status" {
+		return s.runIPFlapStatus(ctx, command, nodeID, fields[3])
+	}
 	if len(fields) == 4 && fields[0] == "ip" && fields[1] == "set" {
 		return s.runIPSet(ctx, command, nodeID, fields[2], fields[3])
 	}
@@ -1005,7 +1050,7 @@ func commandUsage(fields []string, nodeType model.NodeType) (string, bool) {
 	case "unfreeze":
 		return "unfreeze", true
 	case "ip":
-		if nodeType == model.Switch {
+		if nodeType == model.Switch && len(fields) > 1 && fields[1] != "link" && fields[1] != "flap" {
 			return "switch does not support ip commands", true
 		}
 		return ipCommandUsage(fields)
@@ -1050,6 +1095,10 @@ func ipCommandUsage(fields []string) (string, bool) {
 	ipCommands := []string{
 		"ip addr",
 		"ip set [interface] [ip/prefix]",
+		"ip link set [interface] [up|down]",
+		"ip flap start [interface] [--down ms] [--up ms] [--jitter ms]",
+		"ip flap stop [interface]",
+		"ip flap status [interface]",
 		"ip unset [interface]",
 		"ip route",
 		"ip route default [next-hop]",
@@ -1074,6 +1123,30 @@ func ipCommandUsage(fields []string) (string, bool) {
 		return "ip addr", true
 	case "set":
 		return "ip set [interface] [ip/prefix]", true
+	case "link":
+		return "ip link set [interface] [up|down]", true
+	case "flap":
+		if len(fields) == 2 {
+			return strings.Join([]string{
+				"ip flap start [interface] [--down ms] [--up ms] [--jitter ms]",
+				"ip flap stop [interface]",
+				"ip flap status [interface]",
+			}, "\n"), true
+		}
+		switch fields[2] {
+		case "start":
+			return "ip flap start [interface] [--down ms] [--up ms] [--jitter ms]", true
+		case "stop":
+			return "ip flap stop [interface]", true
+		case "status":
+			return "ip flap status [interface]", true
+		default:
+			return strings.Join([]string{
+				"ip flap start [interface] [--down ms] [--up ms] [--jitter ms]",
+				"ip flap stop [interface]",
+				"ip flap status [interface]",
+			}, "\n"), true
+		}
 	case "unset":
 		return "ip unset [interface]", true
 	case "route":
@@ -1101,7 +1174,7 @@ func tcCommandUsage(fields []string) (string, bool) {
 	tcCommands := []string{
 		"tc show [interface]",
 		"tc clear [interface]",
-		"tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--bandwidth kbit]",
+		"tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--loss-correlation pct] [--bandwidth kbit] [--queue-limit packets]",
 	}
 
 	if len(fields) == 1 {
@@ -1114,7 +1187,7 @@ func tcCommandUsage(fields []string) (string, bool) {
 	case "clear":
 		return "tc clear [interface]", true
 	case "set":
-		return "tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--bandwidth kbit]", true
+		return "tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--loss-correlation pct] [--bandwidth kbit] [--queue-limit packets]", true
 	default:
 		return strings.Join(tcCommands, "\n"), true
 	}
@@ -1310,6 +1383,10 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 		"history",
 		"freeze",
 		"unfreeze",
+		"ip link set [interface] [up|down]",
+		"ip flap start [interface] [--down ms] [--up ms] [--jitter ms]",
+		"ip flap stop [interface]",
+		"ip flap status [interface]",
 	}
 
 	if nodeType != model.Switch {
@@ -1350,7 +1427,7 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 	lines = append(lines,
 		"tc show [interface]",
 		"tc clear [interface]",
-		"tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--bandwidth kbit]",
+		"tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--loss-correlation pct] [--bandwidth kbit] [--queue-limit packets]",
 	)
 
 	return commandResponse{
@@ -1389,7 +1466,7 @@ func (s *Service) runPing(ctx context.Context, command string, node model.Node) 
 	return s.execCommand(
 		ctx,
 		node.ContainerID,
-		[]string{"ping", "-c", "2", targetLogicalIP},
+		[]string{"ping", "-c", "4", targetLogicalIP},
 		command,
 	)
 }
@@ -2084,12 +2161,14 @@ func (s *Service) runTCShow(command string, node model.Node, interfaceName strin
 
 func formatTCShowLine(iface model.Interface) string {
 	return fmt.Sprintf(
-		"%s: delay=%dms jitter=%dms loss=%s%% bandwidth=%dkbit",
+		"%s: delay=%dms jitter=%dms loss=%s%% loss-correlation=%s%% bandwidth=%dkbit queue-limit=%d",
 		iface.Name,
 		iface.Conditions.DelayMs,
 		iface.Conditions.JitterMs,
 		strconv.FormatFloat(iface.Conditions.LossPct, 'f', -1, 64),
+		strconv.FormatFloat(iface.Conditions.LossCorrelationPct, 'f', -1, 64),
 		iface.Conditions.BandwidthKbit,
+		iface.Conditions.QueueLimitPackets,
 	)
 }
 
@@ -2375,19 +2454,31 @@ func ValidateTrafficConditions(conditions model.TrafficConditions) error {
 	if conditions.LossPct < 0 || conditions.LossPct > 100 {
 		return httputil.NewAppError(http.StatusBadRequest, "loss must be between 0 and 100")
 	}
+	if math.IsNaN(conditions.LossCorrelationPct) || math.IsInf(conditions.LossCorrelationPct, 0) {
+		return httputil.NewAppError(http.StatusBadRequest, "loss correlation must be finite")
+	}
+	if conditions.LossCorrelationPct < 0 || conditions.LossCorrelationPct > 100 {
+		return httputil.NewAppError(http.StatusBadRequest, "loss correlation must be between 0 and 100")
+	}
+	if conditions.LossPct == 0 && conditions.LossCorrelationPct > 0 {
+		return httputil.NewAppError(http.StatusBadRequest, "loss correlation requires loss")
+	}
 	if conditions.BandwidthKbit < 0 {
 		return httputil.NewAppError(http.StatusBadRequest, "bandwidth must be non-negative")
+	}
+	if conditions.QueueLimitPackets < 0 {
+		return httputil.NewAppError(http.StatusBadRequest, "queue limit must be non-negative")
 	}
 
 	return nil
 }
 
 func hasTrafficNetemConditions(conditions model.TrafficConditions) bool {
-	return conditions.DelayMs > 0 || conditions.JitterMs > 0 || conditions.LossPct > 0
+	return conditions.DelayMs > 0 || conditions.JitterMs > 0 || conditions.LossPct > 0 || conditions.QueueLimitPackets > 0
 }
 
 func buildTrafficNetemArgs(conditions model.TrafficConditions) []string {
-	args := make([]string, 0, 6)
+	args := make([]string, 0, 8)
 	if conditions.DelayMs > 0 {
 		args = append(args, "delay", fmt.Sprintf("%dms", conditions.DelayMs))
 		if conditions.JitterMs > 0 {
@@ -2395,7 +2486,15 @@ func buildTrafficNetemArgs(conditions model.TrafficConditions) []string {
 		}
 	}
 	if conditions.LossPct > 0 {
-		args = append(args, "loss", strconv.FormatFloat(conditions.LossPct, 'f', -1, 64)+"%")
+		loss := strconv.FormatFloat(conditions.LossPct, 'f', -1, 64) + "%"
+		if conditions.LossCorrelationPct > 0 {
+			args = append(args, "loss", loss, strconv.FormatFloat(conditions.LossCorrelationPct, 'f', -1, 64)+"%")
+		} else {
+			args = append(args, "loss", loss)
+		}
+	}
+	if conditions.QueueLimitPackets > 0 {
+		args = append(args, "limit", strconv.Itoa(conditions.QueueLimitPackets))
 	}
 
 	return args
@@ -2407,7 +2506,7 @@ func parseTCSetConditions(args []string, current model.TrafficConditions) (model
 	}
 
 	conditions := current
-	seen := make(map[string]struct{}, 4)
+	seen := make(map[string]struct{}, 7)
 
 	for index := 0; index < len(args); {
 		flagName := args[index]
@@ -2439,12 +2538,24 @@ func parseTCSetConditions(args []string, current model.TrafficConditions) (model
 				return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "invalid loss value")
 			}
 			conditions.LossPct = parsed
+		case "--loss-correlation":
+			parsed, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "invalid loss correlation value")
+			}
+			conditions.LossCorrelationPct = parsed
 		case "--bandwidth":
 			parsed, err := strconv.Atoi(value)
 			if err != nil {
 				return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "invalid bandwidth value")
 			}
 			conditions.BandwidthKbit = parsed
+		case "--queue-limit":
+			parsed, err := strconv.Atoi(value)
+			if err != nil {
+				return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "invalid queue limit value")
+			}
+			conditions.QueueLimitPackets = parsed
 		default:
 			return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "unsupported tc flag: "+flagName)
 		}
@@ -2618,6 +2729,227 @@ func (s *Service) runIPUnset(ctx context.Context, command, nodeID, interfaceName
 	}, nil
 }
 
+func (s *Service) runIPLinkSet(ctx context.Context, command, nodeID, interfaceName, state string) (commandResponse, error) {
+	if state != "up" && state != "down" {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "link state must be up or down")
+	}
+
+	node, iface, inspect, err := s.loadInterfaceForRuntimeCommand(ctx, nodeID, interfaceName)
+	if err != nil {
+		return commandResponse{}, err
+	}
+
+	adminDown := state == "down"
+	if !s.repo.UpdateInterfaceAdminDown(nodeID, interfaceName, adminDown) {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
+	}
+	if !s.repo.UpdateInterfaceFlap(nodeID, interfaceName, model.InterfaceFlap{}) {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
+	}
+
+	if inspect.State != nil && inspect.State.Running {
+		if err := s.stopRuntimeInterfaceFlap(ctx, node, iface); err != nil {
+			return commandResponse{}, err
+		}
+		if err := s.applyRuntimeInterfaceLinkState(ctx, node, iface, adminDown); err != nil {
+			return commandResponse{}, err
+		}
+	}
+
+	return commandResponse{
+		Command:  command,
+		Stdout:   fmt.Sprintf("%s set %s", interfaceName, state),
+		Stderr:   "",
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) runIPFlapStart(ctx context.Context, command, nodeID, interfaceName string, args []string) (commandResponse, error) {
+	downMs := defaultFlapDownMs
+	upMs := defaultFlapUpMs
+	jitterMs := defaultFlapJitterMs
+
+	for index := 0; index < len(args); {
+		if index+1 >= len(args) {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "missing ip flap flag value")
+		}
+		flagName := args[index]
+		value := args[index+1]
+		parsed, err := strconv.Atoi(value)
+		if err != nil || parsed < 0 {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid ip flap value")
+		}
+		switch flagName {
+		case "--down":
+			downMs = parsed
+		case "--up":
+			upMs = parsed
+		case "--jitter":
+			jitterMs = parsed
+		default:
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "unsupported ip flap flag: "+flagName)
+		}
+		index += 2
+	}
+	if downMs == 0 && upMs == 0 {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "down and up durations cannot both be zero")
+	}
+
+	node, iface, inspect, err := s.loadInterfaceForRuntimeCommand(ctx, nodeID, interfaceName)
+	if err != nil {
+		return commandResponse{}, err
+	}
+
+	flap := model.InterfaceFlap{Enabled: true, DownMs: downMs, UpMs: upMs, JitterMs: jitterMs}
+	if !s.repo.UpdateInterfaceAdminDown(nodeID, interfaceName, false) {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
+	}
+	if !s.repo.UpdateInterfaceFlap(nodeID, interfaceName, flap) {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
+	}
+
+	if inspect.State != nil && inspect.State.Running {
+		if err := s.startRuntimeInterfaceFlap(ctx, node, iface); err != nil {
+			return commandResponse{}, err
+		}
+	}
+
+	return commandResponse{
+		Command:  command,
+		Stdout:   fmt.Sprintf("%s flap enabled (down=%dms up=%dms jitter=%dms)", interfaceName, downMs, upMs, jitterMs),
+		Stderr:   "",
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) runIPFlapStop(ctx context.Context, command, nodeID, interfaceName string) (commandResponse, error) {
+	node, iface, inspect, err := s.loadInterfaceForRuntimeCommand(ctx, nodeID, interfaceName)
+	if err != nil {
+		return commandResponse{}, err
+	}
+
+	if !s.repo.UpdateInterfaceFlap(nodeID, interfaceName, model.InterfaceFlap{}) {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
+	}
+
+	if inspect.State != nil && inspect.State.Running {
+		if err := s.stopRuntimeInterfaceFlap(ctx, node, iface); err != nil {
+			return commandResponse{}, err
+		}
+		if err := s.applyRuntimeInterfaceLinkState(ctx, node, iface, iface.AdminDown); err != nil {
+			return commandResponse{}, err
+		}
+	}
+
+	return commandResponse{
+		Command:  command,
+		Stdout:   fmt.Sprintf("%s flap disabled", interfaceName),
+		Stderr:   "",
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) runIPFlapStatus(ctx context.Context, command, nodeID, interfaceName string) (commandResponse, error) {
+	node, iface, inspect, err := s.loadInterfaceForRuntimeCommand(ctx, nodeID, interfaceName)
+	if err != nil {
+		return commandResponse{}, err
+	}
+
+	currentState := "unknown"
+	if inspect.State != nil && inspect.State.Running {
+		currentState, err = s.runtimeInterfaceState(ctx, node, iface)
+		if err != nil {
+			return commandResponse{}, err
+		}
+	}
+
+	status := "stopped"
+	if iface.Flap.Enabled {
+		status = fmt.Sprintf("running down=%dms up=%dms jitter=%dms", iface.Flap.DownMs, iface.Flap.UpMs, iface.Flap.JitterMs)
+	}
+
+	return commandResponse{
+		Command:  command,
+		Stdout:   fmt.Sprintf("%s: state=%s admin-down=%t flap=%s", interfaceName, currentState, iface.AdminDown, status),
+		Stderr:   "",
+		ExitCode: 0,
+	}, nil
+}
+
+func (s *Service) loadInterfaceForRuntimeCommand(ctx context.Context, nodeID, interfaceName string) (model.Node, model.Interface, types.ContainerJSON, error) {
+	node, ok := s.repo.GetNode(nodeID)
+	if !ok {
+		return model.Node{}, model.Interface{}, types.ContainerJSON{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+
+	var iface model.Interface
+	found := false
+	for _, candidate := range node.Interfaces {
+		if candidate.Name != interfaceName {
+			continue
+		}
+		iface = candidate
+		found = true
+		break
+	}
+	if !found {
+		return model.Node{}, model.Interface{}, types.ContainerJSON{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
+	}
+
+	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
+	if err != nil {
+		if client.IsErrNotFound(err) {
+			return model.Node{}, model.Interface{}, types.ContainerJSON{}, httputil.NewAppError(http.StatusNotFound, "container not found")
+		}
+		slog.Error("Container inspect failed", "err", err)
+		return model.Node{}, model.Interface{}, types.ContainerJSON{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
+	}
+
+	if inspect.State != nil && inspect.State.Running {
+		iface, err = s.ensureRuntimeInterfaceForCommand(ctx, node, inspect, iface.Name)
+		if err != nil {
+			return model.Node{}, model.Interface{}, types.ContainerJSON{}, err
+		}
+		updatedNode, ok := s.repo.GetNode(nodeID)
+		if ok {
+			node = updatedNode
+		}
+	}
+
+	return node, iface, inspect, nil
+}
+
+func (s *Service) ensureRuntimeInterfaceForCommand(ctx context.Context, node model.Node, inspect types.ContainerJSON, interfaceName string) (model.Interface, error) {
+	for _, iface := range node.Interfaces {
+		if iface.Name == interfaceName {
+			if iface.RuntimeName != "" {
+				return iface, nil
+			}
+			break
+		}
+	}
+
+	s.syncRuntimeInterfaces(node.ID, node.Interfaces, inspect)
+	if err := s.syncRuntimeInterfaceNames(ctx, node.ID); err != nil {
+		return model.Interface{}, err
+	}
+
+	refreshedNode, ok := s.repo.GetNode(node.ID)
+	if !ok {
+		return model.Interface{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+	for _, iface := range refreshedNode.Interfaces {
+		if iface.Name == interfaceName {
+			if iface.RuntimeName == "" {
+				iface.RuntimeName = iface.Name
+			}
+			return iface, nil
+		}
+	}
+
+	return model.Interface{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
+}
+
 func (s *Service) applyRuntimeInterfaceAddress(ctx context.Context, node model.Node, iface model.Interface) error {
 	if iface.RuntimeName == "" {
 		return httputil.NewAppError(http.StatusBadRequest, "runtime interface name not resolved")
@@ -2682,6 +3014,125 @@ func (s *Service) deleteRuntimeInterfaceAddress(ctx context.Context, node model.
 	}
 
 	return nil
+}
+
+func (s *Service) applyRuntimeInterfaceState(ctx context.Context, node model.Node, iface model.Interface) error {
+	if err := s.applyRuntimeInterfaceLinkState(ctx, node, iface, iface.AdminDown); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) applyRuntimeInterfaceLinkState(ctx context.Context, node model.Node, iface model.Interface, adminDown bool) error {
+	runtimeName := iface.RuntimeName
+	if runtimeName == "" {
+		// Some interfaces (e.g., unconnected switch ports) do not exist in runtime yet.
+		// Skip until a concrete runtime interface name is resolved.
+		if iface.LinkID == "" {
+			return nil
+		}
+		runtimeName = iface.Name
+	}
+	state := "up"
+	if adminDown {
+		state = "down"
+	}
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"ip", "link", "set", runtimeName, state},
+		"failed to apply runtime interface link state",
+	); err != nil {
+		return err
+	}
+	return nil
+}
+
+func interfaceFlapPIDFilePath(iface model.Interface) string {
+	return fmt.Sprintf("/var/run/ip-flap-%s.pid", iface.ID)
+}
+
+func buildInterfaceFlapCommand(iface model.Interface) string {
+	runtimeName := iface.RuntimeName
+	if runtimeName == "" {
+		runtimeName = iface.Name
+	}
+
+	return fmt.Sprintf(`pidfile=%q; iface=%q; down_ms=%d; up_ms=%d; jitter_ms=%d;
+rand_ms() {
+  if [ "$1" -le 0 ]; then echo 0; return; fi
+  n=$(od -An -N2 -tu2 /dev/urandom | tr -d ' ')
+  echo $(( n %% ($1 + 1) ))
+}
+sleep_ms() {
+  sleep "$(awk -v ms="$1" 'BEGIN { printf "%%.3f", ms / 1000.0 }')"
+}
+interval_ms() {
+  base="$1"
+  if [ "$jitter_ms" -le 0 ]; then echo "$base"; return; fi
+  spread=$(( ( $(rand_ms $((jitter_ms * 2))) ) - jitter_ms ))
+  value=$(( base + spread ))
+  if [ "$value" -lt 0 ]; then value=0; fi
+  echo "$value"
+}
+while true; do
+  ip link set "$iface" down
+  sleep_ms "$(interval_ms "$down_ms")"
+  ip link set "$iface" up
+  sleep_ms "$(interval_ms "$up_ms")"
+done > /dev/null 2>&1 & echo $! > "$pidfile"`, interfaceFlapPIDFilePath(iface), runtimeName, iface.Flap.DownMs, iface.Flap.UpMs, iface.Flap.JitterMs)
+}
+
+func (s *Service) startRuntimeInterfaceFlap(ctx context.Context, node model.Node, iface model.Interface) error {
+	if !iface.Flap.Enabled {
+		return nil
+	}
+	if err := s.stopRuntimeInterfaceFlap(ctx, node, iface); err != nil {
+		return err
+	}
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"sh", "-c", buildInterfaceFlapCommand(iface)},
+		"failed to start interface flap",
+	); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) stopRuntimeInterfaceFlap(ctx context.Context, node model.Node, iface model.Interface) error {
+	pidFilePath := interfaceFlapPIDFilePath(iface)
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"sh", "-c", fmt.Sprintf(`if [ -f %q ]; then kill "$(cat %q)" >/dev/null 2>&1 || true; rm -f %q; fi`, pidFilePath, pidFilePath, pidFilePath)},
+		"failed to stop interface flap",
+	); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (s *Service) runtimeInterfaceState(ctx context.Context, node model.Node, iface model.Interface) (string, error) {
+	runtimeName := iface.RuntimeName
+	if runtimeName == "" {
+		runtimeName = iface.Name
+	}
+	stdout, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"sh", "-c", fmt.Sprintf(`cat /sys/class/net/%s/operstate`, runtimeName)},
+		"failed to inspect interface state",
+	)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(stdout), nil
 }
 
 func (s *Service) applyRuntimeInterfaceConditions(ctx context.Context, node model.Node, iface model.Interface) error {
