@@ -33,7 +33,6 @@ import {
 	startNode,
 	stopNode,
 	updateNodePosition,
-	ApiRequestError,
 } from "../services/topology";
 
 type TerminalState = {
@@ -649,7 +648,6 @@ export function TopologyCanvas() {
 			);
 
 			setBusy(true);
-			let shouldPersistHistory = true;
 			try {
 				const result: ApiCommandResponse = await runNodeCommand(baseUrl, nodeID, command);
 				const outputLines = [
@@ -682,9 +680,6 @@ export function TopologyCanvas() {
 				setStatus(`Executed ${result.command} on ${nodeID}`);
 			} catch (err: unknown) {
 				const message = err instanceof Error ? err.message : String(err);
-				if (err instanceof ApiRequestError && err.status === 400) {
-					shouldPersistHistory = false;
-				}
 				setNodes((curr) =>
 					curr.map((node) =>
 						node.id === nodeID
@@ -700,21 +695,19 @@ export function TopologyCanvas() {
 				);
 				setStatus(`Failed to execute command: ${message}`);
 			} finally {
-				if (shouldPersistHistory) {
-					setNodes((curr) =>
-						curr.map((node) =>
-							node.id === nodeID
-								? {
-									...node,
-									data: {
-										...node.data,
-										terminalHistory: appendTerminalHistory(node.data.terminalHistory, command),
-									},
-								}
-								: node,
-						),
-					);
-				}
+				setNodes((curr) =>
+					curr.map((node) =>
+						node.id === nodeID
+							? {
+								...node,
+								data: {
+									...node.data,
+									terminalHistory: appendTerminalHistory(node.data.terminalHistory, command),
+								},
+							}
+							: node,
+					),
+				);
 				setBusy(false);
 			}
 		},
