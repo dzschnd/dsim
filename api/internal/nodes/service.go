@@ -2806,11 +2806,6 @@ func (s *Service) applyRuntimeRoute(ctx context.Context, node model.Node, route 
 	s.repo.store.Mu.RLock()
 	defer s.repo.store.Mu.RUnlock()
 
-	_, _, ok := s.findReachableNextHopLocked(node, route.NextHop)
-	if !ok {
-		return httputil.NewAppError(http.StatusBadRequest, "next hop is not directly reachable")
-	}
-
 	destination := route.Destination
 	if destination == "0.0.0.0/0" {
 		destination = "default"
@@ -2857,38 +2852,6 @@ func (s *Service) deleteRuntimeRoute(ctx context.Context, node model.Node, route
 	}
 
 	return nil
-}
-
-func (s *Service) findReachableNextHopLocked(node model.Node, nextHop string) (model.Node, model.Interface, bool) {
-	nextHopAddr, err := netip.ParseAddr(nextHop)
-	if err != nil {
-		return model.Node{}, model.Interface{}, false
-	}
-
-	for _, sourceIface := range node.Interfaces {
-		if sourceIface.LinkID == "" || sourceIface.IPAddr == "" || sourceIface.PrefixLen == 0 {
-			continue
-		}
-
-		sourceAddr, err := netip.ParseAddr(sourceIface.IPAddr)
-		if err != nil {
-			continue
-		}
-
-		prefix := netip.PrefixFrom(sourceAddr, sourceIface.PrefixLen)
-		if !prefix.Contains(nextHopAddr) {
-			continue
-		}
-
-		peerNode, peerIface, ok := s.findInterfaceThroughSwitchesLocked(sourceIface.ID, map[string]struct{}{}, func(candidateNode model.Node, candidateIface model.Interface) bool {
-			return candidateNode.Type != model.Switch && candidateIface.IPAddr == nextHop
-		})
-		if ok {
-			return peerNode, peerIface, true
-		}
-	}
-
-	return model.Node{}, model.Interface{}, false
 }
 
 func (s *Service) findInterfaceThroughSwitchesLocked(

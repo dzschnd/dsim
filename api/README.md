@@ -8,6 +8,21 @@
 - unlink/link seemingly drops route config
 - let users choose bitrate on iperf tcp/udp clients
 
+- Loss corelation
+- Burst packet loss
+- Packet reorder/duplication/corruption
+- Unstable cable connection (flapping)
+- Broken NIC
+- Queue overflow - tc limit
+- Blackhole routes
+- CPU stress
+- Stop validating route rules (can set unavailble routes)
+- Node freeze
+- highlight active links
+- remove request timeout
+- UI overhaul
+
+
 # Sources
 
 - Go: https://go.dev/
