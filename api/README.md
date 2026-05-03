@@ -14,9 +14,9 @@
 - Unstable cable connection (flapping)
 - Broken NIC
 - Queue overflow - tc limit
-- Blackhole routes
++ Blackhole routes
 - CPU stress
-- Stop validating route rules (can set unavailble routes)
++ Stop validating route rules (can set unavailble routes)
 - Node freeze
 - highlight active links
 - remove request timeout
