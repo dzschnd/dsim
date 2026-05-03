@@ -9,7 +9,7 @@
 - let users choose bitrate on iperf tcp/udp clients
 
 + Loss corelation
-- Packet reorder/duplication/corruption
++ Packet reorder/duplication/corruption
 + Unstable cable connection (flapping)
 + Broken NIC
 + Queue overflow - tc limit

@@ -5,6 +5,9 @@ type TrafficConditions struct {
 	JitterMs           int     `json:"jitterMs"`
 	LossPct            float64 `json:"lossPct"`
 	LossCorrelationPct float64 `json:"lossCorrelationPct"`
+	ReorderPct         float64 `json:"reorderPct"`
+	DuplicatePct       float64 `json:"duplicatePct"`
+	CorruptPct         float64 `json:"corruptPct"`
 	BandwidthKbit      int     `json:"bandwidthKbit"`
 	QueueLimitPackets  int     `json:"queueLimitPackets"`
 }

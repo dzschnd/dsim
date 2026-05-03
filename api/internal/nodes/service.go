@@ -915,6 +915,9 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 	if len(fields) == 2 && fields[0] == "ping" {
 		return s.runPing(ctx, command, node)
 	}
+	if len(fields) == 4 && fields[0] == "ping" && fields[2] == "--count" {
+		return s.runPing(ctx, command, node)
+	}
 	if len(fields) == 2 && fields[0] == "traceroute" {
 		return s.runTraceroute(ctx, command, node)
 	}
@@ -1080,7 +1083,7 @@ func commandUsage(fields []string, nodeType model.NodeType) (string, bool) {
 		if nodeType == model.Switch {
 			return "switch does not support ping", true
 		}
-		return "ping [target-ip]", true
+		return "ping [target-ip] [--count packets]", true
 	case "traceroute":
 		if nodeType == model.Switch {
 			return "switch does not support traceroute", true
@@ -1174,7 +1177,7 @@ func tcCommandUsage(fields []string) (string, bool) {
 	tcCommands := []string{
 		"tc show [interface]",
 		"tc clear [interface]",
-		"tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--loss-correlation pct] [--bandwidth kbit] [--queue-limit packets]",
+		"tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--loss-correlation pct] [--reorder pct] [--duplicate pct] [--corrupt pct] [--bandwidth kbit] [--queue-limit packets]",
 	}
 
 	if len(fields) == 1 {
@@ -1187,7 +1190,7 @@ func tcCommandUsage(fields []string) (string, bool) {
 	case "clear":
 		return "tc clear [interface]", true
 	case "set":
-		return "tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--loss-correlation pct] [--bandwidth kbit] [--queue-limit packets]", true
+		return "tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--loss-correlation pct] [--reorder pct] [--duplicate pct] [--corrupt pct] [--bandwidth kbit] [--queue-limit packets]", true
 	default:
 		return strings.Join(tcCommands, "\n"), true
 	}
@@ -1399,7 +1402,7 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 			"ip route add [destination/prefix] via [next-hop]",
 			"ip route blackhole [destination/prefix]",
 			"ip route delete [default|destination/prefix]",
-			"ping [target-ip]",
+			"ping [target-ip] [--count packets]",
 			"traceroute [target-ip] [--max-hops count(1..255)]",
 			"iperf tcp [ip] [--time seconds | --bytes bytes]",
 			"iperf udp [ip] [--time seconds | --bytes bytes] [--bitrate rate[K|M|G]] [--packet-length bytes(16..65507)]",
@@ -1427,7 +1430,7 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 	lines = append(lines,
 		"tc show [interface]",
 		"tc clear [interface]",
-		"tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--loss-correlation pct] [--bandwidth kbit] [--queue-limit packets]",
+		"tc set [interface] [--delay ms] [--jitter ms] [--loss pct] [--loss-correlation pct] [--reorder pct] [--duplicate pct] [--corrupt pct] [--bandwidth kbit] [--queue-limit packets]",
 	)
 
 	return commandResponse{
@@ -1477,11 +1480,22 @@ func (s *Service) runPing(ctx context.Context, command string, node model.Node) 
 	if _, err := netip.ParseAddr(targetLogicalIP); err != nil {
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
 	}
+	packetCount := 4
+	if len(fields) != 2 {
+		if len(fields) != 4 || fields[2] != "--count" {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid ping syntax")
+		}
+		parsedCount, err := strconv.Atoi(fields[3])
+		if err != nil || parsedCount < 1 {
+			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "packet count must be a positive integer")
+		}
+		packetCount = parsedCount
+	}
 
 	return s.execCommand(
 		ctx,
 		node.ContainerID,
-		[]string{"ping", "-c", "4", targetLogicalIP},
+		[]string{"ping", "-c", strconv.Itoa(packetCount), targetLogicalIP},
 		command,
 	)
 }
@@ -2176,12 +2190,15 @@ func (s *Service) runTCShow(command string, node model.Node, interfaceName strin
 
 func formatTCShowLine(iface model.Interface) string {
 	return fmt.Sprintf(
-		"%s: delay=%dms jitter=%dms loss=%s%% loss-correlation=%s%% bandwidth=%dkbit queue-limit=%d",
+		"%s: delay=%dms jitter=%dms loss=%s%% loss-correlation=%s%% reorder=%s%% duplicate=%s%% corrupt=%s%% bandwidth=%dkbit queue-limit=%d",
 		iface.Name,
 		iface.Conditions.DelayMs,
 		iface.Conditions.JitterMs,
 		strconv.FormatFloat(iface.Conditions.LossPct, 'f', -1, 64),
 		strconv.FormatFloat(iface.Conditions.LossCorrelationPct, 'f', -1, 64),
+		strconv.FormatFloat(iface.Conditions.ReorderPct, 'f', -1, 64),
+		strconv.FormatFloat(iface.Conditions.DuplicatePct, 'f', -1, 64),
+		strconv.FormatFloat(iface.Conditions.CorruptPct, 'f', -1, 64),
 		iface.Conditions.BandwidthKbit,
 		iface.Conditions.QueueLimitPackets,
 	)
@@ -2478,6 +2495,27 @@ func ValidateTrafficConditions(conditions model.TrafficConditions) error {
 	if conditions.LossPct == 0 && conditions.LossCorrelationPct > 0 {
 		return httputil.NewAppError(http.StatusBadRequest, "loss correlation requires loss")
 	}
+	if math.IsNaN(conditions.ReorderPct) || math.IsInf(conditions.ReorderPct, 0) {
+		return httputil.NewAppError(http.StatusBadRequest, "reorder must be finite")
+	}
+	if conditions.ReorderPct < 0 || conditions.ReorderPct > 100 {
+		return httputil.NewAppError(http.StatusBadRequest, "reorder must be between 0 and 100")
+	}
+	if conditions.ReorderPct > 0 && conditions.DelayMs == 0 {
+		return httputil.NewAppError(http.StatusBadRequest, "reorder requires delay")
+	}
+	if math.IsNaN(conditions.DuplicatePct) || math.IsInf(conditions.DuplicatePct, 0) {
+		return httputil.NewAppError(http.StatusBadRequest, "duplicate must be finite")
+	}
+	if conditions.DuplicatePct < 0 || conditions.DuplicatePct > 100 {
+		return httputil.NewAppError(http.StatusBadRequest, "duplicate must be between 0 and 100")
+	}
+	if math.IsNaN(conditions.CorruptPct) || math.IsInf(conditions.CorruptPct, 0) {
+		return httputil.NewAppError(http.StatusBadRequest, "corrupt must be finite")
+	}
+	if conditions.CorruptPct < 0 || conditions.CorruptPct > 100 {
+		return httputil.NewAppError(http.StatusBadRequest, "corrupt must be between 0 and 100")
+	}
 	if conditions.BandwidthKbit < 0 {
 		return httputil.NewAppError(http.StatusBadRequest, "bandwidth must be non-negative")
 	}
@@ -2489,7 +2527,7 @@ func ValidateTrafficConditions(conditions model.TrafficConditions) error {
 }
 
 func hasTrafficNetemConditions(conditions model.TrafficConditions) bool {
-	return conditions.DelayMs > 0 || conditions.JitterMs > 0 || conditions.LossPct > 0 || conditions.QueueLimitPackets > 0
+	return conditions.DelayMs > 0 || conditions.JitterMs > 0 || conditions.LossPct > 0 || conditions.ReorderPct > 0 || conditions.DuplicatePct > 0 || conditions.CorruptPct > 0 || conditions.QueueLimitPackets > 0
 }
 
 func buildTrafficNetemArgs(conditions model.TrafficConditions) []string {
@@ -2508,6 +2546,15 @@ func buildTrafficNetemArgs(conditions model.TrafficConditions) []string {
 			args = append(args, "loss", loss)
 		}
 	}
+	if conditions.ReorderPct > 0 {
+		args = append(args, "reorder", strconv.FormatFloat(conditions.ReorderPct, 'f', -1, 64)+"%")
+	}
+	if conditions.DuplicatePct > 0 {
+		args = append(args, "duplicate", strconv.FormatFloat(conditions.DuplicatePct, 'f', -1, 64)+"%")
+	}
+	if conditions.CorruptPct > 0 {
+		args = append(args, "corrupt", strconv.FormatFloat(conditions.CorruptPct, 'f', -1, 64)+"%")
+	}
 	if conditions.QueueLimitPackets > 0 {
 		args = append(args, "limit", strconv.Itoa(conditions.QueueLimitPackets))
 	}
@@ -2521,7 +2568,7 @@ func parseTCSetConditions(args []string, current model.TrafficConditions) (model
 	}
 
 	conditions := current
-	seen := make(map[string]struct{}, 7)
+	seen := make(map[string]struct{}, 10)
 
 	for index := 0; index < len(args); {
 		flagName := args[index]
@@ -2571,6 +2618,24 @@ func parseTCSetConditions(args []string, current model.TrafficConditions) (model
 				return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "invalid queue limit value")
 			}
 			conditions.QueueLimitPackets = parsed
+		case "--reorder":
+			parsed, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "invalid reorder value")
+			}
+			conditions.ReorderPct = parsed
+		case "--duplicate":
+			parsed, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "invalid duplicate value")
+			}
+			conditions.DuplicatePct = parsed
+		case "--corrupt":
+			parsed, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "invalid corrupt value")
+			}
+			conditions.CorruptPct = parsed
 		default:
 			return model.TrafficConditions{}, httputil.NewAppError(http.StatusBadRequest, "unsupported tc flag: "+flagName)
 		}
