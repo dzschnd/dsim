@@ -53,14 +53,7 @@ func (h *Handler) CreateLinkHandler(w http.ResponseWriter, r *http.Request) {
 		interfaceAID,
 		interfaceBID,
 	}); syncErr != nil {
-		if rollbackErr := h.service.deleteLink(ctx, link.ID); rollbackErr != nil {
-			slog.Error("Link rollback failed after route sync failure", "link_id", link.ID, "sync_err", syncErr, "rollback_err", rollbackErr)
-			httputil.WriteJSONError(w, http.StatusInternalServerError, "link created, route sync failed, and rollback failed")
-			return
-		}
-
-		httputil.WriteAppError(w, syncErr)
-		return
+		slog.Warn("Route sync failed after link creation", "link_id", link.ID, "err", syncErr)
 	}
 
 	w.WriteHeader(http.StatusCreated)

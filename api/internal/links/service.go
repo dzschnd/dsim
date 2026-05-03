@@ -152,11 +152,11 @@ func (s *Service) CreateLink(ctx context.Context, interfaceAID, interfaceBID str
 	s.repo.SetInterfaceLink(interfaceBID, linkID)
 	s.repo.SetInterfaceRuntime(interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen)
 	s.repo.SetInterfaceRuntime(interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen)
-	if err := s.realizeLinkedInterface(ctx, nodeA, interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen, ifaceA.IPAddr, ifaceA.PrefixLen, ifaceA.Conditions); err != nil {
+	if err := s.realizeLinkedInterface(ctx, nodeA, interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen, ifaceA.IPAddr, ifaceA.PrefixLen, ifaceA.Conditions, ifaceA.AdminDown); err != nil {
 		s.rollbackPersistedLinkCreate(ctx, link)
 		return model.Link{}, err
 	}
-	if err := s.realizeLinkedInterface(ctx, nodeB, interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen, ifaceB.IPAddr, ifaceB.PrefixLen, ifaceB.Conditions); err != nil {
+	if err := s.realizeLinkedInterface(ctx, nodeB, interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen, ifaceB.IPAddr, ifaceB.PrefixLen, ifaceB.Conditions, ifaceB.AdminDown); err != nil {
 		s.rollbackPersistedLinkCreate(ctx, link)
 		return model.Link{}, err
 	}
@@ -254,6 +254,7 @@ func (s *Service) realizeLinkedInterface(
 	logicalIP string,
 	logicalPrefixLen int,
 	conditions model.TrafficConditions,
+	adminDown bool,
 ) error {
 	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
 	if err != nil {
@@ -279,6 +280,19 @@ func (s *Service) realizeLinkedInterface(
 		if err := s.attachSwitchPort(ctx, node, runtimeName); err != nil {
 			return err
 		}
+		linkState := "up"
+		if adminDown {
+			linkState = "down"
+		}
+		if _, err := execInContainerChecked(
+			ctx,
+			s.docker,
+			node.ContainerID,
+			[]string{"ip", "link", "set", runtimeName, linkState},
+			"failed to apply runtime interface link state",
+		); err != nil {
+			return err
+		}
 		return s.applyRuntimeInterfaceConditions(ctx, node.ContainerID, runtimeName, conditions)
 	}
 	if logicalIP != "" && logicalPrefixLen != 0 {
@@ -292,15 +306,20 @@ func (s *Service) realizeLinkedInterface(
 		); err != nil {
 			return err
 		}
-		if _, err := execInContainerChecked(
-			ctx,
-			s.docker,
-			node.ContainerID,
-			[]string{"ip", "link", "set", runtimeName, "up"},
-			"failed to bring runtime interface up",
-		); err != nil {
-			return err
-		}
+	}
+
+	linkState := "up"
+	if adminDown {
+		linkState = "down"
+	}
+	if _, err := execInContainerChecked(
+		ctx,
+		s.docker,
+		node.ContainerID,
+		[]string{"ip", "link", "set", runtimeName, linkState},
+		"failed to apply runtime interface link state",
+	); err != nil {
+		return err
 	}
 
 	return s.applyRuntimeInterfaceConditions(ctx, node.ContainerID, runtimeName, conditions)

@@ -44,7 +44,7 @@ const (
 	httpPortFilePath    = "/var/run/http-server.port"
 	tcpPIDFilePath      = "/var/run/tcp-server.pid"
 	udpPIDFilePath      = "/var/run/udp-server.pid"
-	defaultFlapDownMs   = 500
+	defaultFlapDownMs   = 1000
 	defaultFlapUpMs     = 1000
 	defaultFlapJitterMs = 200
 
@@ -880,7 +880,7 @@ func (s *Service) runCommand(ctx context.Context, nodeID, command string) (comma
 		if node.Type == model.Switch {
 			return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch does not support ip addr")
 		}
-		return s.runIPAddr(command, node), nil
+		return s.runIPAddr(ctx, command, node), nil
 	}
 
 	if node.Type == model.Switch {
@@ -1438,14 +1438,29 @@ func runHelp(command string, nodeType model.NodeType) commandResponse {
 	}
 }
 
-func (s *Service) runIPAddr(command string, node model.Node) commandResponse {
+func (s *Service) runIPAddr(ctx context.Context, command string, node model.Node) commandResponse {
 	lines := make([]string, 0, len(node.Interfaces))
+	isRuntimeUpdatable := node.ContainerID != ""
 	for _, iface := range node.Interfaces {
+		state := "UP"
+		if iface.AdminDown {
+			state = "DOWN"
+		}
+		if isRuntimeUpdatable {
+			if runtimeState, err := s.runtimeInterfaceState(ctx, node, iface); err == nil {
+				if runtimeState == "up" {
+					state = "UP"
+				} else {
+					state = "DOWN"
+				}
+			}
+		}
+
 		if iface.IPAddr == "" || iface.PrefixLen == 0 {
-			lines = append(lines, fmt.Sprintf("%s: unassigned", iface.Name))
+			lines = append(lines, fmt.Sprintf("%s: unassigned %s", iface.Name, state))
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("%s: %s/%d", iface.Name, iface.IPAddr, iface.PrefixLen))
+		lines = append(lines, fmt.Sprintf("%s: %s/%d %s", iface.Name, iface.IPAddr, iface.PrefixLen, state))
 	}
 
 	return commandResponse{

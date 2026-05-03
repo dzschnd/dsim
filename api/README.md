@@ -10,9 +10,9 @@
 
 + Loss corelation
 - Packet reorder/duplication/corruption
-- Unstable cable connection (flapping)
-- Broken NIC
-- Queue overflow - tc limit
++ Unstable cable connection (flapping)
++ Broken NIC
++ Queue overflow - tc limit
 + Blackhole routes
 + Stop validating route rules (can set unavailble routes)
 + Node freeze
