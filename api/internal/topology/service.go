@@ -46,6 +46,7 @@ func (s *service) ExportTopology() (File, error) {
 	for _, node := range nodesSnapshot {
 		exportedNode := Node{
 			ID:       node.ID,
+			Name:     node.Name,
 			Type:     model.NodeTypeName[node.Type],
 			Position: Position{X: node.Position.X, Y: node.Position.Y},
 			Running:  node.Status == model.Running,
@@ -285,6 +286,7 @@ func (s *service) applyNodeConfig(nodeID string, topologyNode Node) error {
 	}
 
 	node.Routes = make([]model.Route, 0, len(topologyNode.Routes))
+	node.Name = topologyNode.Name
 
 	for _, topologyInterface := range topologyNode.Interfaces {
 		found := false

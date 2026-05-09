@@ -8,6 +8,7 @@ export type ApiInterface = {
 
 export type ApiNode = {
 	id: string;
+	name: string;
 	position: TopologyPosition;
 	status: string;
 	type: string;
@@ -62,6 +63,7 @@ export type TopologyRoute = {
 
 export type TopologyNode = {
 	id: string;
+	name: string;
 	type: string;
 	position: TopologyPosition;
 	interfaces: TopologyInterface[];
@@ -205,6 +207,22 @@ export async function updateNodePosition(
 		method: "PATCH",
 		headers: { "Content-Type": "application/json" },
 		body: JSON.stringify(position),
+	});
+
+	if (!res.ok) {
+		throw new Error(await parseApiError(res));
+	}
+}
+
+export async function updateNodeName(
+	baseUrl: string,
+	nodeID: string,
+	name: string,
+): Promise<void> {
+	const res = await fetch(`${baseUrl}/api/v1/nodes/${nodeID}/name`, {
+		method: "PATCH",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ name }),
 	});
 
 	if (!res.ok) {

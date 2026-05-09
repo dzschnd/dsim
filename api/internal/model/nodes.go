@@ -8,7 +8,7 @@ import (
 
 type Node struct {
 	ID          string      `json:"id"`
-	Name        string      `json:"-"`
+	Name        string      `json:"name"`
 	Position    Position    `json:"position"`
 	Status      NodeState   `json:"status"`
 	Type        NodeType    `json:"type"`

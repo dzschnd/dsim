@@ -225,6 +225,18 @@ func (s *Service) UpdateNodePosition(ctx context.Context, nodeID string, positio
 	return nil
 }
 
+func (s *Service) UpdateNodeName(ctx context.Context, nodeID, name string) error {
+	_ = ctx
+
+	if nodeID == "" {
+		return httputil.NewAppError(http.StatusBadRequest, "node id required")
+	}
+	if !s.repo.UpdateNodeName(nodeID, name) {
+		return httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+	return nil
+}
+
 func (s *Service) deleteNode(ctx context.Context, nodeID string) error {
 	if nodeID == "" {
 		return httputil.NewAppError(http.StatusBadRequest, "node id required")

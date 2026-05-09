@@ -31,6 +31,10 @@ type updateNodePositionRequest struct {
 	Y float64 `json:"y"`
 }
 
+type updateNodeNameRequest struct {
+	Name string `json:"name"`
+}
+
 type commandRequest struct {
 	Command string `json:"command"`
 }
@@ -114,6 +118,25 @@ func (h *Handler) UpdateNodePositionHandler(w http.ResponseWriter, r *http.Reque
 	}
 
 	if err := h.service.UpdateNodePosition(ctx, nodeID, model.Position{X: req.X, Y: req.Y}); err != nil {
+		httputil.WriteAppError(w, err)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) UpdateNodeNameHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	nodeID := strings.TrimSpace(r.PathValue("id"))
+
+	var req updateNodeNameRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		httputil.WriteJSONError(w, http.StatusBadRequest, "invalid name request")
+		return
+	}
+
+	if err := h.service.UpdateNodeName(ctx, nodeID, req.Name); err != nil {
 		httputil.WriteAppError(w, err)
 		return
 	}

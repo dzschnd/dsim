@@ -7,7 +7,8 @@ import {
 import type { CSSProperties } from "react";
 
 const NODE_WIDTH = 160;
-const ENDPOINT_LABEL_DISTANCE = NODE_WIDTH / 2;
+const NODE_HEIGHT = 118;
+const LABEL_GAP = 6;
 
 export type InterfaceLabelEdgeData = {
 	interfaceAId?: string;
@@ -57,6 +58,17 @@ function pointAlongLine(
 	};
 }
 
+function distanceToNodeEdge(dx: number, dy: number): number {
+	const halfW = NODE_WIDTH / 2;
+	const halfH = NODE_HEIGHT / 2;
+	const adx = Math.abs(dx);
+	const ady = Math.abs(dy);
+	if (adx === 0 && ady === 0) return halfW + LABEL_GAP;
+	const tx = adx === 0 ? Number.POSITIVE_INFINITY : halfW / adx;
+	const ty = ady === 0 ? Number.POSITIVE_INFINITY : halfH / ady;
+	return Math.min(tx, ty) * Math.hypot(dx, dy) + LABEL_GAP;
+}
+
 export function InterfaceLabelEdge({
 	id,
 	sourceX,
@@ -67,30 +79,12 @@ export function InterfaceLabelEdge({
 	markerEnd,
 	data,
 }: EdgeProps<InterfaceLabelEdgeData>) {
-	const adjustedSourceY = sourceY + 8;
-	const adjustedTargetY = targetY + 8;
-	const [edgePath] = getStraightPath({
-		sourceX,
-		sourceY: adjustedSourceY,
-		targetX,
-		targetY: adjustedTargetY,
-	});
-	const sourceLabelPoint = pointAlongLine(
-		sourceX,
-		adjustedSourceY,
-		targetX,
-		adjustedTargetY,
-		ENDPOINT_LABEL_DISTANCE,
-		"source",
-	);
-	const targetLabelPoint = pointAlongLine(
-		sourceX,
-		adjustedSourceY,
-		targetX,
-		adjustedTargetY,
-		ENDPOINT_LABEL_DISTANCE,
-		"target",
-	);
+	const [edgePath] = getStraightPath({ sourceX, sourceY, targetX, targetY });
+	const dx = targetX - sourceX;
+	const dy = targetY - sourceY;
+	const edgeDistance = distanceToNodeEdge(dx, dy);
+	const sourceLabelPoint = pointAlongLine(sourceX, sourceY, targetX, targetY, edgeDistance, "source");
+	const targetLabelPoint = pointAlongLine(sourceX, sourceY, targetX, targetY, edgeDistance, "target");
 
 	return (
 		<>

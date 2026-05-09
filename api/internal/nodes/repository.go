@@ -77,6 +77,19 @@ func (r *repository) UpdateNodePosition(id string, position model.Position) bool
 	return true
 }
 
+func (r *repository) UpdateNodeName(id, name string) bool {
+	r.store.Mu.Lock()
+	defer r.store.Mu.Unlock()
+
+	node, ok := r.store.Nodes[id]
+	if !ok {
+		return false
+	}
+	node.Name = name
+	r.store.Nodes[id] = node
+	return true
+}
+
 func (r *repository) UpdateInterfaceAddress(nodeID, interfaceName, ipAddr string, prefixLen int) bool {
 	r.store.Mu.Lock()
 	defer r.store.Mu.Unlock()

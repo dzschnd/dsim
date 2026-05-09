@@ -7,9 +7,7 @@ type SideHandlesProps = {
 	nodeType: string;
 };
 
-const HOST_HANDLE_TOP_PERCENT = ((196 - 56) / 388) * 100;
-
-export function SideHandles({ currentNodeId, connectionSourceNodeId, nodeType }: SideHandlesProps) {
+export function SideHandles({ currentNodeId, connectionSourceNodeId, nodeType: _nodeType }: SideHandlesProps) {
 	const updateNodeInternals = useUpdateNodeInternals();
 	const isConnecting = connectionSourceNodeId !== "";
 	const isSourceNode = isConnecting && connectionSourceNodeId === currentNodeId;
@@ -21,13 +19,11 @@ export function SideHandles({ currentNodeId, connectionSourceNodeId, nodeType }:
 	const sourceClass = isConnecting && !isSourceNode
 		? `${sharedClass} !pointer-events-none !z-0`
 		: `${sharedClass} !z-20`;
-	const handleStyle = {
-		top: nodeType === "host" ? `${HOST_HANDLE_TOP_PERCENT}%` : "50%",
-	};
+	const handleStyle = { top: "50%" };
 
 	useEffect(() => {
 		updateNodeInternals(currentNodeId);
-	}, [currentNodeId, handleStyle.top, updateNodeInternals]);
+	}, [currentNodeId, updateNodeInternals]);
 
 	return (
 		<>
