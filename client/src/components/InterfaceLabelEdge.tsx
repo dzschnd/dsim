@@ -17,6 +17,9 @@ export type InterfaceLabelEdgeData = {
 	interfaceBId?: string;
 	interfaceBName: string;
 	interfaceBIP?: string;
+	flowAToB?: boolean;
+	flowBToA?: boolean;
+	flowReduced?: boolean;
 };
 
 function endpointLabelStyle(x: number, y: number): CSSProperties {
@@ -80,15 +83,63 @@ export function InterfaceLabelEdge({
 	data,
 }: EdgeProps<InterfaceLabelEdgeData>) {
 	const [edgePath] = getStraightPath({ sourceX, sourceY, targetX, targetY });
+	const [reverseEdgePath] = getStraightPath({ sourceX: targetX, sourceY: targetY, targetX: sourceX, targetY: sourceY });
 	const dx = targetX - sourceX;
 	const dy = targetY - sourceY;
 	const edgeDistance = distanceToNodeEdge(dx, dy);
 	const sourceLabelPoint = pointAlongLine(sourceX, sourceY, targetX, targetY, edgeDistance, "source");
 	const targetLabelPoint = pointAlongLine(sourceX, sourceY, targetX, targetY, edgeDistance, "target");
+	const arrowCount = data?.flowReduced ? 2 : 7;
+	const arrowDurationSec = 2;
+	const arrowPoints = "-6,-4 6,0 -6,4 -2,0";
 
 	return (
 		<>
 			<BaseEdge id={id} path={edgePath} style={style} markerEnd={markerEnd} />
+			{data?.flowAToB ? (
+				<g>
+					<path d={edgePath} stroke="none" fill="none" />
+					{Array.from({ length: arrowCount }).map((_, index) => (
+						<polygon
+							key={`ab-${id}-${index}`}
+							points={arrowPoints}
+							fill="#22c55e"
+							stroke="#ffffff"
+							strokeWidth="1.1"
+						>
+							<animateMotion
+								dur={`${arrowDurationSec}s`}
+								begin={`${-(arrowDurationSec / arrowCount) * index}s`}
+								repeatCount="indefinite"
+								rotate="auto"
+								path={edgePath}
+							/>
+						</polygon>
+					))}
+				</g>
+			) : null}
+			{data?.flowBToA ? (
+				<g>
+					<path d={reverseEdgePath} stroke="none" fill="none" />
+					{Array.from({ length: arrowCount }).map((_, index) => (
+						<polygon
+							key={`ba-${id}-${index}`}
+							points={arrowPoints}
+							fill="#16a34a"
+							stroke="#ffffff"
+							strokeWidth="1.1"
+						>
+							<animateMotion
+								dur={`${arrowDurationSec}s`}
+								begin={`${-(arrowDurationSec / arrowCount) * index}s`}
+								repeatCount="indefinite"
+								rotate="auto"
+								path={reverseEdgePath}
+							/>
+						</polygon>
+					))}
+				</g>
+			) : null}
 			<EdgeLabelRenderer>
 				<div
 					style={endpointLabelStyle(sourceLabelPoint.x, sourceLabelPoint.y)}

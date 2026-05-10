@@ -10,6 +10,7 @@ import (
 	runtimesync "github.com/dzschnd/dsim/internal/docker"
 	"github.com/dzschnd/dsim/internal/httputil"
 	"github.com/dzschnd/dsim/internal/store"
+	"golang.org/x/net/websocket"
 )
 
 type Handler struct {
@@ -21,6 +22,16 @@ type Handler struct {
 type createLinkRequest struct {
 	InterfaceAID string `json:"interfaceAId"`
 	InterfaceBID string `json:"interfaceBId"`
+}
+
+type linkActivityResponse struct {
+	Activities []linkDirectionalActivity `json:"activities"`
+}
+
+type linkDirectionalActivity struct {
+	LinkID string `json:"linkId"`
+	AToB   bool   `json:"aToB"`
+	BToA   bool   `json:"bToA"`
 }
 
 func NewHandler(docker *client.Client, store *store.Store) *Handler {
@@ -80,4 +91,37 @@ func (h *Handler) DeleteLinkHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) ListLinkActivityHandler(w http.ResponseWriter, r *http.Request) {
+	activities, err := h.service.listDirectionalActivity()
+	if err != nil {
+		httputil.WriteAppError(w, err)
+		return
+	}
+
+	responseItems := make([]linkDirectionalActivity, 0, len(activities))
+	for _, item := range activities {
+		responseItems = append(responseItems, linkDirectionalActivity{
+			LinkID: item.LinkID,
+			AToB:   item.AToB,
+			BToA:   item.BToA,
+		})
+	}
+	_ = json.NewEncoder(w).Encode(linkActivityResponse{Activities: responseItems})
+}
+
+func (h *Handler) LinkActivityWSHandler(w http.ResponseWriter, r *http.Request) {
+	websocket.Handler(func(conn *websocket.Conn) {
+		defer conn.Close()
+
+		events, unsubscribe := h.service.SubscribeLinkActivity()
+		defer unsubscribe()
+
+		for event := range events {
+			if err := websocket.JSON.Send(conn, event); err != nil {
+				return
+			}
+		}
+	}).ServeHTTP(w, r)
 }

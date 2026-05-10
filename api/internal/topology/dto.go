@@ -14,7 +14,7 @@ type Node struct {
 	Position   Position    `json:"position"`
 	Interfaces []Interface `json:"interfaces"`
 	Routes     []Route     `json:"routes"`
-	Running    bool        `json:"running"`
+	Running    bool        `json:"running,omitempty"`
 }
 
 type Position struct {

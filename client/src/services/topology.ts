@@ -47,6 +47,25 @@ export type ApiLink = {
 	createdAt: string;
 };
 
+export type ApiLinkActivity = {
+	activities: {
+		linkId: string;
+		aToB: boolean;
+		bToA: boolean;
+	}[];
+};
+
+export type ApiLinkActivityStreamMessage = {
+	type: "snapshot" | "patch";
+	upserts: {
+		linkId: string;
+		aToB: boolean;
+		bToA: boolean;
+	}[];
+	removals: string[];
+	ts: string;
+};
+
 type ApiError = {
 	error: string;
 };
@@ -65,6 +84,10 @@ export type ApiCommandResponse = {
 	stdout: string;
 	stderr: string;
 	exitCode: number;
+};
+
+export type ApiToggleAllNodesResponse = {
+	action: "start" | "stop" | "none";
 };
 
 export type TopologyPosition = {
@@ -160,6 +183,25 @@ export async function fetchTopology(baseUrl: string): Promise<{
 		nodes: (await nodesRes.json()) as ApiNode[],
 		links: (await linksRes.json()) as ApiLink[],
 	};
+}
+
+export async function fetchLinkActivity(baseUrl: string): Promise<ApiLinkActivity> {
+	const res = await fetch(`${baseUrl}/api/v1/links/activity`);
+
+	if (!res.ok) {
+		throw new Error(await parseApiError(res));
+	}
+
+	return (await res.json()) as ApiLinkActivity;
+}
+
+export function createLinkActivityWebSocket(baseUrl: string): WebSocket {
+	const origin = window.location.origin;
+	const resolvedBase = new URL(baseUrl || origin, origin);
+	const endpoint = `${resolvedBase.toString().replace(/\/$/, "")}/api/v1/links/activity/ws`;
+	const wsUrl = new URL(endpoint);
+	wsUrl.protocol = wsUrl.protocol === "https:" ? "wss:" : "ws:";
+	return new WebSocket(wsUrl.toString());
 }
 
 export async function fetchNode(baseUrl: string, nodeID: string): Promise<ApiNode> {
@@ -280,6 +322,18 @@ export async function stopNode(baseUrl: string, nodeID: string): Promise<void> {
 	if (!res.ok) {
 		throw new Error(await parseApiError(res));
 	}
+}
+
+export async function toggleAllNodes(baseUrl: string): Promise<ApiToggleAllNodesResponse> {
+	const res = await fetch(`${baseUrl}/api/v1/nodes/toggle-all`, {
+		method: "POST",
+	});
+
+	if (!res.ok) {
+		throw new Error(await parseApiError(res));
+	}
+
+	return (await res.json()) as ApiToggleAllNodesResponse;
 }
 
 export async function createLink(

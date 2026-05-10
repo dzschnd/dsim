@@ -2,9 +2,12 @@ module github.com/dzschnd/dsim
 
 go 1.25.5
 
-require github.com/joho/godotenv v1.5.1
+require (
+	github.com/joho/godotenv v1.5.1
+	golang.org/x/net v0.49.0
+)
 
-require github.com/lmittmann/tint v1.1.3 // indirect
+require github.com/lmittmann/tint v1.1.3
 
 require (
 	github.com/Microsoft/go-winio v0.4.21 // indirect

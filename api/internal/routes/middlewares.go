@@ -1,12 +1,15 @@
 package routes
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -26,6 +29,10 @@ func corsHeader(next http.Handler) http.Handler {
 
 func jsonHeader(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+			next.ServeHTTP(w, r)
+			return
+		}
 		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		next.ServeHTTP(w, r)
 	})
@@ -35,6 +42,10 @@ type statusRecorder struct {
 	w      http.ResponseWriter
 	status int
 	body   bytes.Buffer
+}
+
+func (r *statusRecorder) Unwrap() http.ResponseWriter {
+	return r.w
 }
 
 func (r *statusRecorder) Write(b []byte) (int, error) {
@@ -47,6 +58,20 @@ func (r *statusRecorder) Header() http.Header {
 func (r *statusRecorder) WriteHeader(code int) {
 	r.status = code
 	r.w.WriteHeader(code)
+}
+
+func (r *statusRecorder) Flush() {
+	if flusher, ok := r.w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+}
+
+func (r *statusRecorder) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	hijacker, ok := r.w.(http.Hijacker)
+	if !ok {
+		return nil, nil, fmt.Errorf("response writer does not support hijacking")
+	}
+	return hijacker.Hijack()
 }
 
 func requestLogger(next http.Handler) http.Handler {

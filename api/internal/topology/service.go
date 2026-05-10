@@ -49,8 +49,10 @@ func (s *service) ExportTopology() (File, error) {
 			Name:     node.Name,
 			Type:     model.NodeTypeName[node.Type],
 			Position: Position{X: node.Position.X, Y: node.Position.Y},
-			Running:  node.Status == model.Running,
 			Routes:   make([]Route, 0, len(node.Routes)),
+		}
+		if exportedNode.Name == "" {
+			exportedNode.Name = node.ID
 		}
 
 		exportedNode.Interfaces = make([]Interface, 0, len(node.Interfaces))
@@ -143,8 +145,6 @@ func (s *service) importTopologyUnsafe(ctx context.Context, file File) error {
 	}
 
 	nodeIDByFileID := make(map[string]string, len(file.Nodes))
-	runningNodeIDs := make([]string, 0, len(file.Nodes))
-
 	for _, topologyNode := range file.Nodes {
 		createdNode, err := s.nodeService.CreateNode(ctx, topologyNode.Type, model.Position{
 			X: topologyNode.Position.X,
@@ -159,9 +159,6 @@ func (s *service) importTopologyUnsafe(ctx context.Context, file File) error {
 		}
 
 		nodeIDByFileID[topologyNode.ID] = createdNode.ID
-		if topologyNode.Running {
-			runningNodeIDs = append(runningNodeIDs, createdNode.ID)
-		}
 	}
 
 	for _, topologyLink := range file.Links {
@@ -188,11 +185,6 @@ func (s *service) importTopologyUnsafe(ctx context.Context, file File) error {
 		}
 	}
 
-	for _, nodeID := range runningNodeIDs {
-		if err := s.nodeService.StartNode(ctx, nodeID); err != nil {
-			return err
-		}
-	}
 	if err := runtimesync.SyncAllRoutes(ctx, s.docker, s.store); err != nil {
 		return err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"net/netip"
 	"sync"
 
@@ -20,6 +21,9 @@ type Store struct {
 	InterfaceOwnerIndex map[string]string
 	IsolatedSubnets     *SubnetAllocator
 	LinkSubnets         *SubnetAllocator
+	hostNameSeq         int
+	switchNameSeq       int
+	routerNameSeq       int
 }
 
 func NewStore(ctx context.Context, docker *client.Client) (*Store, error) {
@@ -101,4 +105,23 @@ func (s *Store) LinksSnapshot() []model.Link {
 	}
 
 	return links
+}
+
+func (s *Store) NextDefaultNodeName(nodeType model.NodeType) string {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
+	switch nodeType {
+	case model.Host:
+		s.hostNameSeq++
+		return "h" + fmt.Sprintf("%d", s.hostNameSeq)
+	case model.Switch:
+		s.switchNameSeq++
+		return "s" + fmt.Sprintf("%d", s.switchNameSeq)
+	case model.Router:
+		s.routerNameSeq++
+		return "r" + fmt.Sprintf("%d", s.routerNameSeq)
+	default:
+		return ""
+	}
 }

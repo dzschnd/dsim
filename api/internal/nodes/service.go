@@ -51,9 +51,10 @@ const (
 	minIperfUDPPacketLength = 16
 	maxIperfUDPPacketLength = 65507
 
-	httpDefaultPort = 8080
-	tcpDefaultPort  = 3000
-	udpDefaultPort  = 4000
+	httpDefaultPort               = 8080
+	tcpDefaultPort                = 3000
+	udpDefaultPort                = 4000
+	maxSyncCommandDurationSeconds = 600
 )
 
 var iperfBitratePattern = regexp.MustCompile(`^[1-9][0-9]*(\.[0-9]+)?[KMGkmg]?$`)
@@ -186,7 +187,7 @@ func (s *Service) CreateNode(ctx context.Context, reqNodeType string, position m
 
 	node := model.Node{
 		ID:          nodeID,
-		Name:        "",
+		Name:        s.repo.store.NextDefaultNodeName(nodeType),
 		Position:    position,
 		Status:      model.Idle,
 		Type:        nodeType,
@@ -751,6 +752,40 @@ func (s *Service) stopNode(ctx context.Context, nodeID string) error {
 
 	s.repo.UpdateNodeStatus(nodeID, model.Idle)
 	return nil
+}
+
+func (s *Service) ToggleAllNodes(ctx context.Context) (string, error) {
+	nodes, err := s.getNodes()
+	if err != nil {
+		return "", err
+	}
+	if len(nodes) == 0 {
+		return "none", nil
+	}
+
+	startAll := false
+	for _, node := range nodes {
+		if node.Status != model.Running && node.Status != model.Frozen {
+			startAll = true
+			break
+		}
+	}
+
+	if startAll {
+		for _, node := range nodes {
+			if err := s.StartNode(ctx, node.ID); err != nil {
+				return "", err
+			}
+		}
+		return "start", nil
+	}
+
+	for _, node := range nodes {
+		if err := s.stopNode(ctx, node.ID); err != nil {
+			return "", err
+		}
+	}
+	return "stop", nil
 }
 
 func execInContainer(ctx context.Context, docker *client.Client, containerID string, execCmd []string) (string, string, int, error) {
@@ -1574,6 +1609,9 @@ func (s *Service) runIperfUDP(ctx context.Context, command string, node model.No
 	if _, err := netip.ParseAddr(targetIP); err != nil {
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid target ip")
 	}
+	if err := validateIperfUDPSyncDuration(fields[3:]); err != nil {
+		return commandResponse{}, err
+	}
 	iperfArgs, err := parseIperfClientArgs(fields[3:], true)
 	if err != nil {
 		return commandResponse{}, err
@@ -1590,6 +1628,79 @@ func (s *Service) runIperfUDP(ctx context.Context, command string, node model.No
 	}
 	response.Stderr = sanitizeIperfError(response.Stderr)
 	return response, nil
+}
+
+func validateIperfUDPSyncDuration(args []string) error {
+	var bytesLimit uint64
+	var hasBytes bool
+	bitrateBps := 1_000_000.0
+	for index := 0; index < len(args); index++ {
+		if !strings.HasPrefix(args[index], "--") {
+			return httputil.NewAppError(http.StatusBadRequest, "invalid iperf syntax")
+		}
+		flagName := args[index]
+		if index+1 >= len(args) {
+			return httputil.NewAppError(http.StatusBadRequest, "missing iperf flag value for "+flagName)
+		}
+		value := args[index+1]
+		switch flagName {
+		case "--bytes":
+			parsed, err := strconv.ParseUint(value, 10, 64)
+			if err != nil || parsed == 0 {
+				return httputil.NewAppError(http.StatusBadRequest, "bytes must be a positive integer")
+			}
+			bytesLimit = parsed
+			hasBytes = true
+		case "--bitrate":
+			parsed, err := parseIperfBitrateBps(value)
+			if err != nil {
+				return err
+			}
+			bitrateBps = parsed
+		}
+		index++
+	}
+	if !hasBytes || bitrateBps <= 0 {
+		return nil
+	}
+	estimatedSeconds := float64(bytesLimit*8) / bitrateBps
+	if estimatedSeconds <= maxSyncCommandDurationSeconds {
+		return nil
+	}
+	return httputil.NewAppError(
+		http.StatusBadRequest,
+		fmt.Sprintf(
+			"estimated runtime %.0fs exceeds %ds synchronous limit; use --time <= %d or lower --bytes",
+			math.Ceil(estimatedSeconds),
+			maxSyncCommandDurationSeconds,
+			maxSyncCommandDurationSeconds,
+		),
+	)
+}
+
+func parseIperfBitrateBps(value string) (float64, error) {
+	if !iperfBitratePattern.MatchString(value) {
+		return 0, httputil.NewAppError(http.StatusBadRequest, "bitrate must be a positive number with optional K, M, or G suffix")
+	}
+	suffix := value[len(value)-1]
+	multiplier := 1.0
+	numberPart := value
+	switch suffix {
+	case 'k', 'K':
+		numberPart = value[:len(value)-1]
+		multiplier = 1_000
+	case 'm', 'M':
+		numberPart = value[:len(value)-1]
+		multiplier = 1_000_000
+	case 'g', 'G':
+		numberPart = value[:len(value)-1]
+		multiplier = 1_000_000_000
+	}
+	magnitude, err := strconv.ParseFloat(numberPart, 64)
+	if err != nil || magnitude <= 0 {
+		return 0, httputil.NewAppError(http.StatusBadRequest, "bitrate must be a positive number with optional K, M, or G suffix")
+	}
+	return magnitude * multiplier, nil
 }
 
 func (s *Service) runIperfServerStart(ctx context.Context, command string, node model.Node) (commandResponse, error) {

@@ -46,6 +46,10 @@ type commandResponse struct {
 	ExitCode int    `json:"exitCode"`
 }
 
+type toggleAllNodesResponse struct {
+	Action string `json:"action"`
+}
+
 func NewHandler(docker *client.Client, store *store.Store) *Handler {
 	return &Handler{service: NewService(docker, store)}
 }
@@ -166,6 +170,18 @@ func (h *Handler) StopNodeHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *Handler) ToggleAllNodesHandler(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	action, err := h.service.ToggleAllNodes(ctx)
+	if err != nil {
+		httputil.WriteAppError(w, err)
+		return
+	}
+
+	_ = json.NewEncoder(w).Encode(toggleAllNodesResponse{Action: action})
 }
 
 func (h *Handler) CLIHandler(w http.ResponseWriter, r *http.Request) {

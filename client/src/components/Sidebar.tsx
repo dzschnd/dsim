@@ -84,6 +84,17 @@ type SidebarProps = {
 	onRequestDeleteNode: () => void;
 	onDeleteLink: () => void;
 	onToggleCollapse: () => void;
+	nodeSidebarStateByNodeId: Record<string, NodeSidebarViewState>;
+	onNodeSidebarStateChange: (nodeId: string, next: NodeSidebarViewState) => void;
+};
+
+export type NodeSidebarViewState = {
+	interfacesCollapsed: boolean;
+	routesCollapsed: boolean;
+	serversCollapsed: boolean;
+	sendDataCollapsed: boolean;
+	recentCollapsed: boolean;
+	actionsCollapsed: boolean;
 };
 
 type RouteRule = {
@@ -492,6 +503,8 @@ function NodePanel({
 	onRequestDeleteNode,
 	onCollapse,
 	onRenameNode,
+	nodeSidebarState,
+	onNodeSidebarStateChange,
 }: {
 	node: Node<SquareNodeData>;
 	nodes: Node<SquareNodeData>[];
@@ -535,18 +548,20 @@ function NodePanel({
 	onRequestDeleteNode: () => void;
 	onCollapse: () => void;
 	onRenameNode: (nodeId: string, displayName: string) => void;
+	nodeSidebarState: NodeSidebarViewState;
+	onNodeSidebarStateChange: (nodeId: string, next: NodeSidebarViewState) => void;
 }) {
 	const { data } = node;
 	const nodeBusy = data.isBusy;
 	const isRunning = data.status === "running" || data.status === "frozen";
 	const canControlNodeNetworking = data.status === "running";
 	const isFrozen = data.status === "frozen";
-	const [interfacesCollapsed, setInterfacesCollapsed] = useState(false);
-	const [routesCollapsed, setRoutesCollapsed] = useState(true);
-	const [serversCollapsed, setServersCollapsed] = useState(true);
-	const [sendDataCollapsed, setSendDataCollapsed] = useState(true);
-	const [recentCollapsed, setRecentCollapsed] = useState(true);
-	const [actionsCollapsed, setActionsCollapsed] = useState(true);
+	const [interfacesCollapsed, setInterfacesCollapsed] = useState(nodeSidebarState.interfacesCollapsed);
+	const [routesCollapsed, setRoutesCollapsed] = useState(nodeSidebarState.routesCollapsed);
+	const [serversCollapsed, setServersCollapsed] = useState(nodeSidebarState.serversCollapsed);
+	const [sendDataCollapsed, setSendDataCollapsed] = useState(nodeSidebarState.sendDataCollapsed);
+	const [recentCollapsed, setRecentCollapsed] = useState(nodeSidebarState.recentCollapsed);
+	const [actionsCollapsed, setActionsCollapsed] = useState(nodeSidebarState.actionsCollapsed);
 	const [editingName, setEditingName] = useState(false);
 	const [draftName, setDraftName] = useState(data.displayName);
 	const [routeDestination, setRouteDestination] = useState("");
@@ -572,6 +587,35 @@ function NodePanel({
 	const [iperfBitrate, setIperfBitrate] = useState("");
 	const [iperfPacketLength, setIperfPacketLength] = useState("");
 	useEffect(() => setDraftName(data.displayName), [data.displayName]);
+	useEffect(() => {
+		setInterfacesCollapsed(nodeSidebarState.interfacesCollapsed);
+		setRoutesCollapsed(nodeSidebarState.routesCollapsed);
+		setServersCollapsed(nodeSidebarState.serversCollapsed);
+		setSendDataCollapsed(nodeSidebarState.sendDataCollapsed);
+		setRecentCollapsed(nodeSidebarState.recentCollapsed);
+		setActionsCollapsed(nodeSidebarState.actionsCollapsed);
+	}, [data.nodeId, nodeSidebarState]);
+
+	useEffect(() => {
+		onNodeSidebarStateChange(data.nodeId, {
+			interfacesCollapsed,
+			routesCollapsed,
+			serversCollapsed,
+			sendDataCollapsed,
+			recentCollapsed,
+			actionsCollapsed,
+		});
+	}, [
+		actionsCollapsed,
+		data.nodeId,
+		interfacesCollapsed,
+		onNodeSidebarStateChange,
+		recentCollapsed,
+		routesCollapsed,
+		sendDataCollapsed,
+		serversCollapsed,
+	]);
+
 	useEffect(() => {
 		setServerStatus({ iperf: "stopped", http: "stopped", tcp: "stopped", udp: "stopped" });
 	}, [data.nodeId]);
@@ -1362,6 +1406,8 @@ export function Sidebar({
 	onRequestDeleteNode,
 	onDeleteLink,
 	onToggleCollapse,
+	nodeSidebarStateByNodeId,
+	onNodeSidebarStateChange,
 }: SidebarProps) {
 	const hasSelection = selectedNode !== null || selectedEdge !== null;
 	const hidden = !hasSelection && isCollapsed;
@@ -1402,6 +1448,15 @@ export function Sidebar({
 					onRequestDeleteNode={onRequestDeleteNode}
 					onCollapse={onToggleCollapse}
 					onRenameNode={onRenameNode}
+					nodeSidebarState={nodeSidebarStateByNodeId[selectedNode.id] ?? {
+						interfacesCollapsed: false,
+						routesCollapsed: true,
+						serversCollapsed: true,
+						sendDataCollapsed: true,
+						recentCollapsed: true,
+						actionsCollapsed: true,
+					}}
+					onNodeSidebarStateChange={onNodeSidebarStateChange}
 				/>
 			) : selectedEdge ? (
 				<EdgePanel

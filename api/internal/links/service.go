@@ -8,8 +8,10 @@ import (
 	"log/slog"
 	"net/http"
 	"net/netip"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
@@ -24,7 +26,37 @@ import (
 type Service struct {
 	docker *client.Client
 	repo   *Repository
+
+	mu sync.Mutex
+
+	stats        map[string]ifaceStatsSample
+	activityByID map[string]LinkDirectionalActivity
+	subscribers  map[int]chan LinkActivityEvent
+	nextSubID    int
 }
+
+type ifaceStatsSample struct {
+	rx uint64
+	tx uint64
+}
+
+type LinkDirectionalActivity struct {
+	LinkID string `json:"linkId"`
+	AToB   bool   `json:"aToB"`
+	BToA   bool   `json:"bToA"`
+}
+
+type LinkActivityEvent struct {
+	Type     string                    `json:"type"`
+	Upserts  []LinkDirectionalActivity `json:"upserts"`
+	Removals []string                  `json:"removals"`
+	TS       time.Time                 `json:"ts"`
+}
+
+const (
+	linkActivityMinStep = 1
+	linkSampleInterval  = time.Second
+)
 
 type runtimeAddrInfo struct {
 	Local     string `json:"local"`
@@ -37,7 +69,15 @@ type runtimeInterfaceInfo struct {
 }
 
 func NewService(docker *client.Client, s *store.Store) *Service {
-	return &Service{docker: docker, repo: NewRepository(s)}
+	svc := &Service{
+		docker:       docker,
+		repo:         NewRepository(s),
+		stats:        make(map[string]ifaceStatsSample),
+		activityByID: make(map[string]LinkDirectionalActivity),
+		subscribers:  make(map[int]chan LinkActivityEvent),
+	}
+	go svc.runActivitySampler()
+	return svc
 }
 
 func (s *Service) CreateLink(ctx context.Context, interfaceAID, interfaceBID string) (model.Link, error) {
@@ -166,6 +206,166 @@ func (s *Service) CreateLink(ctx context.Context, interfaceAID, interfaceBID str
 
 func (s *Service) listLinks() ([]model.Link, error) {
 	return s.repo.ListLinks(), nil
+}
+
+func (s *Service) runActivitySampler() {
+	ticker := time.NewTicker(linkSampleInterval)
+	defer ticker.Stop()
+
+	s.sampleAndBroadcast(context.Background())
+	for range ticker.C {
+		s.sampleAndBroadcast(context.Background())
+	}
+}
+
+func (s *Service) sampleAndBroadcast(ctx context.Context) {
+	upserts, removals := s.sampleActivityPatch(ctx)
+	if len(upserts) == 0 && len(removals) == 0 {
+		return
+	}
+	s.broadcast(LinkActivityEvent{
+		Type:     "patch",
+		Upserts:  upserts,
+		Removals: removals,
+		TS:       time.Now().UTC(),
+	})
+}
+
+func (s *Service) sampleActivityPatch(ctx context.Context) ([]LinkDirectionalActivity, []string) {
+	links := s.repo.ListLinks()
+	nextByID := make(map[string]LinkDirectionalActivity, len(links))
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, link := range links {
+		aToBDelta, aToB := s.sampleInterfaceDeltaLocked(ctx, link.InterfaceAID)
+		bToADelta, bToA := s.sampleInterfaceDeltaLocked(ctx, link.InterfaceBID)
+		if aToB && aToBDelta >= linkActivityMinStep || bToA && bToADelta >= linkActivityMinStep {
+			nextByID[link.ID] = LinkDirectionalActivity{
+				LinkID: link.ID,
+				AToB:   aToB && aToBDelta >= linkActivityMinStep,
+				BToA:   bToA && bToADelta >= linkActivityMinStep,
+			}
+		}
+	}
+	for key := range s.stats {
+		ifaceID, _, found := strings.Cut(key, "|")
+		if !found {
+			delete(s.stats, key)
+			continue
+		}
+		if _, _, ok := s.repo.GetNodeByInterface(ifaceID); !ok {
+			delete(s.stats, key)
+		}
+	}
+
+	upserts := make([]LinkDirectionalActivity, 0)
+	for linkID, next := range nextByID {
+		prev, exists := s.activityByID[linkID]
+		if !exists || prev.AToB != next.AToB || prev.BToA != next.BToA {
+			upserts = append(upserts, next)
+		}
+	}
+	removals := make([]string, 0)
+	for linkID := range s.activityByID {
+		if _, exists := nextByID[linkID]; !exists {
+			removals = append(removals, linkID)
+		}
+	}
+	sort.Slice(upserts, func(i, j int) bool { return upserts[i].LinkID < upserts[j].LinkID })
+	sort.Strings(removals)
+	s.activityByID = nextByID
+	return upserts, removals
+}
+
+func (s *Service) listDirectionalActivity() ([]LinkDirectionalActivity, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	activities := make([]LinkDirectionalActivity, 0, len(s.activityByID))
+	for _, activity := range s.activityByID {
+		activities = append(activities, activity)
+	}
+	sort.Slice(activities, func(i, j int) bool { return activities[i].LinkID < activities[j].LinkID })
+	return activities, nil
+}
+
+func (s *Service) SubscribeLinkActivity() (<-chan LinkActivityEvent, func()) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	subID := s.nextSubID
+	s.nextSubID++
+
+	ch := make(chan LinkActivityEvent, 8)
+	s.subscribers[subID] = ch
+
+	upserts := make([]LinkDirectionalActivity, 0, len(s.activityByID))
+	for _, activity := range s.activityByID {
+		upserts = append(upserts, activity)
+	}
+	sort.Slice(upserts, func(i, j int) bool { return upserts[i].LinkID < upserts[j].LinkID })
+	ch <- LinkActivityEvent{
+		Type:     "snapshot",
+		Upserts:  upserts,
+		Removals: []string{},
+		TS:       time.Now().UTC(),
+	}
+
+	unsubscribe := func() {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if sub, ok := s.subscribers[subID]; ok {
+			delete(s.subscribers, subID)
+			close(sub)
+		}
+	}
+	return ch, unsubscribe
+}
+
+func (s *Service) broadcast(event LinkActivityEvent) {
+	s.mu.Lock()
+	subs := make([]chan LinkActivityEvent, 0, len(s.subscribers))
+	for _, ch := range s.subscribers {
+		subs = append(subs, ch)
+	}
+	s.mu.Unlock()
+
+	for _, ch := range subs {
+		select {
+		case ch <- event:
+		default:
+		}
+	}
+}
+
+func (s *Service) sampleInterfaceDeltaLocked(ctx context.Context, interfaceID string) (uint64, bool) {
+	node, iface, ok := s.repo.GetNodeByInterface(interfaceID)
+	if !ok {
+		return 0, false
+	}
+	if iface.LinkID == "" || iface.RuntimeName == "" {
+		return 0, false
+	}
+	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
+	if err != nil || inspect.State == nil || !inspect.State.Running || inspect.State.Paused {
+		return 0, false
+	}
+
+	rx, tx, err := readInterfaceCounters(ctx, s.docker, node.ContainerID, iface.RuntimeName)
+	if err != nil {
+		return 0, false
+	}
+
+	statsKey := interfaceID + "|" + iface.RuntimeName
+	prev, hasPrev := s.stats[statsKey]
+	s.stats[statsKey] = ifaceStatsSample{rx: rx, tx: tx}
+	if !hasPrev {
+		return 0, false
+	}
+	if rx < prev.rx || tx < prev.tx {
+		return 0, false
+	}
+	return tx - prev.tx, true
 }
 
 func (s *Service) deleteLink(ctx context.Context, linkID string) error {
@@ -360,6 +560,36 @@ func resolveRuntimeInterfaceName(
 
 	slog.Error("Runtime interface name resolution failed")
 	return "", httputil.NewAppError(http.StatusInternalServerError, "runtime interface name resolution failed")
+}
+
+func readInterfaceCounters(ctx context.Context, docker *client.Client, containerID, runtimeName string) (uint64, uint64, error) {
+	stdout, err := execInContainerChecked(
+		ctx,
+		docker,
+		containerID,
+		[]string{
+			"sh",
+			"-c",
+			"cat /sys/class/net/" + runtimeName + "/statistics/rx_bytes /sys/class/net/" + runtimeName + "/statistics/tx_bytes",
+		},
+		"failed to read interface counters",
+	)
+	if err != nil {
+		return 0, 0, err
+	}
+	lines := strings.Fields(stdout)
+	if len(lines) < 2 {
+		return 0, 0, httputil.NewAppError(http.StatusInternalServerError, "invalid interface counter output")
+	}
+	rx, err := strconv.ParseUint(lines[0], 10, 64)
+	if err != nil {
+		return 0, 0, httputil.NewAppError(http.StatusInternalServerError, "invalid rx counter value")
+	}
+	tx, err := strconv.ParseUint(lines[1], 10, 64)
+	if err != nil {
+		return 0, 0, httputil.NewAppError(http.StatusInternalServerError, "invalid tx counter value")
+	}
+	return rx, tx, nil
 }
 
 func execInContainer(ctx context.Context, docker *client.Client, containerID string, execCmd []string) (string, string, int, error) {

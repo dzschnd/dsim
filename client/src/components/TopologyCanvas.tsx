@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
-import { CircleHelp, FileUp, Monitor, Network, RotateCcw, Router, Save } from "lucide-react";
+import { CircleHelp, FileUp, Loader2, Monitor, Network, Play, RotateCcw, Router, Save, Square } from "lucide-react";
 import ReactFlow, {
 	Background,
 	type Connection,
@@ -16,7 +16,7 @@ import ReactFlow, {
 	applyNodeChanges,
 } from "reactflow";
 import { InterfaceLabelEdge, type InterfaceLabelEdgeData } from "./InterfaceLabelEdge";
-import { Sidebar, type SidebarLastCommand } from "./Sidebar";
+import { Sidebar, type NodeSidebarViewState, type SidebarLastCommand } from "./Sidebar";
 import { SquareNode, type SquareNodeData } from "./SquareNode";
 import {
 	TerminalPanel,
@@ -27,9 +27,11 @@ import {
 } from "./TerminalPanel";
 import {
 	type ApiCommandResponse,
+	type ApiLinkActivityStreamMessage,
 	type ApiInterface,
 	type TopologyFile,
 	clearTopology,
+	createLinkActivityWebSocket,
 	createNode as createNodeRequest,
 	createLink,
 	deleteLink,
@@ -41,6 +43,7 @@ import {
 	runNodeCommand,
 	startNode,
 	stopNode,
+	toggleAllNodes,
 	updateNodeName,
 	updateNodePosition,
 } from "../services/topology";
@@ -73,6 +76,7 @@ const TERMINAL_HEADER_HEIGHT = 44;
 const TERMINAL_RESIZE_HANDLE_HEIGHT = 1;
 const DEFAULT_TERMINAL_BODY_HEIGHT = 224;
 const TERMINAL_MIN_DRAG_BODY_HEIGHT = 150;
+const LINK_ACTIVITY_MAX_LINKS = 120;
 function randomPos(index: number) {
 	const row = Math.floor(index / 5);
 	const col = index % 5;
@@ -90,11 +94,31 @@ function applySelectedNode(
 	}));
 }
 
-function applySelectedEdge(edges: Edge[], selectedLinkId: string): Edge[] {
+type LinkDirectionalActivity = {
+	aToB: boolean;
+	bToA: boolean;
+};
+
+function resolveEdgeStyle(edgeId: string, selectedLinkId: string) {
+	if (edgeId === selectedLinkId) return SELECTED_EDGE_STYLE;
+	return EDGE_STYLE;
+}
+
+function applyEdgeVisualState(
+	edges: Edge[],
+	selectedLinkId: string,
+	linkActivityById: Record<string, LinkDirectionalActivity>,
+): Edge[] {
 	return edges.map((edge) => ({
 		...edge,
 		selected: edge.id === selectedLinkId,
-		style: edge.id === selectedLinkId ? SELECTED_EDGE_STYLE : EDGE_STYLE,
+		style: resolveEdgeStyle(edge.id, selectedLinkId),
+		data: {
+			...(edge.data as InterfaceLabelEdgeData | undefined),
+			flowAToB: linkActivityById[edge.id]?.aToB ?? false,
+			flowBToA: linkActivityById[edge.id]?.bToA ?? false,
+			flowReduced: edges.length > LINK_ACTIVITY_MAX_LINKS / 2,
+		},
 	}));
 }
 
@@ -222,6 +246,7 @@ export function TopologyCanvas() {
 	const [edges, setEdges] = useState<Edge[]>([]);
 	const [selectedNodeId, setSelectedNodeId] = useState<string>("");
 	const [selectedLinkId, setSelectedLinkId] = useState<string>("");
+	const [linkActivityById, setLinkActivityById] = useState<Record<string, LinkDirectionalActivity>>({});
 	const [pendingConnection, setPendingConnection] = useState<PendingConnection | null>(null);
 	const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 	const [connectionSourceNodeId, setConnectionSourceNodeId] = useState<string>("");
@@ -232,6 +257,7 @@ export function TopologyCanvas() {
 	const [lastCommand, setLastCommand] = useState<SidebarLastCommand | null>(null);
 	const [nodeNames, setNodeNames] = useState<Record<string, string>>({});
 	const [nodeRecentCommands, setNodeRecentCommands] = useState<Record<string, string[]>>({});
+	const [nodeSidebarStateByNodeId, setNodeSidebarStateByNodeId] = useState<Record<string, NodeSidebarViewState>>({});
 	const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(true);
 	const [isTerminalResizing, setIsTerminalResizing] = useState<boolean>(false);
 
@@ -245,6 +271,7 @@ export function TopologyCanvas() {
 
 	const selectedNodeIdRef = useRef<string>("");
 	const selectedLinkIdRef = useRef<string>("");
+	const linkActivityByIdRef = useRef<Record<string, LinkDirectionalActivity>>({});
 	const importInputRef = useRef<HTMLInputElement | null>(null);
 	const connectionSourceNodeIdRef = useRef<string>("");
 	const pendingConnectionRef = useRef<PendingConnection | null>(null);
@@ -328,7 +355,7 @@ export function TopologyCanvas() {
 				type: "interfaceLabel",
 				source: findNodeIDByInterfaceID(flowNodes, link.interfaceAId),
 				target: findNodeIDByInterfaceID(flowNodes, link.interfaceBId),
-				style: link.id === selectedLinkIdRef.current ? SELECTED_EDGE_STYLE : EDGE_STYLE,
+				style: resolveEdgeStyle(link.id, selectedLinkIdRef.current),
 				data: {
 					interfaceAId: link.interfaceAId,
 					interfaceAName: findInterfaceNameByID(flowNodes, link.interfaceAId),
@@ -336,11 +363,13 @@ export function TopologyCanvas() {
 					interfaceBId: link.interfaceBId,
 					interfaceBName: findInterfaceNameByID(flowNodes, link.interfaceBId),
 					interfaceBIP: findInterfaceCIDRByID(flowNodes, link.interfaceBId),
+					flowAToB: linkActivityByIdRef.current[link.id]?.aToB ?? false,
+					flowBToA: linkActivityByIdRef.current[link.id]?.bToA ?? false,
 				},
 			}));
 
 			setNodes(applySelectedNode(flowNodes, currentSelectedNodeId));
-			setEdges(applySelectedEdge(flowEdges, selectedLinkIdRef.current));
+			setEdges(applyEdgeVisualState(flowEdges, selectedLinkIdRef.current, linkActivityByIdRef.current));
 			setStatus(`Loaded ${flowNodes.length} nodes, ${flowEdges.length} links`);
 		} catch (err: unknown) {
 			setStatus((err instanceof Error ? err.message : String(err)) || "Failed to load topology");
@@ -366,7 +395,7 @@ export function TopologyCanvas() {
 			});
 			if (nextNodes.length === 0) return;
 			setEdges((curr) =>
-				applySelectedEdge(
+				applyEdgeVisualState(
 					curr.map((edge) => {
 						const d = edge.data as InterfaceLabelEdgeData | undefined;
 						if (!d?.interfaceAId || !d.interfaceBId) return edge;
@@ -382,6 +411,7 @@ export function TopologyCanvas() {
 						};
 					}),
 					selectedLinkIdRef.current,
+					linkActivityByIdRef.current,
 				),
 			);
 		},
@@ -655,6 +685,7 @@ export function TopologyCanvas() {
 	// Sync refs
 	useEffect(() => { selectedNodeIdRef.current = selectedNodeId; }, [selectedNodeId]);
 	useEffect(() => { selectedLinkIdRef.current = selectedLinkId; }, [selectedLinkId]);
+	useEffect(() => { linkActivityByIdRef.current = linkActivityById; }, [linkActivityById]);
 	useEffect(() => { pendingConnectionRef.current = pendingConnection; }, [pendingConnection]);
 	useEffect(() => { terminalTabsRef.current = terminalTabs; }, [terminalTabs]);
 	useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
@@ -684,6 +715,19 @@ export function TopologyCanvas() {
 			}
 			return changed ? next : curr;
 		});
+		setNodeSidebarStateByNodeId((curr) => {
+			const existingIds = new Set(nodes.map((node) => node.id));
+			let changed = false;
+			const next: Record<string, NodeSidebarViewState> = {};
+			for (const [nodeId, sidebarState] of Object.entries(curr)) {
+				if (existingIds.has(nodeId)) {
+					next[nodeId] = sidebarState;
+				} else {
+					changed = true;
+				}
+			}
+			return changed ? next : curr;
+		});
 	}, [nodes]);
 
 	useEffect(() => {
@@ -702,8 +746,8 @@ export function TopologyCanvas() {
 	}, [connectionSourceNodeId]);
 
 	useEffect(() => {
-		setEdges((curr) => applySelectedEdge(curr, selectedLinkId));
-	}, [selectedLinkId]);
+		setEdges((curr) => applyEdgeVisualState(curr, selectedLinkId, linkActivityById));
+	}, [selectedLinkId, linkActivityById]);
 
 	const onNodesChange: OnNodesChange = useCallback(
 		(changes) => setNodes((curr) => applySelectedNode(applyNodeChanges(changes, curr), selectedNodeId)),
@@ -711,9 +755,96 @@ export function TopologyCanvas() {
 	);
 
 	const onEdgesChange: OnEdgesChange = useCallback(
-		(changes) => setEdges((curr) => applySelectedEdge(applyEdgeChanges(changes, curr), selectedLinkIdRef.current)),
+		(changes) =>
+			setEdges((curr) =>
+				applyEdgeVisualState(applyEdgeChanges(changes, curr), selectedLinkIdRef.current, linkActivityByIdRef.current),
+			),
 		[],
 	);
+
+	useEffect(() => {
+		if (edges.length > LINK_ACTIVITY_MAX_LINKS) {
+			setLinkActivityById((curr) => (Object.keys(curr).length === 0 ? curr : {}));
+			return;
+		}
+		let cancelled = false;
+		let socket: WebSocket | null = null;
+		let retryTimer: number | null = null;
+		let retryDelayMs = 1500;
+
+		const clearActivity = () => {
+			setLinkActivityById((curr) => (Object.keys(curr).length === 0 ? curr : {}));
+		};
+
+		const scheduleReconnect = () => {
+			if (cancelled || retryTimer !== null) return;
+			retryTimer = window.setTimeout(() => {
+				retryTimer = null;
+				connect();
+			}, retryDelayMs);
+			retryDelayMs = Math.min(5000, retryDelayMs >= 3000 ? 5000 : retryDelayMs * 2);
+		};
+
+		const applyActivityMessage = (message: ApiLinkActivityStreamMessage) => {
+			setLinkActivityById((curr) => {
+				const next = message.type === "snapshot" ? {} : { ...curr };
+				for (const upsert of message.upserts) {
+					next[upsert.linkId] = { aToB: upsert.aToB, bToA: upsert.bToA };
+				}
+				for (const removal of message.removals) {
+					delete next[removal];
+				}
+				return next;
+			});
+		};
+
+		const connect = () => {
+			if (cancelled) return;
+			socket = createLinkActivityWebSocket(baseUrl);
+			socket.onopen = () => {
+				retryDelayMs = 1500;
+			};
+			socket.onmessage = async (event) => {
+				if (cancelled) return;
+				try {
+					let raw = "";
+					if (typeof event.data === "string") {
+						raw = event.data;
+					} else if (event.data instanceof Blob) {
+						raw = await event.data.text();
+					} else if (event.data instanceof ArrayBuffer) {
+						raw = new TextDecoder().decode(event.data);
+					} else {
+						return;
+					}
+					const parsed = JSON.parse(raw) as ApiLinkActivityStreamMessage;
+					if (parsed.type !== "snapshot" && parsed.type !== "patch") return;
+					applyActivityMessage(parsed);
+				} catch {
+					// Ignore malformed message and continue stream.
+				}
+			};
+			socket.onerror = () => {
+				socket?.close();
+			};
+			socket.onclose = () => {
+				if (cancelled) return;
+				clearActivity();
+				scheduleReconnect();
+			};
+		};
+
+		connect();
+		return () => {
+			cancelled = true;
+			if (retryTimer !== null) {
+				window.clearTimeout(retryTimer);
+			}
+			if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+				socket.close();
+			}
+		};
+	}, [baseUrl, edges.length]);
 
 	const createNode = useCallback(async (nodeType: "host" | "switch" | "router") => {
 		setBusy(true);
@@ -728,6 +859,23 @@ export function TopologyCanvas() {
 			setBusy(false);
 		}
 	}, [baseUrl, loadTopology, setRequestStatus]);
+
+	const toggleAllNodesRunState = useCallback(async () => {
+		if (busy) return;
+		setBusy(true);
+		setRequestStatus("Updating all nodes...");
+		try {
+			const result = await toggleAllNodes(baseUrl);
+			await loadTopology();
+			if (result.action === "start") setStatus("All nodes started");
+			else if (result.action === "stop") setStatus("All nodes stopped");
+			else setStatus("No nodes available");
+		} catch (err: unknown) {
+			setStatus((err instanceof Error ? err.message : String(err)) || "Failed to update nodes");
+		} finally {
+			setBusy(false);
+		}
+	}, [baseUrl, busy, loadTopology, setRequestStatus]);
 
 	const deleteSelectedLink = useCallback(async () => {
 		if (!selectedLinkId) return;
@@ -783,6 +931,11 @@ export function TopologyCanvas() {
 				nodePositionsRef.current = new Map();
 				await loadTopology();
 				setSelectedNodeId("");
+				setSelectedLinkId("");
+				setTerminalTabs([]);
+				setActiveTabId(null);
+				setTerminalPanelState("hidden");
+				setSidebarCollapsed(true);
 				setStatus("Topology loaded");
 			} catch (err: unknown) {
 				setStatus((err instanceof Error ? err.message : String(err)) || "Failed to load topology");
@@ -816,6 +969,7 @@ export function TopologyCanvas() {
 			setPendingConnection(null);
 			setBusyNodeIds(new Set());
 			setNodeRecentCommands({});
+			setNodeSidebarStateByNodeId({});
 			setIsCreateNodeMenuOpen(false);
 			setTerminalTabs([]);
 			setActiveTabId(null);
@@ -846,6 +1000,11 @@ export function TopologyCanvas() {
 			await deleteNode(baseUrl, nodeIdToDelete);
 			setTerminalTabs((curr) => curr.filter((t) => t.nodeId !== nodeIdToDelete));
 			setNodeRecentCommands((curr) => {
+				const next = { ...curr };
+				delete next[nodeIdToDelete];
+				return next;
+			});
+			setNodeSidebarStateByNodeId((curr) => {
 				const next = { ...curr };
 				delete next[nodeIdToDelete];
 				return next;
@@ -978,6 +1137,7 @@ export function TopologyCanvas() {
 		const tab = terminalTabs.find((t) => t.nodeId === selectedNode.id);
 		return tab?.history ?? [];
 	})();
+	const allNodesRunning = nodes.length > 0 && nodes.every((node) => node.data.status === "running" || node.data.status === "frozen");
 
 	useEffect(() => {
 		if (!isCreateNodeMenuOpen) return;
@@ -1032,6 +1192,24 @@ export function TopologyCanvas() {
 			setStatus((err instanceof Error ? err.message : String(err)) || "Failed to update node name");
 		});
 	}, [baseUrl]);
+
+	const updateNodeSidebarState = useCallback((nodeId: string, next: NodeSidebarViewState) => {
+		setNodeSidebarStateByNodeId((curr) => {
+			const existing = curr[nodeId];
+			if (
+				existing
+				&& existing.interfacesCollapsed === next.interfacesCollapsed
+				&& existing.routesCollapsed === next.routesCollapsed
+				&& existing.serversCollapsed === next.serversCollapsed
+				&& existing.sendDataCollapsed === next.sendDataCollapsed
+				&& existing.recentCollapsed === next.recentCollapsed
+				&& existing.actionsCollapsed === next.actionsCollapsed
+			) {
+				return curr;
+			}
+			return { ...curr, [nodeId]: next };
+		});
+	}, []);
 
 	const runInterfaceCommand = useCallback(async (nodeId: string, command: string) => {
 		setNodeRecentCommands((curr) => ({
@@ -1264,8 +1442,17 @@ export function TopologyCanvas() {
 							</div>
 						) : null}
 					</div>
+					<button type="button" onClick={() => void toggleAllNodesRunState()} disabled={busy || nodes.length === 0} className="flex items-center gap-2 rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60">
+						{allNodesRunning ? <Square className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+						{allNodesRunning ? "Stop all" : "Start all"}
+					</button>
 				</div>
-				<div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-zinc-600">{nodes.length} nodes, {edges.length} links</div>
+				<div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 text-sm text-zinc-600">
+					<span className="inline-flex h-3.5 w-3.5 items-center justify-center">
+						{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin text-yellow-500" /> : null}
+					</span>
+					<span>{nodes.length} nodes, {edges.length} links</span>
+				</div>
 				<div className="flex items-center gap-3">
 					<button type="button" onClick={() => void saveTopologyToFile()} disabled={busy || nodes.length === 0} className="flex items-center gap-2 rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"><Save className="h-4 w-4" />Save</button>
 					<button type="button" onClick={openImportPicker} disabled={busy} className="flex items-center gap-2 rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"><FileUp className="h-4 w-4" />Load</button>
@@ -1307,6 +1494,8 @@ export function TopologyCanvas() {
 					setNodes((curr) => applySelectedNode(curr, ""));
 				}}
 				onRenameNode={renameNode}
+				nodeSidebarStateByNodeId={nodeSidebarStateByNodeId}
+				onNodeSidebarStateChange={updateNodeSidebarState}
 			/>
 
 			{/* Terminal panel */}

@@ -33,10 +33,13 @@ func NewRouter(s *Server) http.Handler {
 	r.HandleFunc("PATCH /api/v1/nodes/{id}/name", n.UpdateNodeNameHandler)
 	r.HandleFunc("POST /api/v1/nodes/{id}/start", n.StartNodeHandler)
 	r.HandleFunc("POST /api/v1/nodes/{id}/stop", n.StopNodeHandler)
+	r.HandleFunc("POST /api/v1/nodes/toggle-all", n.ToggleAllNodesHandler)
 	r.HandleFunc("POST /api/v1/nodes/{id}/cli", n.CLIHandler)
 
 	r.HandleFunc("POST /api/v1/links", l.CreateLinkHandler)
 	r.HandleFunc("GET /api/v1/links", l.ListLinksHandler)
+	r.HandleFunc("GET /api/v1/links/activity", l.ListLinkActivityHandler)
+	r.HandleFunc("GET /api/v1/links/activity/ws", l.LinkActivityWSHandler)
 	r.HandleFunc("DELETE /api/v1/links/{id}", l.DeleteLinkHandler)
 
 	r.HandleFunc("GET /api/v1/topology", t.ExportTopologyHandler)
