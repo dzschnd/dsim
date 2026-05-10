@@ -182,7 +182,7 @@ function InterfaceCard({
 	const adminUp = !iface.adminDown;
 	const flap = iface.flap ?? { enabled: false, downMs: 0, upMs: 0, jitterMs: 0 };
 	const flapping = flap.enabled;
-	const nicBroken = !adminUp && !flapping;
+	const nicDown = !adminUp;
 	const defaultFlap = {
 		downMs: flap.downMs > 0 ? flap.downMs : 1000,
 		upMs: flap.upMs > 0 ? flap.upMs : 1000,
@@ -302,11 +302,11 @@ function InterfaceCard({
 		|| currentTC.queueLimitPackets > 0;
 
 	return (
-		<div className={`rounded-lg border p-3 transition-colors ${nicBroken ? "border-red-300 bg-red-50/40" : "border-gray-200 bg-gray-50"}`}>
+		<div className={`rounded-lg border bg-gray-50 p-3 transition-colors ${nicDown ? "border-red-300" : "border-gray-200"}`}>
 			<div className="mb-2 flex items-center justify-between gap-2">
 				<div className="flex items-center gap-2">
 					<div className={`h-2 w-2 rounded-full ${isLinked ? "bg-green-500" : "bg-gray-400"}`} />
-					<span className={`text-sm font-medium ${nicBroken ? "text-red-800" : "text-gray-900"}`}>{iface.name}</span>
+					<span className="text-sm font-medium text-gray-900">{iface.name}</span>
 				</div>
 				<span className={`text-xs ${getInterfaceStateColor(isLinked ? "connected" : "disconnected")}`}>
 					{getInterfaceStateLabel(isLinked ? "connected" : "disconnected")}
@@ -361,11 +361,15 @@ function InterfaceCard({
 							type="button"
 							onClick={() => onSetInterfaceAdminState(nodeId, iface.name, iface.adminDown)}
 							disabled={isBusy}
-							className={`relative h-8 flex-1 rounded-md border px-1 transition-colors disabled:opacity-60 disabled:cursor-default ${adminUp ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50"
+							className={`relative h-8 flex-1 rounded-md border px-1 transition-colors disabled:opacity-60 disabled:cursor-default ${isBusy ? "border-yellow-300 bg-yellow-50" : adminUp ? "border-green-300 bg-green-50" : "border-red-300 bg-red-50"
 								}`}
 						>
-							<div className={`absolute top-1/2 h-6 w-[49%] -translate-y-1/2 rounded-md bg-white shadow-sm transition-transform ${adminUp ? "translate-x-0.5" : "translate-x-[98%]"}`}>
-								<div className="flex h-full items-center justify-center text-xs font-semibold text-gray-700">{adminUp ? "Up" : "Down"}</div>
+							<div className="relative z-[1] h-full w-full text-xs font-semibold text-gray-700">
+								<span className="absolute left-[25%] top-1/2 -translate-x-1/2 -translate-y-1/2">Up</span>
+								<span className="absolute left-[75%] top-1/2 -translate-x-1/2 -translate-y-1/2">Down</span>
+							</div>
+							<div className={`absolute top-1/2 h-6 w-[49%] -translate-y-1/2 rounded-md bg-white shadow-sm transition-transform duration-200 ease-in-out ${adminUp ? "translate-x-0.5" : "translate-x-[98%]"}`}>
+								<div className="h-full w-full" />
 							</div>
 						</button>
 					</div>
