@@ -277,6 +277,8 @@ export function TopologyCanvas() {
 	const pendingConnectionRef = useRef<PendingConnection | null>(null);
 	const nodePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
 	const nodesRef = useRef<Node<SquareNodeData>[]>([]);
+	const nodeNamesRef = useRef<Record<string, string>>({});
+	const busyNodeIdsRef = useRef<Set<string>>(new Set());
 	const terminalTabsRef = useRef<TerminalTab[]>([]);
 	const activeTabIdRef = useRef<number | null>(null);
 	const terminalBodyHeightRef = useRef<number>(DEFAULT_TERMINAL_BODY_HEIGHT);
@@ -298,18 +300,18 @@ export function TopologyCanvas() {
 			selected: node.id === selectedNodeId,
 			data: {
 				nodeId: node.id,
-				displayName: nodeNames[node.id] ?? (node.name || node.id),
+				displayName: nodeNamesRef.current[node.id] ?? (node.name || node.id),
 				status: node.status,
 				type: node.type,
 				interfaces: node.interfaces,
 				isSelected: node.id === selectedNodeId,
-				isBusy: busyNodeIds.has(node.id),
+				isBusy: busyNodeIdsRef.current.has(node.id),
 				connectionSourceNodeId: connectionSourceNodeIdRef.current,
 				onToggleRun: () => toggleNodeRunRef.current(node.id),
 				onOpenTerminal: () => openTerminalForNodeRef.current(node.id),
 			},
 		}),
-		[busyNodeIds, nodeNames],
+		[],
 	);
 
 	const edgeByPair = useMemo(() => {
@@ -438,7 +440,7 @@ export function TopologyCanvas() {
 			try {
 				if (action === "start") await startNode(baseUrl, nodeID);
 				else await stopNode(baseUrl, nodeID);
-				await loadTopology();
+				await refreshNode(nodeID);
 				setStatus(`Node ${nodeID} ${action === "start" ? "started" : "stopped"}`);
 			} catch (err: unknown) {
 				setStatus(`Failed to ${action} node: ${err instanceof Error ? err.message : String(err)}`);
@@ -446,7 +448,7 @@ export function TopologyCanvas() {
 				setNodeBusy(nodeID, false);
 			}
 		},
-		[baseUrl, loadTopology, setNodeBusy, setRequestStatus],
+		[baseUrl, refreshNode, setNodeBusy, setRequestStatus],
 	);
 
 	const toggleFreezeNode = useCallback(
@@ -687,6 +689,8 @@ export function TopologyCanvas() {
 	useEffect(() => { selectedLinkIdRef.current = selectedLinkId; }, [selectedLinkId]);
 	useEffect(() => { linkActivityByIdRef.current = linkActivityById; }, [linkActivityById]);
 	useEffect(() => { pendingConnectionRef.current = pendingConnection; }, [pendingConnection]);
+	useEffect(() => { nodeNamesRef.current = nodeNames; }, [nodeNames]);
+	useEffect(() => { busyNodeIdsRef.current = busyNodeIds; }, [busyNodeIds]);
 	useEffect(() => { terminalTabsRef.current = terminalTabs; }, [terminalTabs]);
 	useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
 	useEffect(() => { terminalBodyHeightRef.current = terminalBodyHeight; }, [terminalBodyHeight]);
@@ -1138,6 +1142,7 @@ export function TopologyCanvas() {
 		return tab?.history ?? [];
 	})();
 	const allNodesRunning = nodes.length > 0 && nodes.every((node) => node.data.status === "running" || node.data.status === "frozen");
+	const headerLoading = busy || busyNodeIds.size > 0;
 
 	useEffect(() => {
 		if (!isCreateNodeMenuOpen) return;
@@ -1449,7 +1454,7 @@ export function TopologyCanvas() {
 				</div>
 				<div className="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center gap-2 text-sm text-zinc-600">
 					<span className="inline-flex h-3.5 w-3.5 items-center justify-center">
-						{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin text-yellow-500" /> : null}
+						{headerLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin text-yellow-500" /> : null}
 					</span>
 					<span>{nodes.length} nodes, {edges.length} links</span>
 				</div>
