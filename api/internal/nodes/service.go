@@ -12,8 +12,10 @@ import (
 	"net/netip"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -772,20 +774,67 @@ func (s *Service) ToggleAllNodes(ctx context.Context) (string, error) {
 	}
 
 	if startAll {
-		for _, node := range nodes {
-			if err := s.StartNode(ctx, node.ID); err != nil {
-				return "", err
-			}
+		if err := s.runNodeOpsParallel(ctx, nodes, s.StartNode); err != nil {
+			return "", err
 		}
 		return "start", nil
 	}
 
-	for _, node := range nodes {
-		if err := s.stopNode(ctx, node.ID); err != nil {
-			return "", err
-		}
+	if err := s.runNodeOpsParallel(ctx, nodes, s.stopNode); err != nil {
+		return "", err
 	}
 	return "stop", nil
+}
+
+func (s *Service) runNodeOpsParallel(ctx context.Context, nodes []model.Node, operation func(context.Context, string) error) error {
+	const workers = 16
+
+	nodesCopy := make([]model.Node, len(nodes))
+	copy(nodesCopy, nodes)
+	sort.Slice(nodesCopy, func(i, j int) bool { return nodesCopy[i].ID < nodesCopy[j].ID })
+
+	type task struct {
+		index int
+		node  model.Node
+	}
+
+	taskCh := make(chan task)
+	errs := make([]error, len(nodesCopy))
+
+	workerCount := workers
+	if len(nodesCopy) < workerCount {
+		workerCount = len(nodesCopy)
+	}
+	if workerCount == 0 {
+		return nil
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(workerCount)
+	for range workerCount {
+		go func() {
+			defer wg.Done()
+			for item := range taskCh {
+				if err := operation(ctx, item.node.ID); err != nil {
+					errs[item.index] = err
+				}
+			}
+		}()
+	}
+
+	for i, node := range nodesCopy {
+		taskCh <- task{index: i, node: node}
+	}
+	close(taskCh)
+	wg.Wait()
+
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func execInContainer(ctx context.Context, docker *client.Client, containerID string, execCmd []string) (string, string, int, error) {

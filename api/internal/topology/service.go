@@ -139,55 +139,163 @@ func (s *service) ClearTopology(ctx context.Context) error {
 }
 
 func (s *service) importTopologyUnsafe(ctx context.Context, file File) error {
+	const importWorkers = 16
+
 	CleanupRuntime(ctx, s.docker, s.store)
 	if err := ClearStore(ctx, s.docker, s.store); err != nil {
 		return err
 	}
 
-	nodeIDByFileID := make(map[string]string, len(file.Nodes))
-	for _, topologyNode := range file.Nodes {
-		createdNode, err := s.nodeService.CreateNode(ctx, topologyNode.Type, model.Position{
-			X: topologyNode.Position.X,
-			Y: topologyNode.Position.Y,
-		})
-		if err != nil {
-			return err
-		}
-
-		if err := s.applyNodeConfig(createdNode.ID, topologyNode); err != nil {
-			return err
-		}
-
-		nodeIDByFileID[topologyNode.ID] = createdNode.ID
+	nodeIDByFileID, err := s.importNodesParallel(ctx, file.Nodes, importWorkers)
+	if err != nil {
+		return err
 	}
 
-	for _, topologyLink := range file.Links {
-		nodeAID, ok := nodeIDByFileID[topologyLink.A.NodeID]
-		if !ok {
-			return httputil.NewAppError(http.StatusBadRequest, "link endpoint A node not found")
-		}
-		nodeBID, ok := nodeIDByFileID[topologyLink.B.NodeID]
-		if !ok {
-			return httputil.NewAppError(http.StatusBadRequest, "link endpoint B node not found")
-		}
-
-		interfaceAID, err := s.interfaceIDByName(nodeAID, topologyLink.A.Interface)
-		if err != nil {
-			return err
-		}
-		interfaceBID, err := s.interfaceIDByName(nodeBID, topologyLink.B.Interface)
-		if err != nil {
-			return err
-		}
-
-		if _, err := s.linkService.CreateLink(ctx, interfaceAID, interfaceBID); err != nil {
-			return err
-		}
+	if err := s.importLinksParallel(ctx, file.Links, nodeIDByFileID, importWorkers); err != nil {
+		return err
 	}
 
 	if err := runtimesync.SyncAllRoutes(ctx, s.docker, s.store); err != nil {
 		return err
 	}
+	return nil
+}
+
+func (s *service) importNodesParallel(ctx context.Context, topologyNodes []Node, workers int) (map[string]string, error) {
+	type task struct {
+		index int
+		node  Node
+	}
+	type result struct {
+		fileID    string
+		createdID string
+	}
+
+	nodeIDByFileID := make(map[string]string, len(topologyNodes))
+	if len(topologyNodes) == 0 {
+		return nodeIDByFileID, nil
+	}
+
+	workerCount := workers
+	if len(topologyNodes) < workerCount {
+		workerCount = len(topologyNodes)
+	}
+
+	taskCh := make(chan task)
+	errs := make([]error, len(topologyNodes))
+	results := make([]result, len(topologyNodes))
+	var wg sync.WaitGroup
+	var resultsMu sync.Mutex
+
+	wg.Add(workerCount)
+	for range workerCount {
+		go func() {
+			defer wg.Done()
+			for item := range taskCh {
+				createdNode, err := s.nodeService.CreateNode(ctx, item.node.Type, model.Position{
+					X: item.node.Position.X,
+					Y: item.node.Position.Y,
+				})
+				if err != nil {
+					errs[item.index] = err
+					continue
+				}
+				if err := s.applyNodeConfig(createdNode.ID, item.node); err != nil {
+					errs[item.index] = err
+					continue
+				}
+
+				resultsMu.Lock()
+				results[item.index] = result{
+					fileID:    item.node.ID,
+					createdID: createdNode.ID,
+				}
+				resultsMu.Unlock()
+			}
+		}()
+	}
+
+	for i, topologyNode := range topologyNodes {
+		taskCh <- task{index: i, node: topologyNode}
+	}
+	close(taskCh)
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+		entry := results[i]
+		nodeIDByFileID[entry.fileID] = entry.createdID
+	}
+
+	return nodeIDByFileID, nil
+}
+
+func (s *service) importLinksParallel(ctx context.Context, topologyLinks []Link, nodeIDByFileID map[string]string, workers int) error {
+	type task struct {
+		index int
+		link  Link
+	}
+
+	if len(topologyLinks) == 0 {
+		return nil
+	}
+
+	workerCount := workers
+	if len(topologyLinks) < workerCount {
+		workerCount = len(topologyLinks)
+	}
+
+	taskCh := make(chan task)
+	errs := make([]error, len(topologyLinks))
+	var wg sync.WaitGroup
+
+	wg.Add(workerCount)
+	for range workerCount {
+		go func() {
+			defer wg.Done()
+			for item := range taskCh {
+				nodeAID, ok := nodeIDByFileID[item.link.A.NodeID]
+				if !ok {
+					errs[item.index] = httputil.NewAppError(http.StatusBadRequest, "link endpoint A node not found")
+					continue
+				}
+				nodeBID, ok := nodeIDByFileID[item.link.B.NodeID]
+				if !ok {
+					errs[item.index] = httputil.NewAppError(http.StatusBadRequest, "link endpoint B node not found")
+					continue
+				}
+
+				interfaceAID, err := s.interfaceIDByName(nodeAID, item.link.A.Interface)
+				if err != nil {
+					errs[item.index] = err
+					continue
+				}
+				interfaceBID, err := s.interfaceIDByName(nodeBID, item.link.B.Interface)
+				if err != nil {
+					errs[item.index] = err
+					continue
+				}
+				if _, err := s.linkService.CreateLink(ctx, interfaceAID, interfaceBID); err != nil {
+					errs[item.index] = err
+				}
+			}
+		}()
+	}
+
+	for i, topologyLink := range topologyLinks {
+		taskCh <- task{index: i, link: topologyLink}
+	}
+	close(taskCh)
+	wg.Wait()
+
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
