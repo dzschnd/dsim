@@ -1005,7 +1005,7 @@ function NodePanel({
 								onClick={() => setServersCollapsed((v) => !v)}
 								className="mb-2 flex items-center gap-1 text-sm font-medium text-gray-700"
 							>
-								Server
+								Servers
 								<ChevronDown className={`h-4 w-4 transition-transform ${serversCollapsed ? "-rotate-90" : ""}`} />
 							</button>
 							<div className={`overflow-hidden transition-all duration-200 ${serversCollapsed ? "max-h-0 -translate-y-2 opacity-0" : "max-h-[1400px] translate-y-0 opacity-100"}`}>
