@@ -253,7 +253,7 @@ export function TopologyCanvas() {
 	const [isCreateNodeMenuOpen, setIsCreateNodeMenuOpen] = useState<boolean>(false);
 	const [busyNodeIds, setBusyNodeIds] = useState<Set<string>>(new Set());
 	const [busy, setBusy] = useState<boolean>(false);
-	const [status, setStatus] = useState<string>("");
+	const [, setStatus] = useState<string>("");
 	const [lastCommand, setLastCommand] = useState<SidebarLastCommand | null>(null);
 	const [nodeNames, setNodeNames] = useState<Record<string, string>>({});
 	const [nodeRecentCommands, setNodeRecentCommands] = useState<Record<string, string[]>>({});

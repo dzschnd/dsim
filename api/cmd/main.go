@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -49,10 +50,19 @@ func main() {
 
 	srv := api.newServer(api.mount())
 
-	slog.Info("Starting server", "url", fmt.Sprintf("http://localhost%s", srv.Addr))
+	ln, err := net.Listen("tcp", srv.Addr)
+	if err != nil {
+		slog.Error("Server failed to start", "addr", srv.Addr,
+			"err", err)
+		os.Exit(1)
+	}
+
+	slog.Info("Server started", "url", fmt.Sprintf("http://localhost%s", srv.Addr))
+
 	go func() {
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("Server stopped", "err", err)
+		if err := srv.Serve(ln); err != nil && err !=
+			http.ErrServerClosed {
+			slog.Error("Server stopped unexpectedly", "err", err)
 		}
 	}()
 

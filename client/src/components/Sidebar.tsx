@@ -482,7 +482,6 @@ function InterfaceCard({
 function NodePanel({
 	node,
 	nodes,
-	isBusy,
 	recentCommands,
 	lastCommand,
 	onOpenTerminal,
@@ -508,7 +507,6 @@ function NodePanel({
 }: {
 	node: Node<SquareNodeData>;
 	nodes: Node<SquareNodeData>[];
-	isBusy: boolean;
 	recentCommands: string[];
 	lastCommand: SidebarLastCommand | null;
 	onOpenTerminal: (nodeId: string) => void;
@@ -1427,7 +1425,6 @@ export function Sidebar({
 					key={selectedNode.id}
 					node={selectedNode}
 					nodes={nodes}
-					isBusy={isBusy}
 					recentCommands={recentCommands}
 					lastCommand={lastCommand}
 					onOpenTerminal={onOpenTerminal}
