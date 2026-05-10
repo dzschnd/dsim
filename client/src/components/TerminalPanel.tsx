@@ -35,6 +35,7 @@ type TerminalPanelProps = {
 	normalBodyHeight: number;
 	onTabChange: (tabId: number) => void;
 	onTabClose: (tabId: number) => void;
+	onTabReorder: (sourceTabId: number, targetTabId: number, position: "before" | "after") => void;
 	onPanelStateChange: (state: TerminalPanelState) => void;
 	onInputChange: (tabId: number, value: string) => void;
 	onHistoryNavigate: (tabId: number, direction: "up" | "down") => void;
@@ -142,6 +143,7 @@ export function TerminalPanel({
 	normalBodyHeight,
 	onTabChange,
 	onTabClose,
+	onTabReorder,
 	onPanelStateChange,
 	onInputChange,
 	onHistoryNavigate,
@@ -150,6 +152,15 @@ export function TerminalPanel({
 	isResizing,
 }: TerminalPanelProps) {
 	const activeTab = tabs.find((t) => t.tabId === activeTabId) ?? null;
+	const [draggingTabId, setDraggingTabId] = useState<number | null>(null);
+	const [dropGapIndex, setDropGapIndex] = useState<number | null>(null);
+	const draggingTabIndex = draggingTabId === null ? -1 : tabs.findIndex((t) => t.tabId === draggingTabId);
+	const showDropGapIndex = dropGapIndex !== null
+		&& draggingTabIndex >= 0
+		&& dropGapIndex !== draggingTabIndex
+		&& dropGapIndex !== draggingTabIndex + 1
+		? dropGapIndex
+		: null;
 	const isCollapsed = panelState === "hidden";
 	const isFullscreen = panelState === "fullscreen";
 	const isDisconnected = terminalStatus === "disconnected";
@@ -173,7 +184,48 @@ export function TerminalPanel({
 					<StatusIndicator status={terminalStatus} />
 					<div className="flex min-w-0 items-center gap-1">
 						{tabs.map((tab) => (
-							<div key={tab.tabId} className="flex items-center">
+							// `gapIndex` model: indicator belongs to the gap before tab[i] (i) or after last tab (tabs.length).
+							<div
+								key={tab.tabId}
+								className="relative flex items-center"
+								draggable
+								onDragStart={(event) => {
+									setDraggingTabId(tab.tabId);
+									event.dataTransfer.effectAllowed = "move";
+								}}
+								onDragOver={(event) => {
+									event.preventDefault();
+									event.dataTransfer.dropEffect = "move";
+									const rect = (event.currentTarget as HTMLDivElement).getBoundingClientRect();
+									const index = tabs.findIndex((t) => t.tabId === tab.tabId);
+									if (index < 0) return;
+									const beforeHalf = event.clientX < rect.left + rect.width / 2;
+									const gapIndex = beforeHalf ? index : index + 1;
+									setDropGapIndex(gapIndex);
+								}}
+								onDrop={(event) => {
+									event.preventDefault();
+									const index = tabs.findIndex((t) => t.tabId === tab.tabId);
+									if (draggingTabId !== null && draggingTabId !== tab.tabId && index >= 0 && showDropGapIndex !== null) {
+										const position: "before" | "after" = showDropGapIndex <= index ? "before" : "after";
+										onTabReorder(draggingTabId, tab.tabId, position);
+									}
+									setDropGapIndex(null);
+									setDraggingTabId(null);
+								}}
+								onDragEnd={() => {
+									setDropGapIndex(null);
+									setDraggingTabId(null);
+								}}
+							>
+								{showDropGapIndex === tabs.findIndex((t) => t.tabId === tab.tabId) ? (
+									<div
+										className="pointer-events-none absolute bottom-0 top-0 left-[-2px] w-[2px] bg-blue-400"
+									/>
+								) : null}
+								{showDropGapIndex === tabs.length && tab.tabId === tabs[tabs.length - 1]?.tabId ? (
+									<div className="pointer-events-none absolute bottom-0 top-0 right-[-2px] w-[2px] bg-blue-400" />
+								) : null}
 								<button
 									type="button"
 									onClick={() => onTabChange(tab.tabId)}
@@ -256,7 +308,7 @@ export function TerminalPanel({
 		>
 			<div
 				onMouseDown={onStartResize}
-				className="h-1 w-full cursor-row-resize bg-transparent hover:bg-gray-500/40"
+				className="relative z-20 h-1 w-full cursor-row-resize touch-none bg-transparent hover:bg-gray-500/40"
 				aria-label="Resize terminal"
 			/>
 			{header}

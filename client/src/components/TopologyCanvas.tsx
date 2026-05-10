@@ -53,6 +53,11 @@ type PendingConnection = {
 };
 
 type ConfirmAction = "delete-node" | "clear-topology";
+type RouteRule = {
+	destination: string;
+	nextHop: string;
+	kind: "via" | "blackhole";
+};
 
 const EDGE_STYLE = {
 	stroke: "#334155",
@@ -67,6 +72,7 @@ const HEADER_HEIGHT = 56;
 const TERMINAL_HEADER_HEIGHT = 44;
 const TERMINAL_RESIZE_HANDLE_HEIGHT = 1;
 const DEFAULT_TERMINAL_BODY_HEIGHT = 224;
+const TERMINAL_MIN_DRAG_BODY_HEIGHT = 150;
 function randomPos(index: number) {
 	const row = Math.floor(index / 5);
 	const col = index % 5;
@@ -124,6 +130,17 @@ function isInterfaceAddressCommand(command: string): boolean {
 		|| (f.length === 3 && f[0] === "ip" && f[1] === "unset");
 }
 
+function parseInterfaceAddressCommand(command: string): { action: "set" | "unset"; iface: string; cidr?: string } | null {
+	const f = command.trim().split(/\s+/);
+	if (f.length === 4 && f[0] === "ip" && f[1] === "set") {
+		return { action: "set", iface: f[2], cidr: f[3] };
+	}
+	if (f.length === 3 && f[0] === "ip" && f[1] === "unset") {
+		return { action: "unset", iface: f[2] };
+	}
+	return null;
+}
+
 function isNodeStateCommand(command: string): boolean {
 	return command.trim() === "freeze" || command.trim() === "unfreeze";
 }
@@ -133,6 +150,66 @@ function appendTerminalHistory(history: string[], command: string): string[] {
 	if (normalized === "") return history;
 	if (history.at(-1)?.trim() === normalized) return history;
 	return [...history, normalized];
+}
+
+function appendNodeRecent(history: string[], command: string): string[] {
+	const normalized = command.trim();
+	if (normalized === "") return history;
+	if (history.at(-1)?.trim() === normalized) return history;
+	return [...history, normalized];
+}
+
+function parseRoutes(output: string): RouteRule[] {
+	const lines = output.split("\n").map((line) => line.trim()).filter((line) => line !== "");
+	const routes: RouteRule[] = [];
+	for (const line of lines) {
+		if (line.startsWith("blackhole ")) {
+			const parts = line.split(/\s+/);
+			const destination = parts[1] ?? "";
+			if (destination !== "") {
+				routes.push({ destination, nextHop: "blackhole", kind: "blackhole" });
+			}
+			continue;
+		}
+		if (line.startsWith("default ")) {
+			const viaMatch = line.match(/\bvia\s+(\S+)/);
+			routes.push({
+				destination: "default",
+				nextHop: viaMatch?.[1] ?? "",
+				kind: "via",
+			});
+			continue;
+		}
+		const viaMatch = line.match(/^(\S+)\s+via\s+(\S+)/);
+		if (viaMatch) {
+			routes.push({
+				destination: viaMatch[1],
+				nextHop: viaMatch[2],
+				kind: "via",
+			});
+		}
+	}
+	return routes;
+}
+
+function isValidIPv4(value: string): boolean {
+	const parts = value.trim().split(".");
+	if (parts.length !== 4) return false;
+	for (const part of parts) {
+		if (!/^\d+$/.test(part)) return false;
+		const n = Number(part);
+		if (!Number.isInteger(n) || n < 0 || n > 255) return false;
+	}
+	return true;
+}
+
+function isValidCIDR(value: string): boolean {
+	const [ip, prefix] = value.trim().split("/");
+	if (!ip || prefix === undefined) return false;
+	if (!isValidIPv4(ip)) return false;
+	if (!/^\d+$/.test(prefix)) return false;
+	const p = Number(prefix);
+	return Number.isInteger(p) && p >= 0 && p <= 32;
 }
 
 const nodeTypes = { square: SquareNode };
@@ -154,6 +231,7 @@ export function TopologyCanvas() {
 	const [status, setStatus] = useState<string>("");
 	const [lastCommand, setLastCommand] = useState<SidebarLastCommand | null>(null);
 	const [nodeNames, setNodeNames] = useState<Record<string, string>>({});
+	const [nodeRecentCommands, setNodeRecentCommands] = useState<Record<string, string[]>>({});
 	const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(true);
 	const [isTerminalResizing, setIsTerminalResizing] = useState<boolean>(false);
 
@@ -174,6 +252,7 @@ export function TopologyCanvas() {
 	const nodesRef = useRef<Node<SquareNodeData>[]>([]);
 	const terminalTabsRef = useRef<TerminalTab[]>([]);
 	const activeTabIdRef = useRef<number | null>(null);
+	const terminalBodyHeightRef = useRef<number>(DEFAULT_TERMINAL_BODY_HEIGHT);
 
 	// Refs for node button callbacks
 	const toggleNodeRunRef = useRef<(nodeId: string) => void>(() => { });
@@ -224,10 +303,19 @@ export function TopologyCanvas() {
 		setRequestStatus("Loading topology...");
 		try {
 			const { nodes: apiNodes, links: apiLinks } = await fetchTopology(baseUrl);
+			const detailedNodes = await Promise.all(
+				apiNodes.map(async (node) => {
+					try {
+						return await fetchNode(baseUrl, node.id);
+					} catch {
+						return node;
+					}
+				}),
+			);
 			const existingPositions = nodePositionsRef.current;
 			const currentSelectedNodeId = selectedNodeIdRef.current;
 
-			const flowNodes: Node<SquareNodeData>[] = apiNodes.map((node, index) =>
+			const flowNodes: Node<SquareNodeData>[] = detailedNodes.map((node, index) =>
 				buildFlowNode(
 					node,
 					existingPositions.get(node.id) ?? node.position ?? randomPos(index),
@@ -338,7 +426,6 @@ export function TopologyCanvas() {
 			const { status: nodeStatus } = currentNode.data;
 			if (nodeStatus === "stopped") return;
 			const command = nodeStatus === "frozen" ? "unfreeze" : "freeze";
-			setNodeBusy(nodeID, true);
 			setRequestStatus(`${command === "freeze" ? "Freezing" : "Unfreezing"} node ${nodeID}...`);
 			try {
 				await runNodeCommand(baseUrl, nodeID, command);
@@ -346,11 +433,9 @@ export function TopologyCanvas() {
 				setStatus(`Node ${nodeID} ${command === "freeze" ? "frozen" : "unfrozen"}`);
 			} catch (err: unknown) {
 				setStatus(`Failed to ${command} node: ${err instanceof Error ? err.message : String(err)}`);
-			} finally {
-				setNodeBusy(nodeID, false);
 			}
 		},
-		[baseUrl, refreshNode, setNodeBusy, setRequestStatus],
+		[baseUrl, refreshNode, setRequestStatus],
 	);
 
 	// Terminal tab management
@@ -373,6 +458,20 @@ export function TopologyCanvas() {
 			if (current !== tabId) return current;
 			const remaining = terminalTabsRef.current.filter((t) => t.tabId !== tabId);
 			return remaining.at(-1)?.tabId ?? null;
+		});
+	}, []);
+
+	const reorderTerminalTabs = useCallback((sourceTabId: number, targetTabId: number, position: "before" | "after") => {
+		setTerminalTabs((curr) => {
+			const sourceIndex = curr.findIndex((tab) => tab.tabId === sourceTabId);
+			const targetIndex = curr.findIndex((tab) => tab.tabId === targetTabId);
+			if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return curr;
+			const next = [...curr];
+			const [moved] = next.splice(sourceIndex, 1);
+			const adjustedTargetIndex = sourceIndex < targetIndex ? targetIndex - 1 : targetIndex;
+			const insertionIndex = position === "before" ? adjustedTargetIndex : adjustedTargetIndex + 1;
+			next.splice(insertionIndex, 0, moved);
+			return next;
 		});
 	}, []);
 
@@ -409,6 +508,10 @@ export function TopologyCanvas() {
 			const { nodeId } = tab;
 			const command = tab.input.trim();
 			if (!command) return;
+			setNodeRecentCommands((curr) => ({
+				...curr,
+				[nodeId]: appendNodeRecent(curr[nodeId] ?? [], command),
+			}));
 
 			if (command === "clear") {
 				setTerminalTabs((curr) => curr.map((t) =>
@@ -432,7 +535,7 @@ export function TopologyCanvas() {
 				t.tabId === tabId ? { ...t, input: "", historyIndex: null, historyDraft: null } : t,
 			));
 
-			setLastCommand({ command, status: "executing" });
+			setLastCommand({ command, status: "executing", nodeId });
 			setBusy(true);
 			setRequestStatus(`Running command on ${nodeId}...`);
 			try {
@@ -444,18 +547,22 @@ export function TopologyCanvas() {
 				setTerminalTabs((curr) => curr.map((t) =>
 					t.tabId === tabId ? { ...t, lines: [...t.lines, `$ ${command}`, ...outputLines] } : t,
 				));
+				if (result.exitCode !== 0) {
+					const errOut = result.stderr.trim() || result.stdout.trim() || `command failed (exit ${result.exitCode})`;
+					throw new Error(errOut);
+				}
 				if (isInterfaceAddressCommand(command) || isNodeStateCommand(command)) {
 					await refreshNode(nodeId);
 				}
 				setStatus(`Executed ${result.command} on ${nodeId}`);
-				setLastCommand({ command, status: "success" });
+				setLastCommand({ command, status: "success", nodeId });
 			} catch (err: unknown) {
 				const message = err instanceof Error ? err.message : String(err);
 				setTerminalTabs((curr) => curr.map((t) =>
 					t.tabId === tabId ? { ...t, lines: [...t.lines, `$ ${command}`, message] } : t,
 				));
-				setStatus(`Failed to execute command: ${message}`);
-				setLastCommand({ command, status: "failed" });
+				setStatus(message.trim() !== "" ? message : "Failed to execute command");
+				setLastCommand({ command, status: "failed", errorMessage: message, nodeId });
 			} finally {
 				setTerminalTabs((curr) => curr.map((t) =>
 					t.tabId === tabId ? { ...t, history: appendTerminalHistory(t.history, command) } : t,
@@ -466,20 +573,117 @@ export function TopologyCanvas() {
 		[baseUrl, refreshNode, setRequestStatus],
 	);
 
+	const executeNodeCommandFromSidebar = useCallback(async (nodeId: string, command: string, options?: { silent?: boolean }) => {
+		const silent = options?.silent === true;
+		setNodeRecentCommands((curr) => ({
+			...curr,
+			[nodeId]: appendNodeRecent(curr[nodeId] ?? [], command),
+		}));
+		if (!silent) {
+			openTerminalForNode(nodeId);
+		}
+		setLastCommand({ command, status: "executing", nodeId });
+		setBusy(true);
+		setRequestStatus(`Running command on ${nodeId}...`);
+		try {
+			const result: ApiCommandResponse = await runNodeCommand(baseUrl, nodeId, command);
+			const outputLines = [
+				...result.stdout.split("\n").map((line) => line.trimEnd()).filter((line) => line !== ""),
+				...result.stderr.split("\n").map((line) => line.trimEnd()).filter((line) => line !== ""),
+			];
+			if (!silent) {
+				const tab = terminalTabsRef.current.find((t) => t.nodeId === nodeId);
+				if (tab) {
+					setTerminalTabs((curr) => curr.map((t) =>
+						t.tabId === tab.tabId ? { ...t, lines: [...t.lines, `$ ${command}`, ...outputLines] } : t,
+					));
+					setActiveTabId(tab.tabId);
+					setTerminalPanelState((s) => s === "hidden" ? "normal" : s);
+				}
+			}
+			if (result.exitCode !== 0) {
+				const errOut = result.stderr.trim() || result.stdout.trim() || `command failed (exit ${result.exitCode})`;
+				throw new Error(errOut);
+			}
+			if (isInterfaceAddressCommand(command) || isNodeStateCommand(command)) {
+				await refreshNode(nodeId);
+			}
+			setStatus(`Executed ${result.command} on ${nodeId}`);
+			setLastCommand({ command, status: "success", nodeId });
+			return true;
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			if (!silent) {
+				const tab = terminalTabsRef.current.find((t) => t.nodeId === nodeId);
+				if (tab) {
+					setTerminalTabs((curr) => curr.map((t) =>
+						t.tabId === tab.tabId ? { ...t, lines: [...t.lines, `$ ${command}`, message] } : t,
+					));
+					setActiveTabId(tab.tabId);
+					setTerminalPanelState((s) => s === "hidden" ? "normal" : s);
+				}
+			}
+			setStatus(message.trim() !== "" ? message : "Failed to execute command");
+			setLastCommand({ command, status: "failed", errorMessage: message, nodeId });
+			return false;
+		} finally {
+			if (!silent) {
+				setTerminalTabs((curr) => curr.map((t) =>
+					t.nodeId === nodeId ? { ...t, history: appendTerminalHistory(t.history, command) } : t,
+				));
+			}
+			setBusy(false);
+		}
+	}, [baseUrl, openTerminalForNode, refreshNode, setRequestStatus]);
+
+	const clearNodeRecentCommands = useCallback((nodeId: string) => {
+		setNodeRecentCommands((curr) => ({ ...curr, [nodeId]: [] }));
+		setTerminalTabs((curr) => curr.map((t) =>
+			t.nodeId === nodeId ? { ...t, history: [] } : t,
+		));
+	}, []);
+
+	const recordFailedNodeCommand = useCallback((nodeId: string, command: string, errorMessage: string) => {
+		setNodeRecentCommands((curr) => ({
+			...curr,
+			[nodeId]: appendNodeRecent(curr[nodeId] ?? [], command),
+		}));
+		setLastCommand({ command, status: "failed", errorMessage, nodeId });
+		setStatus(errorMessage);
+	}, []);
+
 	// Sync refs
 	useEffect(() => { selectedNodeIdRef.current = selectedNodeId; }, [selectedNodeId]);
 	useEffect(() => { selectedLinkIdRef.current = selectedLinkId; }, [selectedLinkId]);
 	useEffect(() => { pendingConnectionRef.current = pendingConnection; }, [pendingConnection]);
 	useEffect(() => { terminalTabsRef.current = terminalTabs; }, [terminalTabs]);
 	useEffect(() => { activeTabIdRef.current = activeTabId; }, [activeTabId]);
+	useEffect(() => { terminalBodyHeightRef.current = terminalBodyHeight; }, [terminalBodyHeight]);
 	useEffect(() => { toggleNodeRunRef.current = (nodeId) => void toggleNodeRun(nodeId); }, [toggleNodeRun]);
 	useEffect(() => { openTerminalForNodeRef.current = openTerminalForNode; }, [openTerminalForNode]);
 
 	useEffect(() => { void loadTopology(); }, [loadTopology]);
+	useEffect(() => {
+		if (!selectedNodeId) return;
+		void refreshNode(selectedNodeId);
+	}, [refreshNode, selectedNodeId]);
 
 	useEffect(() => {
 		nodePositionsRef.current = new Map(nodes.map((n) => [n.id, { x: n.position.x, y: n.position.y }]));
 		nodesRef.current = nodes;
+		setNodeRecentCommands((curr) => {
+			const existingIds = new Set(nodes.map((node) => node.id));
+			let changed = false;
+			const next: Record<string, string[]> = {};
+			for (const [nodeId, history] of Object.entries(curr)) {
+				if (existingIds.has(nodeId)) {
+					next[nodeId] = history;
+				} else {
+					changed = true;
+				}
+			}
+			return changed ? next : curr;
+		});
 	}, [nodes]);
 
 	useEffect(() => {
@@ -611,6 +815,7 @@ export function TopologyCanvas() {
 			setConnectionSourceNodeId("");
 			setPendingConnection(null);
 			setBusyNodeIds(new Set());
+			setNodeRecentCommands({});
 			setIsCreateNodeMenuOpen(false);
 			setTerminalTabs([]);
 			setActiveTabId(null);
@@ -640,6 +845,11 @@ export function TopologyCanvas() {
 			const nodeIdToDelete = selectedNodeId;
 			await deleteNode(baseUrl, nodeIdToDelete);
 			setTerminalTabs((curr) => curr.filter((t) => t.nodeId !== nodeIdToDelete));
+			setNodeRecentCommands((curr) => {
+				const next = { ...curr };
+				delete next[nodeIdToDelete];
+				return next;
+			});
 			setActiveTabId((current) => {
 				const remaining = terminalTabsRef.current.filter((t) => t.nodeId !== nodeIdToDelete);
 				if (remaining.some((t) => t.tabId === current)) return current;
@@ -763,6 +973,8 @@ export function TopologyCanvas() {
 	// Sidebar recent commands: history of the terminal tab for the selected node
 	const sidebarRecentCommands = (() => {
 		if (!selectedNode) return [];
+		const fromNodeRecent = nodeRecentCommands[selectedNode.id];
+		if (fromNodeRecent && fromNodeRecent.length > 0) return fromNodeRecent;
 		const tab = terminalTabs.find((t) => t.nodeId === selectedNode.id);
 		return tab?.history ?? [];
 	})();
@@ -780,33 +992,37 @@ export function TopologyCanvas() {
 	}, [isCreateNodeMenuOpen]);
 
 	const startTerminalResize = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
+		if (terminalPanelState === "fullscreen") return;
 		event.preventDefault();
-		setIsTerminalResizing(true);
-		if (terminalPanelState === "hidden") {
-			setTerminalPanelState("normal");
-		}
 		const startY = event.clientY;
-		const startHeight = terminalPanelState === "hidden" ? 0 : terminalBodyHeight;
+		const fromHidden = terminalPanelState === "hidden";
+		const initialHeight = fromHidden ? 0 : terminalBodyHeightRef.current;
+		setIsTerminalResizing(true);
+		if (fromHidden) {
+			setTerminalBodyHeight(0);
+		}
+		setTerminalPanelState("normal");
+
 		function onMove(moveEvent: MouseEvent) {
 			const delta = startY - moveEvent.clientY;
-			const maxBodyHeight = Math.max(0, window.innerHeight - HEADER_HEIGHT - TERMINAL_HEADER_HEIGHT - TERMINAL_RESIZE_HANDLE_HEIGHT);
-			const next = Math.max(0, Math.min(maxBodyHeight, startHeight + delta));
-			if (next <= 0) {
-				setTerminalBodyHeight(0);
-				setTerminalPanelState("hidden");
-			} else {
-				setTerminalBodyHeight(next);
-				setTerminalPanelState("normal");
-			}
+			const maxBodyHeight = Math.max(
+				0,
+				window.innerHeight - HEADER_HEIGHT - TERMINAL_HEADER_HEIGHT - TERMINAL_RESIZE_HANDLE_HEIGHT,
+			);
+			const minBodyHeight = Math.min(TERMINAL_MIN_DRAG_BODY_HEIGHT, maxBodyHeight);
+			const next = Math.max(minBodyHeight, Math.min(maxBodyHeight, initialHeight + delta));
+			setTerminalBodyHeight(next);
 		}
+
 		function onUp() {
 			setIsTerminalResizing(false);
 			window.removeEventListener("mousemove", onMove);
 			window.removeEventListener("mouseup", onUp);
 		}
+
 		window.addEventListener("mousemove", onMove);
 		window.addEventListener("mouseup", onUp);
-	}, [terminalBodyHeight, terminalPanelState]);
+	}, [terminalPanelState]);
 
 	const renameNode = useCallback((nodeId: string, displayName: string) => {
 		const nextName = displayName.trim();
@@ -817,13 +1033,203 @@ export function TopologyCanvas() {
 		});
 	}, [baseUrl]);
 
+	const runInterfaceCommand = useCallback(async (nodeId: string, command: string) => {
+		setNodeRecentCommands((curr) => ({
+			...curr,
+			[nodeId]: appendNodeRecent(curr[nodeId] ?? [], command),
+		}));
+		setLastCommand({ command, status: "executing", nodeId });
+		const parsedAddress = parseInterfaceAddressCommand(command);
+		if (parsedAddress) {
+			setNodes((curr) => curr.map((node) => {
+				if (node.id !== nodeId) return node;
+				return {
+					...node,
+					data: {
+						...node.data,
+						interfaces: node.data.interfaces.map((iface) => {
+							if (iface.name !== parsedAddress.iface) return iface;
+							if (parsedAddress.action === "unset") {
+								return { ...iface, ipAddress: "", prefixLength: 0 };
+							}
+							const cidr = parsedAddress.cidr ?? "";
+							const [ip, prefix] = cidr.split("/");
+							const parsedPrefix = Number(prefix);
+							return {
+								...iface,
+								ipAddress: ip ?? "",
+								prefixLength: Number.isFinite(parsedPrefix) ? parsedPrefix : iface.prefixLength,
+							};
+						}),
+					},
+				};
+			}));
+		}
+		setRequestStatus(`Running command on ${nodeId}...`);
+		try {
+			const result = await runNodeCommand(baseUrl, nodeId, command);
+			await refreshNode(nodeId);
+			setStatus(result.stdout.trim() || `Executed ${result.command}`);
+			setLastCommand({ command, status: "success", nodeId });
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			setStatus(message.trim() !== "" ? message : "Failed to execute command");
+			setLastCommand({ command, status: "failed", errorMessage: message, nodeId });
+			await refreshNode(nodeId);
+		}
+	}, [baseUrl, refreshNode, setRequestStatus]);
+
+	const setInterfaceAddress = useCallback((nodeId: string, interfaceName: string, cidr: string) => {
+		void runInterfaceCommand(nodeId, `ip set ${interfaceName} ${cidr}`);
+	}, [runInterfaceCommand]);
+
+	const unsetInterfaceAddress = useCallback((nodeId: string, interfaceName: string) => {
+		void runInterfaceCommand(nodeId, `ip unset ${interfaceName}`);
+	}, [runInterfaceCommand]);
+
+	const setInterfaceAdminState = useCallback((nodeId: string, interfaceName: string, up: boolean) => {
+		void runInterfaceCommand(nodeId, `ip link set ${interfaceName} ${up ? "up" : "down"}`);
+	}, [runInterfaceCommand]);
+
+	const setInterfaceFlap = useCallback((
+		nodeId: string,
+		interfaceName: string,
+		enabled: boolean,
+		options: { downMs: number; upMs: number; jitterMs: number },
+	) => {
+		const downMs = Math.max(0, Math.floor(options.downMs));
+		const upMs = Math.max(0, Math.floor(options.upMs));
+		const jitterMs = Math.max(0, Math.floor(options.jitterMs));
+		const command = enabled
+			? `ip flap start ${interfaceName} --down ${downMs} --up ${upMs} --jitter ${jitterMs}`
+			: `ip flap stop ${interfaceName}`;
+		void runInterfaceCommand(nodeId, command);
+	}, [runInterfaceCommand]);
+
+	const setInterfaceTC = useCallback((
+		nodeId: string,
+		interfaceName: string,
+		options: {
+			delayMs: number;
+			jitterMs: number;
+			lossPct: number;
+			lossCorrelationPct: number;
+			reorderPct: number;
+			duplicatePct: number;
+			corruptPct: number;
+			bandwidthKbit: number;
+			queueLimitPackets: number;
+		},
+	) => {
+		const command = `tc set ${interfaceName} --delay ${options.delayMs} --jitter ${options.jitterMs} --loss ${options.lossPct} --loss-correlation ${options.lossCorrelationPct} --reorder ${options.reorderPct} --duplicate ${options.duplicatePct} --corrupt ${options.corruptPct} --bandwidth ${options.bandwidthKbit} --queue-limit ${options.queueLimitPackets}`;
+		void runInterfaceCommand(nodeId, command);
+	}, [runInterfaceCommand]);
+
+	const clearInterfaceTC = useCallback((nodeId: string, interfaceName: string) => {
+		void runInterfaceCommand(nodeId, `tc clear ${interfaceName}`);
+	}, [runInterfaceCommand]);
+
+	const listRoutes = useCallback(async (nodeId: string): Promise<RouteRule[]> => {
+		const result = await runNodeCommand(baseUrl, nodeId, "ip route");
+		return parseRoutes(result.stdout);
+	}, [baseUrl]);
+
+	const addRoute = useCallback(async (nodeId: string, destination: string, gatewayOrBlackhole: string): Promise<boolean> => {
+		const dst = destination.trim().toLowerCase();
+		const rhs = gatewayOrBlackhole.trim().toLowerCase();
+		if (!dst || !rhs) return false;
+		const attemptedCommand = rhs === "blackhole"
+			? `ip route blackhole ${destination.trim()}`
+			: dst === "default"
+				? `ip route default ${gatewayOrBlackhole.trim()}`
+				: `ip route add ${destination.trim()} via ${gatewayOrBlackhole.trim()}`;
+
+		if (dst !== "default" && !isValidCIDR(destination.trim())) {
+			setLastCommand({
+				command: attemptedCommand,
+				status: "failed",
+				errorMessage: "invalid destination format (expected CIDR, e.g. 10.0.2.0/24)",
+				nodeId,
+			});
+			setStatus("Invalid route destination format");
+			return false;
+		}
+		if (rhs !== "blackhole" && !isValidIPv4(gatewayOrBlackhole.trim())) {
+			setLastCommand({
+				command: attemptedCommand,
+				status: "failed",
+				errorMessage: "invalid next-hop format (expected IPv4, e.g. 10.0.2.1)",
+				nodeId,
+			});
+			setStatus("Invalid route next-hop format");
+			return false;
+		}
+		if (dst === "default" && rhs === "blackhole") {
+			setStatus("default route to blackhole is disabled");
+			setLastCommand({
+				command: attemptedCommand,
+				status: "failed",
+				errorMessage: "default route to blackhole is disabled",
+				nodeId,
+			});
+			return false;
+		}
+		let command = "";
+		if (rhs === "blackhole") {
+			command = `ip route blackhole ${destination.trim()}`;
+		} else if (dst === "default") {
+			command = `ip route default ${gatewayOrBlackhole.trim()}`;
+		} else {
+			command = `ip route add ${destination.trim()} via ${gatewayOrBlackhole.trim()}`;
+		}
+		setNodeRecentCommands((curr) => ({
+			...curr,
+			[nodeId]: appendNodeRecent(curr[nodeId] ?? [], command),
+		}));
+		setLastCommand({ command, status: "executing", nodeId });
+		setRequestStatus(`Running command on ${nodeId}...`);
+		try {
+			const result = await runNodeCommand(baseUrl, nodeId, command);
+			setStatus(result.stdout.trim() || `Executed ${result.command}`);
+			setLastCommand({ command, status: "success", nodeId });
+			return true;
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			setStatus(message.trim() !== "" ? message : "Failed to execute command");
+			setLastCommand({ command, status: "failed", errorMessage: message, nodeId });
+			return false;
+		}
+	}, [baseUrl, setRequestStatus]);
+
+	const deleteRouteRule = useCallback(async (nodeId: string, route: RouteRule) => {
+		const command = route.destination.toLowerCase() === "default"
+			? "ip route delete default"
+			: `ip route delete ${route.destination}`;
+		setNodeRecentCommands((curr) => ({
+			...curr,
+			[nodeId]: appendNodeRecent(curr[nodeId] ?? [], command),
+		}));
+		setLastCommand({ command, status: "executing", nodeId });
+		setRequestStatus(`Running command on ${nodeId}...`);
+		try {
+			const result = await runNodeCommand(baseUrl, nodeId, command);
+			setStatus(result.stdout.trim() || `Executed ${result.command}`);
+			setLastCommand({ command, status: "success", nodeId });
+		} catch (err: unknown) {
+			const message = err instanceof Error ? err.message : String(err);
+			setStatus(message.trim() !== "" ? message : "Failed to execute command");
+			setLastCommand({ command, status: "failed", errorMessage: message, nodeId });
+			throw err;
+		}
+	}, [baseUrl, setRequestStatus]);
+
 	const tabLabel = useCallback((tab: TerminalTab) => {
 		return nodeNames[tab.nodeId] ?? tab.nodeId;
 	}, [nodeNames]);
 
 	return (
 		<div className="relative h-screen w-screen bg-zinc-100 text-zinc-900">
-			<header className="fixed left-0 top-0 z-[2000] flex w-full items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 py-3 relative">
+			<header className="fixed left-0 top-0 z-[2000] flex w-full items-center justify-between gap-3 border-b border-zinc-200 bg-white px-4 py-3 relative [&_button:not(:disabled)]:cursor-pointer">
 				<input
 					ref={importInputRef}
 					type="file"
@@ -832,30 +1238,39 @@ export function TopologyCanvas() {
 					className="hidden"
 				/>
 				<div className="flex items-center gap-3">
-					<button type="button" onClick={() => void saveTopologyToFile()} disabled={busy || nodes.length === 0} className="flex items-center gap-2 rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"><Save className="h-4 w-4" />Save</button>
-					<button type="button" onClick={openImportPicker} disabled={busy} className="flex items-center gap-2 rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"><FileUp className="h-4 w-4" />Load</button>
-					<button type="button" onClick={requestClearTopology} disabled={busy} className="flex items-center gap-2 rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"><RotateCcw className="h-4 w-4" />Clear</button>
-					<div className="relative" ref={createNodeMenuRef}>
 					<button
 						type="button"
-						onClick={() => setIsCreateNodeMenuOpen((v) => !v)}
-						disabled={busy}
-						className="flex items-center gap-2 rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
+						onClick={() => window.open("/help", "_blank")}
+						className="flex h-6 w-6 items-center justify-center text-zinc-700 hover:text-zinc-900"
+						aria-label="Help"
 					>
-						<Network className="h-4 w-4" />
-						Create node
+						<CircleHelp className="h-4 w-4" />
 					</button>
-					{isCreateNodeMenuOpen ? (
-						<div className="absolute left-0 top-full z-30 mt-2 flex w-full flex-col rounded border border-zinc-300 bg-white p-1 shadow-lg">
-							<button type="button" onClick={() => void createNode("host")} className="flex items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"><Monitor className="h-4 w-4 text-gray-600" />Host</button>
-							<button type="button" onClick={() => void createNode("switch")} className="flex items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"><Network className="h-4 w-4 text-gray-600" />Switch</button>
-							<button type="button" onClick={() => void createNode("router")} className="flex items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"><Router className="h-4 w-4 text-gray-600" />Router</button>
-						</div>
-					) : null}
+					<div className="relative" ref={createNodeMenuRef}>
+						<button
+							type="button"
+							onClick={() => setIsCreateNodeMenuOpen((v) => !v)}
+							disabled={busy}
+							className="flex items-center gap-2 rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"
+						>
+							<Network className="h-4 w-4" />
+							Create node
+						</button>
+						{isCreateNodeMenuOpen ? (
+							<div className="absolute left-0 top-full z-30 mt-2 flex w-full flex-col rounded border border-zinc-300 bg-white p-1 shadow-lg">
+								<button type="button" onClick={() => void createNode("host")} className="flex items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"><Monitor className="h-4 w-4 text-gray-600" />Host</button>
+								<button type="button" onClick={() => void createNode("switch")} className="flex items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"><Network className="h-4 w-4 text-gray-600" />Switch</button>
+								<button type="button" onClick={() => void createNode("router")} className="flex items-center gap-2 rounded px-3 py-2 text-left text-sm hover:bg-zinc-100"><Router className="h-4 w-4 text-gray-600" />Router</button>
+							</div>
+						) : null}
 					</div>
 				</div>
 				<div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-sm text-zinc-600">{nodes.length} nodes, {edges.length} links</div>
-				<button type="button" onClick={() => window.open("/help", "_blank")} className="flex items-center gap-2 rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100"><CircleHelp className="h-4 w-4" />Help</button>
+				<div className="flex items-center gap-3">
+					<button type="button" onClick={() => void saveTopologyToFile()} disabled={busy || nodes.length === 0} className="flex items-center gap-2 rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"><Save className="h-4 w-4" />Save</button>
+					<button type="button" onClick={openImportPicker} disabled={busy} className="flex items-center gap-2 rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"><FileUp className="h-4 w-4" />Load</button>
+					<button type="button" onClick={requestClearTopology} disabled={busy} className="flex items-center gap-2 rounded border border-zinc-700 px-3 py-1 text-sm hover:bg-zinc-100 disabled:opacity-60"><RotateCcw className="h-4 w-4" />Clear</button>
+				</div>
 			</header>
 
 			{/* Right sidebar */}
@@ -871,7 +1286,19 @@ export function TopologyCanvas() {
 				onOpenTerminal={openTerminalForNode}
 				onToggleRun={(nodeId) => void toggleNodeRun(nodeId)}
 				onToggleFreeze={(nodeId) => void toggleFreezeNode(nodeId)}
-				onRequestDeleteNode={requestDeleteSelectedNode}
+					onSetInterfaceAddress={setInterfaceAddress}
+					onUnsetInterfaceAddress={unsetInterfaceAddress}
+					onSetInterfaceAdminState={setInterfaceAdminState}
+					onSetInterfaceFlap={setInterfaceFlap}
+					onSetInterfaceTC={setInterfaceTC}
+					onClearInterfaceTC={clearInterfaceTC}
+					onListRoutes={listRoutes}
+					onAddRoute={addRoute}
+					onDeleteRoute={deleteRouteRule}
+					onExecuteNodeCommand={executeNodeCommandFromSidebar}
+					onRecordFailedNodeCommand={recordFailedNodeCommand}
+					onClearRecentCommands={clearNodeRecentCommands}
+					onRequestDeleteNode={requestDeleteSelectedNode}
 				onDeleteLink={() => void deleteSelectedLink()}
 				onToggleCollapse={() => {
 					setSelectedNodeId("");
@@ -893,6 +1320,7 @@ export function TopologyCanvas() {
 				sidebarWidth={sidebarWidth}
 				onTabChange={setActiveTabId}
 				onTabClose={closeTerminalTab}
+				onTabReorder={reorderTerminalTabs}
 				onPanelStateChange={setTerminalPanelState}
 				onInputChange={handleTabInputChange}
 				onHistoryNavigate={handleTabHistoryNavigate}

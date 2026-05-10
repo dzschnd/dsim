@@ -821,9 +821,12 @@ func execInContainerChecked(
 		return "", err
 	}
 	if exitCode != 0 {
-		message := failureMessage
-		if trimmed := strings.TrimSpace(stderr); trimmed != "" {
-			message += ": " + trimmed
+		message := strings.TrimSpace(stderr)
+		if message == "" {
+			message = strings.TrimSpace(stdout)
+		}
+		if message == "" {
+			message = failureMessage
 		}
 		slog.Error("Container exec failed", "message", message)
 		return "", httputil.NewAppError(http.StatusInternalServerError, message)

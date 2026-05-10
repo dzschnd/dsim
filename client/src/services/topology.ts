@@ -1,9 +1,31 @@
+export type ApiInterfaceFlap = {
+	enabled: boolean;
+	downMs: number;
+	upMs: number;
+	jitterMs: number;
+};
+
+export type ApiTrafficConditions = {
+	delayMs: number;
+	jitterMs: number;
+	lossPct: number;
+	lossCorrelationPct: number;
+	reorderPct: number;
+	duplicatePct: number;
+	corruptPct: number;
+	bandwidthKbit: number;
+	queueLimitPackets: number;
+};
+
 export type ApiInterface = {
 	id: string;
 	name: string;
 	linkId: string;
 	ipAddress: string;
 	prefixLength: number;
+	adminDown: boolean;
+	flap: ApiInterfaceFlap;
+	conditions: ApiTrafficConditions;
 };
 
 export type ApiNode = {
