@@ -2831,13 +2831,16 @@ func (s *Service) runIPSet(ctx context.Context, command, nodeID, interfaceName, 
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid interface address")
 	}
 
-	if !s.repo.UpdateInterfaceAddress(nodeID, interfaceName, prefix.Addr().String(), prefix.Bits()) {
-		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
-	}
-
 	node, ok := s.repo.GetNode(nodeID)
 	if !ok {
 		return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+	if node.Type == model.Switch {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch ports do not support ip assignment")
+	}
+
+	if !s.repo.UpdateInterfaceAddress(nodeID, interfaceName, prefix.Addr().String(), prefix.Bits()) {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
 	}
 
 	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
@@ -2918,6 +2921,9 @@ func (s *Service) runIPUnset(ctx context.Context, command, nodeID, interfaceName
 	node, ok := s.repo.GetNode(nodeID)
 	if !ok {
 		return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
+	}
+	if node.Type == model.Switch {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "switch ports do not support ip assignment")
 	}
 
 	found := false

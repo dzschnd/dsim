@@ -150,6 +150,7 @@ function InterfaceCard({
 	iface,
 	isBusy,
 	canControl,
+	canSetIPAddress,
 	onSetInterfaceAddress,
 	onUnsetInterfaceAddress,
 	onSetInterfaceAdminState,
@@ -161,6 +162,7 @@ function InterfaceCard({
 	iface: ApiInterface;
 	isBusy: boolean;
 	canControl: boolean;
+	canSetIPAddress: boolean;
 	onSetInterfaceAddress: (nodeId: string, interfaceName: string, cidr: string) => void;
 	onUnsetInterfaceAddress: (nodeId: string, interfaceName: string) => void;
 	onSetInterfaceAdminState: (nodeId: string, interfaceName: string, up: boolean) => void;
@@ -236,9 +238,9 @@ function InterfaceCard({
 		}
 	}, [cidr, editingIP]);
 	useEffect(() => {
-		if (canControl) return;
+		if (canSetIPAddress) return;
 		setEditingIP(false);
-	}, [canControl]);
+	}, [canSetIPAddress]);
 
 	useEffect(() => {
 		setFlapDraft({
@@ -272,7 +274,7 @@ function InterfaceCard({
 	]);
 
 	const submitIP = () => {
-		if (!canControl) {
+		if (!canSetIPAddress) {
 			setEditingIP(false);
 			return;
 		}
@@ -338,7 +340,7 @@ function InterfaceCard({
 									setDraftIP(cidr);
 								}
 							}}
-							disabled={isBusy || !canControl}
+							disabled={isBusy || !canSetIPAddress}
 							autoFocus
 							placeholder="IP unset"
 							className="absolute inset-0 h-7 w-full rounded-md border border-blue-200 bg-blue-50 px-2 text-sm text-gray-900 outline-none focus:border-blue-400 focus:bg-white disabled:opacity-60"
@@ -347,11 +349,11 @@ function InterfaceCard({
 						<button
 							type="button"
 							onClick={() => setEditingIP(true)}
-							disabled={isBusy || !canControl}
+							disabled={isBusy || !canSetIPAddress}
 							className="absolute inset-0 flex h-7 w-full items-center gap-1.5 rounded-md border border-gray-200 bg-white px-2 text-left text-sm text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-60 disabled:cursor-default"
 						>
 							<span className={`min-w-0 flex-1 truncate ${hasIp ? "text-gray-800" : "text-gray-400"}`}>{hasIp ? cidr : "IP unset"}</span>
-							{canControl && !isBusy ? <PencilLine className="h-3.5 w-3.5 shrink-0 text-gray-400" /> : null}
+							{canSetIPAddress && !isBusy ? <PencilLine className="h-3.5 w-3.5 shrink-0 text-gray-400" /> : null}
 						</button>
 					)}
 				</div>
@@ -553,6 +555,7 @@ function NodePanel({
 	const nodeBusy = data.isBusy;
 	const isRunning = data.status === "running" || data.status === "frozen";
 	const canControlNodeNetworking = data.status === "running";
+	const canSetNodeInterfaceIP = canControlNodeNetworking && data.type !== "switch";
 	const isFrozen = data.status === "frozen";
 	const [interfacesCollapsed, setInterfacesCollapsed] = useState(nodeSidebarState.interfacesCollapsed);
 	const [routesCollapsed, setRoutesCollapsed] = useState(nodeSidebarState.routesCollapsed);
@@ -869,6 +872,7 @@ function NodePanel({
 											iface={iface}
 											isBusy={nodeBusy}
 											canControl={canControlNodeNetworking}
+											canSetIPAddress={canSetNodeInterfaceIP}
 											onSetInterfaceAddress={onSetInterfaceAddress}
 											onUnsetInterfaceAddress={onUnsetInterfaceAddress}
 											onSetInterfaceAdminState={onSetInterfaceAdminState}

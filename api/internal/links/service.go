@@ -324,18 +324,13 @@ func (s *Service) SubscribeLinkActivity() (<-chan LinkActivityEvent, func()) {
 
 func (s *Service) broadcast(event LinkActivityEvent) {
 	s.mu.Lock()
-	subs := make([]chan LinkActivityEvent, 0, len(s.subscribers))
 	for _, ch := range s.subscribers {
-		subs = append(subs, ch)
-	}
-	s.mu.Unlock()
-
-	for _, ch := range subs {
 		select {
 		case ch <- event:
 		default:
 		}
 	}
+	s.mu.Unlock()
 }
 
 func (s *Service) sampleInterfaceDeltaLocked(ctx context.Context, interfaceID string) (uint64, bool) {
