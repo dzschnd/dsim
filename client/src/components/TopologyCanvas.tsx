@@ -332,19 +332,10 @@ export function TopologyCanvas() {
 		setRequestStatus("Loading topology...");
 		try {
 			const { nodes: apiNodes, links: apiLinks } = await fetchTopology(baseUrl);
-			const detailedNodes = await Promise.all(
-				apiNodes.map(async (node) => {
-					try {
-						return await fetchNode(baseUrl, node.id);
-					} catch {
-						return node;
-					}
-				}),
-			);
 			const existingPositions = nodePositionsRef.current;
 			const currentSelectedNodeId = selectedNodeIdRef.current;
 
-			const flowNodes: Node<SquareNodeData>[] = detailedNodes.map((node, index) =>
+			const flowNodes: Node<SquareNodeData>[] = apiNodes.map((node, index) =>
 				buildFlowNode(
 					node,
 					existingPositions.get(node.id) ?? node.position ?? randomPos(index),
@@ -1478,19 +1469,19 @@ export function TopologyCanvas() {
 				onOpenTerminal={openTerminalForNode}
 				onToggleRun={(nodeId) => void toggleNodeRun(nodeId)}
 				onToggleFreeze={(nodeId) => void toggleFreezeNode(nodeId)}
-					onSetInterfaceAddress={setInterfaceAddress}
-					onUnsetInterfaceAddress={unsetInterfaceAddress}
-					onSetInterfaceAdminState={setInterfaceAdminState}
-					onSetInterfaceFlap={setInterfaceFlap}
-					onSetInterfaceTC={setInterfaceTC}
-					onClearInterfaceTC={clearInterfaceTC}
-					onListRoutes={listRoutes}
-					onAddRoute={addRoute}
-					onDeleteRoute={deleteRouteRule}
-					onExecuteNodeCommand={executeNodeCommandFromSidebar}
-					onRecordFailedNodeCommand={recordFailedNodeCommand}
-					onClearRecentCommands={clearNodeRecentCommands}
-					onRequestDeleteNode={requestDeleteSelectedNode}
+				onSetInterfaceAddress={setInterfaceAddress}
+				onUnsetInterfaceAddress={unsetInterfaceAddress}
+				onSetInterfaceAdminState={setInterfaceAdminState}
+				onSetInterfaceFlap={setInterfaceFlap}
+				onSetInterfaceTC={setInterfaceTC}
+				onClearInterfaceTC={clearInterfaceTC}
+				onListRoutes={listRoutes}
+				onAddRoute={addRoute}
+				onDeleteRoute={deleteRouteRule}
+				onExecuteNodeCommand={executeNodeCommandFromSidebar}
+				onRecordFailedNodeCommand={recordFailedNodeCommand}
+				onClearRecentCommands={clearNodeRecentCommands}
+				onRequestDeleteNode={requestDeleteSelectedNode}
 				onDeleteLink={() => void deleteSelectedLink()}
 				onToggleCollapse={() => {
 					setSelectedNodeId("");
