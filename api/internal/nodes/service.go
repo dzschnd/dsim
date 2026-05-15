@@ -436,13 +436,48 @@ func (s *Service) StartNode(ctx context.Context, nodeID string) error {
 		return httputil.NewAppError(http.StatusInternalServerError, "failed to start node")
 	}
 
-	inspectStarted, err := s.docker.ContainerInspect(ctx, node.ContainerID)
-	if err != nil {
-		if client.IsErrNotFound(err) {
-			return httputil.NewAppError(http.StatusNotFound, "container not found")
+	s.repo.store.Mu.RLock()
+	linkedNetworks := make(map[string]struct{})
+	for _, iface := range node.Interfaces {
+		if iface.LinkID == "" {
+			continue
 		}
-		slog.Error("Container inspect failed", "err", err)
-		return httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
+		if link, ok := s.repo.store.Links[iface.LinkID]; ok && link.NetworkName != "" {
+			linkedNetworks[link.NetworkName] = struct{}{}
+		}
+	}
+	s.repo.store.Mu.RUnlock()
+
+	deadline := time.Now().Add(30 * time.Second)
+	var inspectStarted types.ContainerJSON
+	for {
+		var err error
+		inspectStarted, err = s.docker.ContainerInspect(ctx, node.ContainerID)
+		if err != nil {
+			if client.IsErrNotFound(err) {
+				return httputil.NewAppError(http.StatusNotFound, "container not found")
+			}
+			slog.Error("Container inspect failed", "err", err)
+			return httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
+		}
+		ready := true
+		if inspectStarted.NetworkSettings != nil {
+			for name := range linkedNetworks {
+				ep := inspectStarted.NetworkSettings.Networks[name]
+				if ep == nil || ep.IPAddress == "" {
+					ready = false
+					break
+				}
+			}
+		}
+		if ready {
+			break
+		}
+		if time.Now().After(deadline) {
+			slog.Warn("Container networks not fully attached after deadline", "container_id", node.ContainerID)
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
 
 	s.syncRuntimeInterfaces(nodeID, node.Interfaces, inspectStarted)
@@ -3410,17 +3445,8 @@ func (s *Service) applyRuntimeInterfaceConditions(ctx context.Context, node mode
 			ctx,
 			s.docker,
 			node.ContainerID,
-			[]string{"tc", "qdisc", "replace", "dev", iface.RuntimeName, "root", "handle", "1:", "htb", "default", "1"},
-			"failed to apply tc root qdisc",
-		); err != nil {
-			return err
-		}
-		if _, err := execInContainerChecked(
-			ctx,
-			s.docker,
-			node.ContainerID,
-			[]string{"tc", "class", "replace", "dev", iface.RuntimeName, "parent", "1:", "classid", "1:1", "htb", "rate", rate, "ceil", rate},
-			"failed to apply tc bandwidth class",
+			[]string{"tc", "qdisc", "replace", "dev", iface.RuntimeName, "root", "handle", "1:", "tbf", "rate", rate, "burst", "1600", "latency", "50ms"},
+			"failed to apply tc bandwidth qdisc",
 		); err != nil {
 			return err
 		}

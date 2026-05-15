@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -64,11 +65,28 @@ func (app *application) mount() http.Handler {
 			apiHandler.ServeHTTP(w, r)
 			return
 		}
+
 		if r.URL.Path == "/" {
 			http.ServeFile(w, r, fmt.Sprintf("%s/index.html", clientDistDir))
 			return
 		}
-		clientHandler.ServeHTTP(w, r)
+
+		cleanPath := filepath.Clean(strings.TrimPrefix(r.URL.Path, "/"))
+		if cleanPath != "." && !strings.HasPrefix(cleanPath, "..") {
+			assetPath := filepath.Join(clientDistDir, cleanPath)
+			if info, err := os.Stat(assetPath); err == nil {
+				if !info.IsDir() {
+					clientHandler.ServeHTTP(w, r)
+					return
+				}
+			} else if !errors.Is(err, os.ErrNotExist) {
+				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+				return
+			}
+		}
+
+		http.ServeFile(w, r, fmt.Sprintf("%s/index.html", clientDistDir))
+		return
 	})
 }
 
