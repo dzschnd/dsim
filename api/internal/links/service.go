@@ -123,15 +123,21 @@ func (s *Service) CreateLink(ctx context.Context, interfaceAID, interfaceBID str
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 
-	sandboxKeyA := inspectA.NetworkSettings.SandboxKey
-	sandboxKeyB := inspectB.NetworkSettings.SandboxKey
 	runningA := inspectA.State != nil && inspectA.State.Running
 	runningB := inspectB.State != nil && inspectB.State.Running
+	pidA := 0
+	pidB := 0
+	if inspectA.State != nil {
+		pidA = inspectA.State.Pid
+	}
+	if inspectB.State != nil {
+		pidB = inspectB.State.Pid
+	}
 
 	// Create the veth pair immediately only when both containers are running.
 	// If either is stopped, veth creation is deferred to syncNodeRuntime on start.
-	if sandboxKeyA != "" && sandboxKeyB != "" {
-		if err := CreateVethPair(nameA, nameB, sandboxKeyA, sandboxKeyB); err != nil {
+	if runningA && runningB && pidA != 0 && pidB != 0 {
+		if err := CreateVethPair(nameA, nameB, pidA, pidB); err != nil {
 			s.repo.store.LinkSubnets.Release(subnet)
 			slog.Error("Veth pair create failed", "err", err)
 			return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, fmt.Sprintf("veth pair create failed: %v", err))

@@ -381,27 +381,23 @@ func (s *Service) resyncLinkedPeers(ctx context.Context, nodeID string) {
 	}
 }
 
-func (s *Service) waitForNode(ctx context.Context, node model.Node) (string, error) {
+func (s *Service) waitForNode(ctx context.Context, node model.Node) (int, error) {
 	deadline := time.Now().Add(30 * time.Second)
 	for {
 		inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
 		if err != nil {
 			if client.IsErrNotFound(err) {
-				return "", httputil.NewAppError(http.StatusNotFound, "container not found")
+				return 0, httputil.NewAppError(http.StatusNotFound, "container not found")
 			}
 			slog.Error("Container inspect failed", "err", err)
-			return "", httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
+			return 0, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 		}
 		if inspect.State != nil && inspect.State.Running {
-			sk := ""
-			if inspect.NetworkSettings != nil {
-				sk = inspect.NetworkSettings.SandboxKey
-			}
-			return sk, nil
+			return inspect.State.Pid, nil
 		}
 		if time.Now().After(deadline) {
 			slog.Warn("Container not running after deadline", "container_id", node.ContainerID)
-			return "", nil
+			return 0, nil
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -752,7 +748,7 @@ func (s *Service) startAllNodes(ctx context.Context, nodes []model.Node) error {
 	type nodeState struct {
 		node           model.Node
 		alreadyRunning bool
-		sandboxKey     string
+		pid            int
 		err            error
 	}
 
@@ -787,9 +783,7 @@ func (s *Service) startAllNodes(ctx context.Context, nodes []model.Node) error {
 					}
 				}
 				states[i].alreadyRunning = true
-				if inspect.NetworkSettings != nil {
-					states[i].sandboxKey = inspect.NetworkSettings.SandboxKey
-				}
+				states[i].pid = inspect.State.Pid
 				return
 			}
 			if err := s.docker.ContainerStart(ctx, node.ContainerID, container.StartOptions{}); err != nil {
@@ -803,7 +797,7 @@ func (s *Service) startAllNodes(ctx context.Context, nodes []model.Node) error {
 	wg.Wait()
 
 	// Phase 2A: wait for all containers to reach running state in parallel,
-	// capturing each container's sandbox key from the final inspect.
+	// capturing each container's PID from the final inspect.
 	var wg2a sync.WaitGroup
 	wg2a.Add(len(states))
 	for i := range states {
@@ -813,26 +807,26 @@ func (s *Service) startAllNodes(ctx context.Context, nodes []model.Node) error {
 				return
 			}
 			if !states[i].alreadyRunning {
-				sk, err := s.waitForNode(ctx, states[i].node)
+				pid, err := s.waitForNode(ctx, states[i].node)
 				if err != nil {
 					states[i].err = err
 					return
 				}
-				states[i].sandboxKey = sk
+				states[i].pid = pid
 			}
 		}()
 	}
 	wg2a.Wait()
 
-	// Phase 2B: create all veth pairs upfront using sandbox keys already
+	// Phase 2B: create all veth pairs upfront using container PIDs already
 	// captured in phases 1 and 2A — no extra ContainerInspect calls needed.
-	sandboxKeys := make(map[string]string, len(states))
+	pids := make(map[string]int, len(states))
 	for _, st := range states {
-		if st.err == nil && st.sandboxKey != "" {
-			sandboxKeys[st.node.ContainerID] = st.sandboxKey
+		if st.err == nil && st.pid != 0 {
+			pids[st.node.ContainerID] = st.pid
 		}
 	}
-	prebuilt := s.precreateVeths(ctx, sandboxKeys)
+	prebuilt := s.precreateVeths(ctx, pids)
 
 	// Phase 2C: sync all node runtimes in parallel.
 	errs := make([]error, len(states))
@@ -865,11 +859,11 @@ func (s *Service) startAllNodes(ctx context.Context, nodes []model.Node) error {
 	return nil
 }
 
-// precreateVeths creates every link's veth pair in parallel using sandbox keys
+// precreateVeths creates every link's veth pair in parallel using container PIDs
 // already captured during container startup. Returns a set of interface IDs
 // whose veths are confirmed ready, allowing syncNodeRuntime to skip
 // ensureLinkedVeths entirely for the start-all path.
-func (s *Service) precreateVeths(ctx context.Context, sandboxKeys map[string]string) map[string]bool {
+func (s *Service) precreateVeths(ctx context.Context, pids map[string]int) map[string]bool {
 	// Snapshot links and interface→container mapping.
 	s.repo.store.Mu.RLock()
 	linksCopy := make([]model.Link, 0, len(s.repo.store.Links))
@@ -892,12 +886,12 @@ func (s *Service) precreateVeths(ctx context.Context, sandboxKeys map[string]str
 		wg2.Add(1)
 		go func(l model.Link) {
 			defer wg2.Done()
-			skA := sandboxKeys[ifaceContainer[l.InterfaceAID]]
-			skB := sandboxKeys[ifaceContainer[l.InterfaceBID]]
-			if skA == "" || skB == "" {
+			pidA := pids[ifaceContainer[l.InterfaceAID]]
+			pidB := pids[ifaceContainer[l.InterfaceBID]]
+			if pidA == 0 || pidB == 0 {
 				return
 			}
-			if err := links.CreateVethPair(links.VethNameA(l.ID), links.VethNameB(l.ID), skA, skB); err != nil {
+			if err := links.CreateVethPair(links.VethNameA(l.ID), links.VethNameB(l.ID), pidA, pidB); err != nil {
 				slog.Warn("precreateVeths: failed", "link", l.ID, "err", err)
 				return
 			}
@@ -3737,11 +3731,11 @@ func (s *Service) ensureLinkedVeths(ctx context.Context, node model.Node) map[st
 	ready := make(map[string]bool)
 
 	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
-	if err != nil || inspect.NetworkSettings == nil {
+	if err != nil || inspect.State == nil || !inspect.State.Running {
 		return ready
 	}
-	sandboxKeyThis := inspect.NetworkSettings.SandboxKey
-	if sandboxKeyThis == "" {
+	pidThis := inspect.State.Pid
+	if pidThis == 0 {
 		return ready
 	}
 
@@ -3782,11 +3776,11 @@ func (s *Service) ensureLinkedVeths(ctx context.Context, node model.Node) map[st
 		}
 
 		peerInspect, err := s.docker.ContainerInspect(ctx, peerContainerID)
-		if err != nil || peerInspect.NetworkSettings == nil {
+		if err != nil || peerInspect.State == nil || !peerInspect.State.Running {
 			continue
 		}
-		sandboxKeyPeer := peerInspect.NetworkSettings.SandboxKey
-		if sandboxKeyPeer == "" {
+		pidPeer := peerInspect.State.Pid
+		if pidPeer == 0 {
 			continue
 		}
 
@@ -3798,7 +3792,7 @@ func (s *Service) ensureLinkedVeths(ctx context.Context, node model.Node) map[st
 		}
 
 		vethOK := false
-		if err := links.CreateVethPair(nameThis, namePeer, sandboxKeyThis, sandboxKeyPeer); err != nil {
+		if err := links.CreateVethPair(nameThis, namePeer, pidThis, pidPeer); err != nil {
 			// Peer node may have created the pair simultaneously and is still
 			// moving our end into this container. Retry a few times.
 			for i := 0; i < 5; i++ {

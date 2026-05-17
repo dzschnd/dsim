@@ -2,7 +2,6 @@ package links
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/vishvananda/netlink"
@@ -27,46 +26,31 @@ func vethNameA(linkID string) string { return VethNameA(linkID) }
 func vethNameB(linkID string) string { return VethNameB(linkID) }
 
 // CreateVethPair creates a veth pair and moves each end into the network namespace
-// identified by sandboxKeyA / sandboxKeyB (the Docker SandboxKey path, e.g.
-// /var/run/docker/netns/<id>). Requires the containers to be running.
+// of the container identified by pidA / pidB (the container's init PID from
+// ContainerInspect State.Pid). Requires the containers to be running.
 //
-// Requirements: the process must have CAP_NET_ADMIN and CAP_SYS_ADMIN, and the
-// /var/run/docker/netns directory must be visible inside the app container.
-func CreateVethPair(nameA, nameB, sandboxKeyA, sandboxKeyB string) error {
-	// Open B's netns first so we can place end B there at creation time.
-	// This means end B never touches the current netns: a crash after LinkAdd
-	// leaves only end A here, which the kernel cleans up automatically when
-	// container B stops (peer destruction crosses namespace boundaries).
-	nsB, err := os.Open(sandboxKeyB)
-	if err != nil {
-		return fmt.Errorf("open netns for container B (%s): %w", sandboxKeyB, err)
-	}
-	defer nsB.Close()
-
+// Requirements: the process must have CAP_NET_ADMIN and CAP_SYS_ADMIN, and
+// /proc must be visible so the kernel can resolve /proc/<pid>/ns/net.
+func CreateVethPair(nameA, nameB string, pidA, pidB int) error {
+	// Create end A in the current netns; end B goes directly into container B's
+	// netns via IFLA_NET_NS_PID, which the kernel resolves through /proc/<pid>/ns/net.
 	veth := &netlink.Veth{
 		LinkAttrs:     netlink.LinkAttrs{Name: nameA},
 		PeerName:      nameB,
-		PeerNamespace: netlink.NsFd(nsB.Fd()),
+		PeerNamespace: netlink.NsPid(pidB),
 	}
 	if err := netlink.LinkAdd(veth); err != nil {
 		return fmt.Errorf("create veth pair %s/%s: %w", nameA, nameB, err)
 	}
 
-	// Only end A is in the current netns now; look it up and move it.
+	// End A is still in the current netns; look it up and move it into container A.
 	linkA, err := netlink.LinkByName(nameA)
 	if err != nil {
 		_ = netlink.LinkDel(linkA)
 		return fmt.Errorf("lookup veth %s: %w", nameA, err)
 	}
 
-	nsA, err := os.Open(sandboxKeyA)
-	if err != nil {
-		_ = netlink.LinkDel(linkA)
-		return fmt.Errorf("open netns for container A (%s): %w", sandboxKeyA, err)
-	}
-	defer nsA.Close()
-
-	if err := netlink.LinkSetNsFd(linkA, int(nsA.Fd())); err != nil {
+	if err := netlink.LinkSetNsPid(linkA, pidA); err != nil {
 		_ = netlink.LinkDel(linkA)
 		return fmt.Errorf("move veth %s into container A netns: %w", nameA, err)
 	}
