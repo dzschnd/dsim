@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { CircleHelp, FileUp, Loader2, Monitor, Network, Play, RotateCcw, Router, Save, Square } from "lucide-react";
-import ReactFlow, {
+import {
+	ReactFlow,
 	Background,
 	type Connection,
 	ConnectionLineType,
 	Controls,
 	type Edge,
-	type EdgeMouseHandler,
 	MiniMap,
 	type Node,
 	type OnConnect,
@@ -14,7 +14,7 @@ import ReactFlow, {
 	type OnNodesChange,
 	applyEdgeChanges,
 	applyNodeChanges,
-} from "reactflow";
+} from "@xyflow/react";
 import { InterfaceLabelEdge, type InterfaceLabelEdgeData } from "./InterfaceLabelEdge";
 import { Sidebar, type NodeSidebarViewState, type SidebarLastCommand } from "./Sidebar";
 import { SquareNode, type SquareNodeData } from "./SquareNode";
@@ -296,6 +296,10 @@ export function TopologyCanvas() {
 			id: node.id,
 			type: "square",
 			position,
+			// Pre-set dimensions so nodeHasDimensions() returns true immediately.
+			// Without this ReactFlow hides nodes until ResizeObserver fires for each one.
+			width: 160,
+			height: 118,
 			zIndex: 10,
 			selected: node.id === selectedNodeId,
 			data: {
@@ -745,7 +749,7 @@ export function TopologyCanvas() {
 	}, [selectedLinkId, linkActivityById]);
 
 	const onNodesChange: OnNodesChange = useCallback(
-		(changes) => setNodes((curr) => applySelectedNode(applyNodeChanges(changes, curr), selectedNodeId)),
+		(changes) => setNodes((curr) => applySelectedNode(applyNodeChanges(changes, curr) as Node<SquareNodeData>[], selectedNodeId)),
 		[selectedNodeId],
 	);
 
@@ -1036,8 +1040,7 @@ export function TopologyCanvas() {
 
 	const onConnect: OnConnect = useCallback(
 		async (connection: Connection) => {
-			const source = connection.source ?? "";
-			const target = connection.target ?? "";
+			const { source, target } = connection;
 			if (!source || !target || source === target) return;
 			const key = source < target ? `${source}|${target}` : `${target}|${source}`;
 			const existing = edgeByPair.get(key);
@@ -1524,6 +1527,13 @@ export function TopologyCanvas() {
 					transition: "right 200ms ease-in-out",
 				}}
 			>
+				{/* Canvas loading overlay — shown while the first topology fetch is in flight */}
+				{busy && nodes.length === 0 ? (
+					<div className="absolute inset-0 z-20 flex items-center justify-center bg-zinc-100/80">
+						<Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+					</div>
+				) : null}
+
 				{/* Confirm modal */}
 				{confirmAction ? (
 					<div className="fixed left-1/2 top-1/2 z-30 w-[360px] -translate-x-1/2 -translate-y-1/2 rounded border border-zinc-300 bg-white p-4 shadow-lg">
@@ -1587,12 +1597,12 @@ export function TopologyCanvas() {
 						setSidebarCollapsed(false);
 						setNodes((curr) => applySelectedNode(curr, node.id));
 					}}
-					onEdgeClick={((_, edge) => {
+					onEdgeClick={(_, edge) => {
 						setSelectedNodeId("");
 						setSelectedLinkId(edge.id);
 						setSidebarCollapsed(false);
 						setNodes((curr) => applySelectedNode(curr, ""));
-					}) as EdgeMouseHandler}
+					}}
 					onNodeDragStop={(_, node) => {
 						void persistNodePosition(node.id, { x: node.position.x, y: node.position.y });
 					}}

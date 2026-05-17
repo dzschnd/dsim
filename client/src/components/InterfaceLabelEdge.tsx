@@ -2,8 +2,9 @@ import {
 	BaseEdge,
 	EdgeLabelRenderer,
 	type EdgeProps,
+	type Edge,
 	getStraightPath,
-} from "reactflow";
+} from "@xyflow/react";
 import type { CSSProperties } from "react";
 
 const NODE_WIDTH = 160;
@@ -81,7 +82,7 @@ export function InterfaceLabelEdge({
 	style,
 	markerEnd,
 	data,
-}: EdgeProps<InterfaceLabelEdgeData>) {
+}: EdgeProps<Edge<InterfaceLabelEdgeData>>) {
 	const [edgePath] = getStraightPath({ sourceX, sourceY, targetX, targetY });
 	const [reverseEdgePath] = getStraightPath({ sourceX: targetX, sourceY: targetY, targetX: sourceX, targetY: sourceY });
 	const dx = targetX - sourceX;

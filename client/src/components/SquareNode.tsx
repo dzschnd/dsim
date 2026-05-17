@@ -1,5 +1,6 @@
+import { memo } from "react";
 import { Monitor, Network, Router as RouterIcon, Terminal, Play, Square } from "lucide-react";
-import type { NodeProps } from "reactflow";
+import type { NodeProps, Node } from "@xyflow/react";
 import type { ApiInterface } from "../services/topology";
 import { SideHandles } from "./SideHandles";
 
@@ -29,7 +30,7 @@ const TYPE_LABEL: Record<string, string> = {
 	router: "Router",
 };
 
-export function SquareNode({ data }: NodeProps<SquareNodeData>) {
+export const SquareNode = memo(function SquareNode({ data }: NodeProps<Node<SquareNodeData>>) {
 	const isRunning = data.status === "running" || data.status === "frozen";
 	const isPowerBusy = data.isBusy;
 	const nodeWidth = 160;
@@ -104,4 +105,4 @@ export function SquareNode({ data }: NodeProps<SquareNodeData>) {
 			/>
 		</div >
 	);
-}
+});

@@ -25,7 +25,7 @@ import {
 	Terminal,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { Edge, Node } from "reactflow";
+import type { Edge, Node } from "@xyflow/react";
 import type { InterfaceLabelEdgeData } from "./InterfaceLabelEdge";
 import type { SquareNodeData } from "./SquareNode";
 import type { ApiInterface } from "../services/topology";
