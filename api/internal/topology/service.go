@@ -25,12 +25,12 @@ type service struct {
 	linkService *links.Service
 }
 
-func newService(docker *client.Client, store *store.Store) *service {
+func newService(docker *client.Client, store *store.Store, linkSvc *links.Service) *service {
 	return &service{
 		docker:      docker,
 		store:       store,
 		nodeService: nodes.NewService(docker, store),
-		linkService: links.NewService(docker, store),
+		linkService: linkSvc,
 	}
 }
 
@@ -146,18 +146,22 @@ func (s *service) importTopologyUnsafe(ctx context.Context, file File) error {
 		return err
 	}
 
+	slog.Info("Import: creating nodes", "count", len(file.Nodes))
 	nodeIDByFileID, err := s.importNodesParallel(ctx, file.Nodes, importWorkers)
 	if err != nil {
 		return err
 	}
 
+	slog.Info("Import: creating links", "count", len(file.Links))
 	if err := s.importLinksParallel(ctx, file.Links, nodeIDByFileID, importWorkers); err != nil {
 		return err
 	}
 
+	slog.Info("Import: syncing routes")
 	if err := runtimesync.SyncAllRoutes(ctx, s.docker, s.store); err != nil {
 		return err
 	}
+	slog.Info("Import: complete")
 	return nil
 }
 
@@ -232,6 +236,7 @@ func (s *service) importNodesParallel(ctx context.Context, topologyNodes []Node,
 	return nodeIDByFileID, nil
 }
 
+
 func (s *service) importLinksParallel(ctx context.Context, topologyLinks []Link, nodeIDByFileID map[string]string, workers int) error {
 	type task struct {
 		index int
@@ -279,7 +284,9 @@ func (s *service) importLinksParallel(ctx context.Context, topologyLinks []Link,
 				}
 				if _, err := s.linkService.CreateLink(ctx, interfaceAID, interfaceBID); err != nil {
 					errs[item.index] = err
+					continue
 				}
+				slog.Info("Import: link created", "a_node", item.link.A.NodeID, "a_iface", item.link.A.Interface, "b_node", item.link.B.NodeID, "b_iface", item.link.B.Interface)
 			}
 		}()
 	}
@@ -301,16 +308,13 @@ func (s *service) importLinksParallel(ctx context.Context, topologyLinks []Link,
 
 func CleanupRuntime(ctx context.Context, docker *client.Client, topologyStore *store.Store) {
 	nodesSnapshot := topologyStore.NodesSnapshot()
-	linksSnapshot := topologyStore.LinksSnapshot()
 
-	const linkPoolSize = 6
-	const nodePoolSize = 2 * linkPoolSize
-	linkSem := make(chan struct{}, linkPoolSize)
+	const nodePoolSize = 12
 	nodeSem := make(chan struct{}, nodePoolSize)
 	var wg sync.WaitGroup
 
 	for _, node := range nodesSnapshot {
-		if node.ContainerID == "" && node.NetworkID == "" {
+		if node.ContainerID == "" {
 			continue
 		}
 		node := node
@@ -318,38 +322,10 @@ func CleanupRuntime(ctx context.Context, docker *client.Client, topologyStore *s
 			nodeSem <- struct{}{}
 			defer func() { <-nodeSem }()
 
-			if node.ContainerID != "" {
-				if err := docker.ContainerRemove(ctx, node.ContainerID, container.RemoveOptions{Force: true}); err != nil && !client.IsErrNotFound(err) {
-					slog.Error("Topology cleanup container remove failed", "container_id", node.ContainerID, "err", err)
-				} else {
-					slog.Info("Topology cleanup container removed", "container_id", node.ContainerID)
-				}
-			}
-
-			if node.NetworkID != "" {
-				if err := docker.NetworkRemove(ctx, node.NetworkID); err != nil && !client.IsErrNotFound(err) {
-					slog.Error("Topology cleanup isolated network remove failed", "network_id", node.NetworkID, "err", err)
-				} else {
-					slog.Info("Topology cleanup isolated network removed", "network_id", node.NetworkID)
-				}
-			}
-		})
-	}
-	wg.Wait()
-
-	for _, link := range linksSnapshot {
-		if link.NetworkID == "" {
-			continue
-		}
-		link := link
-		wg.Go(func() {
-			linkSem <- struct{}{}
-			defer func() { <-linkSem }()
-
-			if err := docker.NetworkRemove(ctx, link.NetworkID); err != nil && !client.IsErrNotFound(err) {
-				slog.Error("Topology cleanup link network remove failed", "network_id", link.NetworkID, "err", err)
+			if err := docker.ContainerRemove(ctx, node.ContainerID, container.RemoveOptions{Force: true}); err != nil && !client.IsErrNotFound(err) {
+				slog.Error("Topology cleanup container remove failed", "container_id", node.ContainerID, "err", err)
 			} else {
-				slog.Info("Topology cleanup link network removed", "network_id", link.NetworkID)
+				slog.Info("Topology cleanup container removed", "container_id", node.ContainerID)
 			}
 		})
 	}
@@ -370,7 +346,6 @@ func ClearStore(ctx context.Context, docker *client.Client, topologyStore *store
 	topologyStore.Links = freshStore.Links
 	topologyStore.LinkIndex = freshStore.LinkIndex
 	topologyStore.InterfaceOwnerIndex = freshStore.InterfaceOwnerIndex
-	topologyStore.IsolatedSubnets = freshStore.IsolatedSubnets
 	topologyStore.LinkSubnets = freshStore.LinkSubnets
 
 	return nil

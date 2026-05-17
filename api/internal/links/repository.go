@@ -199,3 +199,4 @@ func (r *Repository) nodeOwnsInterfaceLocked(nodeID, interfaceID string) bool {
 	ownerID, ok := r.store.InterfaceOwnerIndex[interfaceID]
 	return ok && ownerID == nodeID
 }
+

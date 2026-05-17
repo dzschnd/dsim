@@ -23,7 +23,7 @@ func NewRouter(s *Server) http.Handler {
 	r := http.NewServeMux()
 	n := nodes.NewHandler(s.docker, s.store)
 	l := links.NewHandler(s.docker, s.store)
-	t := topology.NewHandler(s.docker, s.store)
+	t := topology.NewHandler(s.docker, s.store, l.Service())
 
 	r.HandleFunc("POST /api/v1/nodes", n.CreateNodeHandler)
 	r.HandleFunc("GET /api/v1/nodes", n.ListNodesHandler)

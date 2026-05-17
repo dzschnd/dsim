@@ -3,7 +3,6 @@ package nodes
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -20,7 +19,6 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/dzschnd/dsim/internal/httputil"
@@ -34,9 +32,10 @@ type linkRepository interface {
 }
 
 type Service struct {
-	docker   *client.Client
-	repo     *repository
-	linkRepo linkRepository
+	docker      *client.Client
+	repo        *repository
+	linkRepo    linkRepository
+	imageCache  sync.Map // map[image]struct{}: images confirmed to exist this session
 }
 
 const (
@@ -121,71 +120,44 @@ func (s *Service) CreateNode(ctx context.Context, reqNodeType string, position m
 	}
 	image, ifaceCount := nodeTypeTag(nodeType)
 
-	if _, _, err := s.docker.ImageInspectWithRaw(ctx, image); err != nil {
-		if client.IsErrNotFound(err) {
-			return model.Node{}, httputil.NewAppError(http.StatusNotFound, "image not found: "+image)
+	if _, loaded := s.imageCache.LoadOrStore(image, struct{}{}); !loaded {
+		if _, _, err := s.docker.ImageInspectWithRaw(ctx, image); err != nil {
+			s.imageCache.Delete(image)
+			if client.IsErrNotFound(err) {
+				return model.Node{}, httputil.NewAppError(http.StatusNotFound, "image not found: "+image)
+			}
+			slog.Error("Image inspect failed", "err", err)
+			return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "image inspect failed")
 		}
-		slog.Error("Image inspect failed", "err", err)
-		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "image inspect failed")
 	}
 
 	nodeID := store.NewID("node_")
-	networkName := nodeID + "_isolated"
-	subnet, err := s.repo.store.IsolatedSubnets.Allocate()
-	if err != nil {
-		slog.Error("Isolated subnet allocation failed", "err", err)
-		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "isolated subnet allocation failed")
-	}
-	gateway, err := store.GatewayAddr(subnet)
-	if err != nil {
-		s.repo.store.IsolatedSubnets.Release(subnet)
-		slog.Error("Isolated subnet gateway resolution failed", "err", err)
-		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "isolated subnet gateway resolution failed")
-	}
-	networkResp, err := s.docker.NetworkCreate(ctx, networkName, network.CreateOptions{
-		Driver: "bridge",
-		IPAM: &network.IPAM{
-			Config: []network.IPAMConfig{
-				{
-					Subnet:  subnet.String(),
-					Gateway: gateway.String(),
-				},
-			},
-		},
-	})
-	if err != nil {
-		s.repo.store.IsolatedSubnets.Release(subnet)
-		slog.Error("Isolated network create failed", "err", err)
-		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "isolated network create failed")
-	}
 
 	initEnabled := true
 	hostConfig := &container.HostConfig{
-		Init:   &initEnabled,
-		CapAdd: []string{"NET_ADMIN"},
+		Init:        &initEnabled,
+		CapAdd:      []string{"NET_ADMIN"},
+		NetworkMode: "none",
 	}
 	if nodeType == model.Router {
 		hostConfig.Sysctls = map[string]string{
 			"net.ipv4.ip_forward": "1",
 		}
 	}
+
 	createResp, err := s.docker.ContainerCreate(
 		ctx,
 		&container.Config{Image: image},
 		hostConfig,
-		&network.NetworkingConfig{
-			EndpointsConfig: map[string]*network.EndpointSettings{
-				networkName: {},
-			},
-		},
+		nil,
 		nil, "",
 	)
 	if err != nil {
-		_ = s.docker.NetworkRemove(ctx, networkResp.ID)
-		s.repo.store.IsolatedSubnets.Release(subnet)
 		slog.Error("Container create failed", "err", err)
 		return model.Node{}, httputil.NewAppError(http.StatusInternalServerError, "container create failed")
 	}
+
+	slog.Info("Container created", "node_id", nodeID, "type", reqNodeType)
 
 	node := model.Node{
 		ID:          nodeID,
@@ -194,9 +166,6 @@ func (s *Service) CreateNode(ctx context.Context, reqNodeType string, position m
 		Status:      model.Idle,
 		Type:        nodeType,
 		ContainerID: createResp.ID,
-		NetworkID:   networkResp.ID,
-		NetworkName: networkName,
-		Subnet:      subnet.String(),
 		CreatedAt:   time.Now().UTC(),
 		Interfaces:  make([]model.Interface, 0, ifaceCount),
 		Routes:      make([]model.Route, 0),
@@ -213,6 +182,7 @@ func (s *Service) CreateNode(ctx context.Context, reqNodeType string, position m
 
 	return node, nil
 }
+
 
 func (s *Service) UpdateNodePosition(ctx context.Context, nodeID string, position model.Position) error {
 	_ = ctx
@@ -250,11 +220,7 @@ func (s *Service) deleteNode(ctx context.Context, nodeID string) error {
 		return httputil.NewAppError(http.StatusNotFound, "node not found")
 	}
 
-	links := s.linksForNode(nodeID)
-	for _, link := range links {
-		if err := s.removeLinkNetwork(ctx, link); err != nil {
-			return err
-		}
+	for _, link := range s.linksForNode(nodeID) {
 		s.releaseLinkSubnet(link)
 		s.deleteLinkState(link)
 	}
@@ -265,15 +231,6 @@ func (s *Service) deleteNode(ctx context.Context, nodeID string) error {
 			slog.Error("Container remove failed", "err", err)
 			return httputil.NewAppError(http.StatusInternalServerError, "container remove failed")
 		}
-	}
-	if node.NetworkID != "" {
-		if err := s.docker.NetworkRemove(ctx, node.NetworkID); err != nil && !client.IsErrNotFound(err) {
-			slog.Error("Isolated network remove failed", "err", err)
-			return httputil.NewAppError(http.StatusInternalServerError, "isolated network remove failed")
-		}
-	}
-	if node.Subnet != "" {
-		s.repo.store.IsolatedSubnets.ReleaseString(node.Subnet)
 	}
 
 	s.repo.DeleteNode(nodeID)
@@ -298,22 +255,6 @@ func (s *Service) nodeOwnsInterfaceLocked(nodeID, interfaceID string) bool {
 	return ok && ownerID == nodeID
 }
 
-func (s *Service) removeLinkNetwork(ctx context.Context, link model.Link) error {
-	if link.NetworkID == "" {
-		return nil
-	}
-	if nodeA, _, ok := s.nodeByInterface(link.InterfaceAID); ok && nodeA.ContainerID != "" {
-		_ = s.docker.NetworkDisconnect(ctx, link.NetworkID, nodeA.ContainerID, true)
-	}
-	if nodeB, _, ok := s.nodeByInterface(link.InterfaceBID); ok && nodeB.ContainerID != "" {
-		_ = s.docker.NetworkDisconnect(ctx, link.NetworkID, nodeB.ContainerID, true)
-	}
-	if err := s.docker.NetworkRemove(ctx, link.NetworkID); err != nil && !client.IsErrNotFound(err) {
-		slog.Error("Link network remove failed", "err", err)
-		return httputil.NewAppError(http.StatusInternalServerError, "link network remove failed")
-	}
-	return nil
-}
 
 func (s *Service) nodeByInterface(interfaceID string) (model.Node, model.Interface, bool) {
 	s.repo.store.Mu.RLock()
@@ -406,25 +347,7 @@ func (s *Service) StartNode(ctx context.Context, nodeID string) error {
 				return httputil.NewAppError(http.StatusInternalServerError, "failed to unfreeze node before start sync")
 			}
 		}
-		s.syncRuntimeInterfaces(nodeID, node.Interfaces, inspect)
-		if err := s.syncRuntimeInterfaceNames(ctx, nodeID); err != nil {
-			return err
-		}
-		if node.Type == model.Switch {
-			if err := s.syncSwitchPorts(ctx, nodeID); err != nil {
-				return err
-			}
-		}
-		if err := s.syncRuntimeInterfaceAddresses(ctx, nodeID); err != nil {
-			return err
-		}
-		if err := s.syncRuntimeInterfaceConditions(ctx, nodeID); err != nil {
-			return err
-		}
-		if err := s.syncRuntimeRoutes(ctx, nodeID); err != nil {
-			return err
-		}
-		if err := s.syncRuntimeInterfaceStates(ctx, nodeID); err != nil {
+		if err := s.syncNodeRuntime(ctx, nodeID, nil); err != nil {
 			return err
 		}
 		s.repo.UpdateNodeStatus(nodeID, model.Running)
@@ -436,322 +359,234 @@ func (s *Service) StartNode(ctx context.Context, nodeID string) error {
 		return httputil.NewAppError(http.StatusInternalServerError, "failed to start node")
 	}
 
-	s.repo.store.Mu.RLock()
-	linkedNetworks := make(map[string]struct{})
-	for _, iface := range node.Interfaces {
-		if iface.LinkID == "" {
-			continue
-		}
-		if link, ok := s.repo.store.Links[iface.LinkID]; ok && link.NetworkName != "" {
-			linkedNetworks[link.NetworkName] = struct{}{}
-		}
-	}
-	s.repo.store.Mu.RUnlock()
-
-	deadline := time.Now().Add(30 * time.Second)
-	var inspectStarted types.ContainerJSON
-	for {
-		var err error
-		inspectStarted, err = s.docker.ContainerInspect(ctx, node.ContainerID)
-		if err != nil {
-			if client.IsErrNotFound(err) {
-				return httputil.NewAppError(http.StatusNotFound, "container not found")
-			}
-			slog.Error("Container inspect failed", "err", err)
-			return httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
-		}
-		ready := true
-		if inspectStarted.NetworkSettings != nil {
-			for name := range linkedNetworks {
-				ep := inspectStarted.NetworkSettings.Networks[name]
-				if ep == nil || ep.IPAddress == "" {
-					ready = false
-					break
-				}
-			}
-		}
-		if ready {
-			break
-		}
-		if time.Now().After(deadline) {
-			slog.Warn("Container networks not fully attached after deadline", "container_id", node.ContainerID)
-			break
-		}
-		time.Sleep(50 * time.Millisecond)
+	if _, err := s.waitForNode(ctx, node); err != nil {
+		return err
 	}
 
-	s.syncRuntimeInterfaces(nodeID, node.Interfaces, inspectStarted)
-	if err := s.syncRuntimeInterfaceNames(ctx, nodeID); err != nil {
-		return err
-	}
-	if node.Type == model.Switch {
-		if err := s.syncSwitchPorts(ctx, nodeID); err != nil {
-			return err
-		}
-	}
-	if err := s.syncRuntimeInterfaceAddresses(ctx, nodeID); err != nil {
-		return err
-	}
-	if err := s.syncRuntimeInterfaceConditions(ctx, nodeID); err != nil {
-		return err
-	}
-	if err := s.syncRuntimeRoutes(ctx, nodeID); err != nil {
-		return err
-	}
-	if err := s.syncRuntimeInterfaceStates(ctx, nodeID); err != nil {
+	if err := s.syncNodeRuntime(ctx, nodeID, nil); err != nil {
 		return err
 	}
 
 	s.repo.UpdateNodeStatus(nodeID, model.Running)
-
 	return nil
 }
 
-func (s *Service) ensureSwitchBridge(ctx context.Context, node model.Node) error {
-	if _, err := execInContainerChecked(
-		ctx,
-		s.docker,
-		node.ContainerID,
-		[]string{"sh", "-c", "ip link show br0 >/dev/null 2>&1 || ip link add br0 type bridge"},
-		"failed to create switch bridge",
-	); err != nil {
-		return err
-	}
-
-	if _, err := execInContainerChecked(
-		ctx,
-		s.docker,
-		node.ContainerID,
-		[]string{"ip", "link", "set", "br0", "up"},
-		"failed to bring switch bridge up",
-	); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *Service) attachSwitchPort(ctx context.Context, node model.Node, runtimeName string) error {
-	if runtimeName == "" {
-		return httputil.NewAppError(http.StatusBadRequest, "runtime interface name not resolved")
-	}
-	if err := s.ensureSwitchBridge(ctx, node); err != nil {
-		return err
-	}
-
-	if _, err := execInContainerChecked(
-		ctx,
-		s.docker,
-		node.ContainerID,
-		[]string{"ip", "link", "set", runtimeName, "master", "br0"},
-		"failed to attach switch port to bridge",
-	); err != nil {
-		return err
-	}
-
-	if _, err := execInContainerChecked(
-		ctx,
-		s.docker,
-		node.ContainerID,
-		[]string{"ip", "link", "set", runtimeName, "up"},
-		"failed to bring switch port up",
-	); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *Service) syncSwitchPorts(ctx context.Context, nodeID string) error {
-	node, ok := s.repo.GetNode(nodeID)
-	if !ok {
-		return httputil.NewAppError(http.StatusNotFound, "node not found")
-	}
-	if node.Type != model.Switch {
-		return nil
-	}
-	if err := s.ensureSwitchBridge(ctx, node); err != nil {
-		return err
-	}
-
-	for _, iface := range node.Interfaces {
-		if iface.LinkID == "" || iface.RuntimeName == "" {
-			continue
+func (s *Service) waitForNode(ctx context.Context, node model.Node) (string, error) {
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
+		if err != nil {
+			if client.IsErrNotFound(err) {
+				return "", httputil.NewAppError(http.StatusNotFound, "container not found")
+			}
+			slog.Error("Container inspect failed", "err", err)
+			return "", httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 		}
-		if err := s.attachSwitchPort(ctx, node, iface.RuntimeName); err != nil {
-			return err
+		if inspect.State != nil && inspect.State.Running {
+			sk := ""
+			if inspect.NetworkSettings != nil {
+				sk = inspect.NetworkSettings.SandboxKey
+			}
+			return sk, nil
 		}
-	}
-
-	return nil
-}
-
-func (s *Service) syncRuntimeInterfaces(nodeID string, interfaces []model.Interface, inspect types.ContainerJSON) {
-	if inspect.NetworkSettings == nil || inspect.NetworkSettings.Networks == nil {
-		return
-	}
-
-	s.repo.store.Mu.RLock()
-	linksByID := make(map[string]model.Link, len(s.repo.store.Links))
-	for _, link := range s.repo.store.Links {
-		linksByID[link.ID] = link
-	}
-	s.repo.store.Mu.RUnlock()
-
-	for _, iface := range interfaces {
-		if iface.LinkID == "" {
-			continue
+		if time.Now().After(deadline) {
+			slog.Warn("Container not running after deadline", "container_id", node.ContainerID)
+			return "", nil
 		}
-
-		link, ok := linksByID[iface.LinkID]
-		if !ok {
-			continue
-		}
-
-		endpoint, ok := inspect.NetworkSettings.Networks[link.NetworkName]
-		if !ok || endpoint == nil {
-			continue
-		}
-
-		s.repo.UpdateInterfaceRuntime(nodeID, iface.ID, endpoint.IPAddress, endpoint.IPPrefixLen)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
-type runtimeAddrInfo struct {
-	Local     string `json:"local"`
-	PrefixLen int    `json:"prefixlen"`
-}
-
-type runtimeInterfaceInfo struct {
-	IfName   string            `json:"ifname"`
-	AddrInfo []runtimeAddrInfo `json:"addr_info"`
-}
-
-func (s *Service) syncRuntimeInterfaceNames(ctx context.Context, nodeID string) error {
+// syncNodeRuntime applies all in-container configuration after a node starts.
+// prebuilt, when non-nil, is a set of interface IDs whose veths were already
+// created by precreateVeths; ensureLinkedVeths is skipped in that case.
+func (s *Service) syncNodeRuntime(ctx context.Context, nodeID string, prebuilt map[string]bool) error {
 	node, ok := s.repo.GetNode(nodeID)
 	if !ok {
 		return httputil.NewAppError(http.StatusNotFound, "node not found")
 	}
 
-	stdout, err := execInContainerChecked(
-		ctx,
-		s.docker,
-		node.ContainerID,
-		[]string{"ip", "-j", "addr", "show"},
-		"failed to inspect runtime interfaces",
-	)
-	if err != nil {
-		return err
+	var vethReady map[string]bool
+	if prebuilt != nil {
+		vethReady = prebuilt
+	} else {
+		// Single-node start: create veths lazily.
+		vethReady = s.ensureLinkedVeths(ctx, node)
 	}
 
-	var runtimeIfaces []runtimeInterfaceInfo
-	if err := json.Unmarshal([]byte(stdout), &runtimeIfaces); err != nil {
-		slog.Error("Runtime interface inspect parse failed", "err", err)
-		return httputil.NewAppError(http.StatusInternalServerError, "runtime interface inspect parse failed")
-	}
+	cmds := []string{"set -e"}
 
-	runtimeNameByAddress := make(map[string]string, len(runtimeIfaces))
-	for _, runtimeIface := range runtimeIfaces {
-		for _, addrInfo := range runtimeIface.AddrInfo {
-			key := fmt.Sprintf("%s/%d", addrInfo.Local, addrInfo.PrefixLen)
-			runtimeNameByAddress[key] = runtimeIface.IfName
-		}
-	}
-
+	// Build a map from interface ID to its kernel name.
+	// Only include linked interfaces whose veth has been confirmed ready.
+	ifaceExpr := make(map[string]string, len(node.Interfaces))
 	for _, iface := range node.Interfaces {
 		if iface.RuntimeName != "" {
+			if iface.LinkID == "" || vethReady[iface.ID] {
+				ifaceExpr[iface.ID] = iface.RuntimeName
+			}
+		}
+	}
+
+	varIdx := 0
+	for _, iface := range node.Interfaces {
+		if _, ok := ifaceExpr[iface.ID]; ok {
 			continue
 		}
 		if iface.RuntimeIPAddr == "" || iface.RuntimePrefixLen == 0 {
 			continue
 		}
-
-		addr := fmt.Sprintf("%s/%d", iface.RuntimeIPAddr, iface.RuntimePrefixLen)
-		runtimeName := runtimeNameByAddress[addr]
-		if runtimeName == "" {
-			slog.Error("Runtime interface name resolution failed")
-			return httputil.NewAppError(http.StatusInternalServerError, "runtime interface name resolution failed")
+		if varIdx == 0 {
+			cmds = append(cmds,
+				`_a=$(ip -o addr show)`,
+				`_iface() { printf '%s\n' "$_a" | awk -v ip="$1" '$4==ip{print $2;exit}'; }`,
+			)
 		}
-		if !s.repo.UpdateInterfaceRuntimeName(nodeID, iface.ID, runtimeName) {
-			slog.Error("Failed to persist runtime interface name")
-			return httputil.NewAppError(http.StatusInternalServerError, "failed to persist runtime interface name")
+		varName := fmt.Sprintf("_e%d", varIdx)
+		varIdx++
+		cidr := fmt.Sprintf("%s/%d", iface.RuntimeIPAddr, iface.RuntimePrefixLen)
+		cmds = append(cmds,
+			fmt.Sprintf(`%s=$(_iface %q)`, varName, cidr),
+			fmt.Sprintf(`[ -n "$%s" ] || { echo "name lookup failed: %s" >&2; exit 1; }`, varName, cidr),
+			// Print for Go to capture and store in the repo.
+			fmt.Sprintf(`echo "_rname_ %s $%s"`, iface.ID, varName),
+		)
+		ifaceExpr[iface.ID] = "$" + varName
+	}
+
+	if node.Type == model.Switch {
+		cmds = append(cmds,
+			"ip link show br0 >/dev/null 2>&1 || ip link add br0 type bridge",
+			"ip link set br0 up",
+		)
+		for _, iface := range node.Interfaces {
+			if iface.LinkID == "" {
+				continue
+			}
+			expr, ok := ifaceExpr[iface.ID]
+			if !ok {
+				continue
+			}
+			cmds = append(cmds,
+				fmt.Sprintf("ip link set %s master br0", expr),
+				fmt.Sprintf("ip link set %s up", expr),
+			)
 		}
 	}
 
-	return nil
-}
-
-func (s *Service) syncRuntimeInterfaceAddresses(ctx context.Context, nodeID string) error {
-	node, ok := s.repo.GetNode(nodeID)
-	if !ok {
-		return httputil.NewAppError(http.StatusNotFound, "node not found")
+	// Bring non-AdminDown interfaces up before assigning IPs and routes so that
+	// gateway reachability checks in the kernel succeed.
+	for _, iface := range node.Interfaces {
+		if iface.AdminDown {
+			continue
+		}
+		expr, hasExpr := ifaceExpr[iface.ID]
+		if !hasExpr {
+			if iface.LinkID == "" {
+				continue
+			}
+			expr = iface.Name
+		}
+		cmds = append(cmds, fmt.Sprintf("ip link set %s up", expr))
 	}
 
 	for _, iface := range node.Interfaces {
-		if iface.IPAddr == "" || iface.PrefixLen == 0 || iface.RuntimeName == "" {
+		expr, ok := ifaceExpr[iface.ID]
+		if !ok {
 			continue
 		}
-		if err := s.applyRuntimeInterfaceAddress(ctx, node, iface); err != nil {
+		ip, prefix := iface.IPAddr, iface.PrefixLen
+		if ip == "" || prefix == 0 {
+			ip, prefix = iface.RuntimeIPAddr, iface.RuntimePrefixLen
+		}
+		if ip == "" || prefix == 0 {
+			continue
+		}
+		cmds = append(cmds, fmt.Sprintf("ip addr replace %s/%d dev %s", ip, prefix, expr))
+	}
+
+	for _, route := range node.Routes {
+		dest := route.Destination
+		if dest == "0.0.0.0/0" {
+			dest = "default"
+		}
+		switch route.Kind {
+		case model.RouteKindVia:
+			cmds = append(cmds, fmt.Sprintf("ip route replace %s via %s", dest, route.NextHop))
+		case model.RouteKindBlackhole:
+			cmds = append(cmds, fmt.Sprintf("ip route replace blackhole %s", dest))
+		default:
+			return httputil.NewAppError(http.StatusBadRequest, "invalid route kind")
+		}
+	}
+
+	// Apply AdminDown state last.
+	for _, iface := range node.Interfaces {
+		if !iface.AdminDown {
+			continue
+		}
+		expr, hasExpr := ifaceExpr[iface.ID]
+		if !hasExpr {
+			if iface.LinkID == "" {
+				continue
+			}
+			expr = iface.Name
+		}
+		cmds = append(cmds, fmt.Sprintf("ip link set %s down", expr))
+	}
+
+	var stdout string
+	if len(cmds) > 1 {
+		var err error
+		stdout, err = execInContainerChecked(ctx, s.docker, node.ContainerID,
+			[]string{"sh", "-c", strings.Join(cmds, "\n")},
+			"failed to apply node runtime configuration")
+		if err != nil {
 			return err
 		}
 	}
 
-	return nil
-}
-
-func (s *Service) syncRuntimeInterfaceConditions(ctx context.Context, nodeID string) error {
-	node, ok := s.repo.GetNode(nodeID)
-	if !ok {
-		return httputil.NewAppError(http.StatusNotFound, "node not found")
+	// Parse _rname_ lines emitted by the script to persist resolved interface names.
+	if varIdx > 0 {
+		for _, line := range strings.Split(stdout, "\n") {
+			if !strings.HasPrefix(line, "_rname_ ") {
+				continue
+			}
+			parts := strings.Fields(line)
+			if len(parts) != 3 {
+				continue
+			}
+			if !s.repo.UpdateInterfaceRuntimeName(nodeID, parts[1], parts[2]) {
+				slog.Error("Failed to persist runtime interface name", "iface", parts[1])
+				return httputil.NewAppError(http.StatusInternalServerError, "failed to persist runtime interface name")
+			}
+		}
+		// Re-read so conditions/flap see the newly stored names.
+		node, ok = s.repo.GetNode(nodeID)
+		if !ok {
+			return httputil.NewAppError(http.StatusNotFound, "node not found")
+		}
 	}
 
 	for _, iface := range node.Interfaces {
+		if !hasTrafficNetemConditions(iface.Conditions) && iface.Conditions.BandwidthKbit == 0 {
+			continue
+		}
 		if err := s.applyRuntimeInterfaceConditions(ctx, node, iface); err != nil {
 			return err
 		}
 	}
 
-	return nil
-}
-
-func (s *Service) syncRuntimeInterfaceStates(ctx context.Context, nodeID string) error {
-	node, ok := s.repo.GetNode(nodeID)
-	if !ok {
-		return httputil.NewAppError(http.StatusNotFound, "node not found")
-	}
-
 	for _, iface := range node.Interfaces {
-		if err := s.applyRuntimeInterfaceState(ctx, node, iface); err != nil {
-			return err
-		}
 		if iface.Flap.Enabled {
 			if err := s.startRuntimeInterfaceFlap(ctx, node, iface); err != nil {
 				return err
 			}
-		} else {
-			if err := s.stopRuntimeInterfaceFlap(ctx, node, iface); err != nil {
-				return err
-			}
 		}
 	}
 
 	return nil
 }
 
-func (s *Service) syncRuntimeRoutes(ctx context.Context, nodeID string) error {
-	node, ok := s.repo.GetNode(nodeID)
-	if !ok {
-		return httputil.NewAppError(http.StatusNotFound, "node not found")
-	}
-
-	for _, route := range node.Routes {
-		if err := s.applyRuntimeRoute(ctx, node, route); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
 
 func (s *Service) stopNode(ctx context.Context, nodeID string) error {
 	if nodeID == "" {
@@ -809,7 +644,7 @@ func (s *Service) ToggleAllNodes(ctx context.Context) (string, error) {
 	}
 
 	if startAll {
-		if err := s.runNodeOpsParallel(ctx, nodes, s.StartNode); err != nil {
+		if err := s.startAllNodes(ctx, nodes); err != nil {
 			return "", err
 		}
 		return "start", nil
@@ -870,6 +705,170 @@ func (s *Service) runNodeOpsParallel(ctx context.Context, nodes []model.Node, op
 	}
 
 	return nil
+}
+
+func (s *Service) startAllNodes(ctx context.Context, nodes []model.Node) error {
+	type nodeState struct {
+		node           model.Node
+		alreadyRunning bool
+		sandboxKey     string
+		err            error
+	}
+
+	states := make([]nodeState, len(nodes))
+	for i, node := range nodes {
+		states[i].node = node
+	}
+
+	// Phase 1: inspect and start all containers in parallel.
+	var wg sync.WaitGroup
+	wg.Add(len(states))
+	for i := range states {
+		go func() {
+			defer wg.Done()
+			node := states[i].node
+			inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
+			if err != nil {
+				if client.IsErrNotFound(err) {
+					states[i].err = httputil.NewAppError(http.StatusNotFound, "container not found")
+				} else {
+					slog.Error("Container inspect failed", "err", err)
+					states[i].err = httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
+				}
+				return
+			}
+			if inspect.State != nil && inspect.State.Running {
+				if inspect.State.Paused {
+					if err := s.docker.ContainerUnpause(ctx, node.ContainerID); err != nil {
+						slog.Error("Failed to unfreeze node", "err", err)
+						states[i].err = httputil.NewAppError(http.StatusInternalServerError, "failed to unfreeze node")
+						return
+					}
+				}
+				states[i].alreadyRunning = true
+				if inspect.NetworkSettings != nil {
+					states[i].sandboxKey = inspect.NetworkSettings.SandboxKey
+				}
+				return
+			}
+			if err := s.docker.ContainerStart(ctx, node.ContainerID, container.StartOptions{}); err != nil {
+				slog.Error("Failed to start node", "err", err)
+				states[i].err = httputil.NewAppError(http.StatusInternalServerError, "failed to start node")
+				return
+			}
+			slog.Info("Container start fired", "node_id", node.ID, "name", node.Name)
+		}()
+	}
+	wg.Wait()
+
+	// Phase 2A: wait for all containers to reach running state in parallel,
+	// capturing each container's sandbox key from the final inspect.
+	var wg2a sync.WaitGroup
+	wg2a.Add(len(states))
+	for i := range states {
+		go func() {
+			defer wg2a.Done()
+			if states[i].err != nil {
+				return
+			}
+			if !states[i].alreadyRunning {
+				sk, err := s.waitForNode(ctx, states[i].node)
+				if err != nil {
+					states[i].err = err
+					return
+				}
+				states[i].sandboxKey = sk
+			}
+		}()
+	}
+	wg2a.Wait()
+
+	// Phase 2B: create all veth pairs upfront using sandbox keys already
+	// captured in phases 1 and 2A — no extra ContainerInspect calls needed.
+	sandboxKeys := make(map[string]string, len(states))
+	for _, st := range states {
+		if st.err == nil && st.sandboxKey != "" {
+			sandboxKeys[st.node.ContainerID] = st.sandboxKey
+		}
+	}
+	prebuilt := s.precreateVeths(ctx, sandboxKeys)
+
+	// Phase 2C: sync all node runtimes in parallel.
+	errs := make([]error, len(states))
+	var wg2c sync.WaitGroup
+	wg2c.Add(len(states))
+	for i := range states {
+		go func() {
+			defer wg2c.Done()
+			if states[i].err != nil {
+				errs[i] = states[i].err
+				return
+			}
+			node := states[i].node
+			slog.Info("Container ready", "node_id", node.ID, "name", node.Name)
+			if err := s.syncNodeRuntime(ctx, node.ID, prebuilt); err != nil {
+				errs[i] = err
+				return
+			}
+			slog.Info("Node runtime synced", "node_id", node.ID, "name", node.Name)
+			s.repo.UpdateNodeStatus(node.ID, model.Running)
+		}()
+	}
+	wg2c.Wait()
+
+	for _, err := range errs {
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// precreateVeths creates every link's veth pair in parallel using sandbox keys
+// already captured during container startup. Returns a set of interface IDs
+// whose veths are confirmed ready, allowing syncNodeRuntime to skip
+// ensureLinkedVeths entirely for the start-all path.
+func (s *Service) precreateVeths(ctx context.Context, sandboxKeys map[string]string) map[string]bool {
+	// Snapshot links and interface→container mapping.
+	s.repo.store.Mu.RLock()
+	linksCopy := make([]model.Link, 0, len(s.repo.store.Links))
+	for _, l := range s.repo.store.Links {
+		linksCopy = append(linksCopy, l)
+	}
+	ifaceContainer := make(map[string]string, len(s.repo.store.InterfaceOwnerIndex))
+	for ifaceID, nodeID := range s.repo.store.InterfaceOwnerIndex {
+		if node, ok := s.repo.store.Nodes[nodeID]; ok {
+			ifaceContainer[ifaceID] = node.ContainerID
+		}
+	}
+	s.repo.store.Mu.RUnlock()
+
+	// Create all veth pairs in parallel — each link is created exactly once.
+	prebuilt := make(map[string]bool)
+	var mu2 sync.Mutex
+	var wg2 sync.WaitGroup
+	for _, link := range linksCopy {
+		wg2.Add(1)
+		go func(l model.Link) {
+			defer wg2.Done()
+			skA := sandboxKeys[ifaceContainer[l.InterfaceAID]]
+			skB := sandboxKeys[ifaceContainer[l.InterfaceBID]]
+			if skA == "" || skB == "" {
+				return
+			}
+			if err := links.CreateVethPair(links.VethNameA(l.ID), links.VethNameB(l.ID), skA, skB); err != nil {
+				slog.Warn("precreateVeths: failed", "link", l.ID, "err", err)
+				return
+			}
+			mu2.Lock()
+			prebuilt[l.InterfaceAID] = true
+			prebuilt[l.InterfaceBID] = true
+			mu2.Unlock()
+		}(link)
+	}
+	wg2.Wait()
+
+	return prebuilt
 }
 
 func execInContainer(ctx context.Context, docker *client.Client, containerID string, execCmd []string) (string, string, int, error) {
@@ -2278,25 +2277,7 @@ func (s *Service) runTCSet(ctx context.Context, command, nodeID, interfaceName s
 		slog.Error("Container inspect failed", "err", err)
 		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
-	if inspect.State != nil && inspect.State.Running && targetIface.LinkID != "" {
-		if targetIface.RuntimeName == "" {
-			s.syncRuntimeInterfaces(nodeID, node.Interfaces, inspect)
-			if err := s.syncRuntimeInterfaceNames(ctx, nodeID); err != nil {
-				return commandResponse{}, err
-			}
-			node, ok = s.repo.GetNode(nodeID)
-			if !ok {
-				return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
-			}
-			for _, iface := range node.Interfaces {
-				if iface.Name != interfaceName {
-					continue
-				}
-				targetIface = iface
-				break
-			}
-		}
-
+	if inspect.State != nil && inspect.State.Running && targetIface.LinkID != "" && targetIface.RuntimeName != "" {
 		if err := s.applyRuntimeInterfaceConditions(ctx, node, targetIface); err != nil {
 			_ = s.repo.UpdateInterfaceConditions(nodeID, interfaceName, previousConditions)
 			targetIface.Conditions = previousConditions
@@ -2346,31 +2327,12 @@ func (s *Service) runTCClear(ctx context.Context, command, nodeID, interfaceName
 		slog.Error("Container inspect failed", "err", err)
 		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
-	if inspect.State != nil && inspect.State.Running && targetIface.LinkID != "" {
-		if targetIface.RuntimeName == "" {
-			s.syncRuntimeInterfaces(nodeID, node.Interfaces, inspect)
-			if err := s.syncRuntimeInterfaceNames(ctx, nodeID); err != nil {
-				return commandResponse{}, err
-			}
-			node, ok = s.repo.GetNode(nodeID)
-			if !ok {
-				return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
-			}
-			for _, iface := range node.Interfaces {
-				if iface.Name != interfaceName {
-					continue
-				}
-				targetIface = iface
-				break
-			}
-		}
-		if targetIface.RuntimeName != "" {
-			if err := s.clearRuntimeInterfaceConditions(ctx, node.ContainerID, targetIface.RuntimeName); err != nil {
-				_ = s.repo.UpdateInterfaceConditions(nodeID, interfaceName, previousConditions)
-				targetIface.Conditions = previousConditions
-				_ = s.applyRuntimeInterfaceConditions(ctx, node, targetIface)
-				return commandResponse{}, err
-			}
+	if inspect.State != nil && inspect.State.Running && targetIface.LinkID != "" && targetIface.RuntimeName != "" {
+		if err := s.clearRuntimeInterfaceConditions(ctx, node.ContainerID, targetIface.RuntimeName); err != nil {
+			_ = s.repo.UpdateInterfaceConditions(nodeID, interfaceName, previousConditions)
+			targetIface.Conditions = previousConditions
+			_ = s.applyRuntimeInterfaceConditions(ctx, node, targetIface)
+			return commandResponse{}, err
 		}
 	}
 
@@ -2915,28 +2877,12 @@ func (s *Service) runIPSet(ctx context.Context, command, nodeID, interfaceName, 
 		}
 
 		if targetIface.RuntimeName == "" {
-			s.syncRuntimeInterfaces(nodeID, refreshedNode.Interfaces, inspect)
-			if err := s.syncRuntimeInterfaceNames(ctx, nodeID); err != nil {
-				return commandResponse{}, err
-			}
-
-			refreshedNode, ok = s.repo.GetNode(nodeID)
-			if !ok {
-				return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
-			}
-
-			targetIface = model.Interface{}
-			for _, iface := range refreshedNode.Interfaces {
-				if iface.Name != interfaceName {
-					continue
-				}
-				targetIface = iface
-				break
-			}
-			if targetIface.RuntimeName == "" {
-				slog.Error("Runtime interface name resolution failed")
-				return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "runtime interface name resolution failed")
-			}
+			return commandResponse{
+				Command:  command,
+				Stdout:   fmt.Sprintf("%s set to %s", interfaceName, cidr),
+				Stderr:   "",
+				ExitCode: 0,
+			}, nil
 		}
 
 		if err := s.applyRuntimeInterfaceAddress(ctx, refreshedNode, targetIface); err != nil {
@@ -2987,26 +2933,7 @@ func (s *Service) runIPUnset(ctx context.Context, command, nodeID, interfaceName
 		return commandResponse{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 
-	if inspect.State != nil && inspect.State.Running && targetIface.LinkID != "" {
-		if targetIface.RuntimeName == "" {
-			s.syncRuntimeInterfaces(nodeID, node.Interfaces, inspect)
-			if err := s.syncRuntimeInterfaceNames(ctx, nodeID); err != nil {
-				return commandResponse{}, err
-			}
-
-			node, ok = s.repo.GetNode(nodeID)
-			if !ok {
-				return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
-			}
-			for _, iface := range node.Interfaces {
-				if iface.Name != interfaceName {
-					continue
-				}
-				targetIface = iface
-				break
-			}
-		}
-
+	if inspect.State != nil && inspect.State.Running && targetIface.LinkID != "" && targetIface.RuntimeName != "" {
 		if err := s.deleteRuntimeInterfaceAddress(ctx, node, targetIface); err != nil {
 			return commandResponse{}, err
 		}
@@ -3215,26 +3142,8 @@ func (s *Service) loadInterfaceForRuntimeCommand(ctx context.Context, nodeID, in
 	return node, iface, inspect, nil
 }
 
-func (s *Service) ensureRuntimeInterfaceForCommand(ctx context.Context, node model.Node, inspect types.ContainerJSON, interfaceName string) (model.Interface, error) {
+func (s *Service) ensureRuntimeInterfaceForCommand(_ context.Context, node model.Node, _ types.ContainerJSON, interfaceName string) (model.Interface, error) {
 	for _, iface := range node.Interfaces {
-		if iface.Name == interfaceName {
-			if iface.RuntimeName != "" {
-				return iface, nil
-			}
-			break
-		}
-	}
-
-	s.syncRuntimeInterfaces(node.ID, node.Interfaces, inspect)
-	if err := s.syncRuntimeInterfaceNames(ctx, node.ID); err != nil {
-		return model.Interface{}, err
-	}
-
-	refreshedNode, ok := s.repo.GetNode(node.ID)
-	if !ok {
-		return model.Interface{}, httputil.NewAppError(http.StatusNotFound, "node not found")
-	}
-	for _, iface := range refreshedNode.Interfaces {
 		if iface.Name == interfaceName {
 			if iface.RuntimeName == "" {
 				iface.RuntimeName = iface.Name
@@ -3242,7 +3151,6 @@ func (s *Service) ensureRuntimeInterfaceForCommand(ctx context.Context, node mod
 			return iface, nil
 		}
 	}
-
 	return model.Interface{}, httputil.NewAppError(http.StatusBadRequest, "interface not found on node")
 }
 
@@ -3782,6 +3690,98 @@ func (s *Service) findInterfaceOwnerLocked(interfaceID string) (model.Node, mode
 	}
 
 	return model.Node{}, model.Interface{}, false
+}
+
+func (s *Service) ensureLinkedVeths(ctx context.Context, node model.Node) map[string]bool {
+	ready := make(map[string]bool)
+
+	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
+	if err != nil || inspect.NetworkSettings == nil {
+		return ready
+	}
+	sandboxKeyThis := inspect.NetworkSettings.SandboxKey
+	if sandboxKeyThis == "" {
+		return ready
+	}
+
+	s.repo.store.Mu.RLock()
+	linksCopy := make(map[string]model.Link, len(s.repo.store.Links))
+	for k, v := range s.repo.store.Links {
+		linksCopy[k] = v
+	}
+	s.repo.store.Mu.RUnlock()
+
+	for _, iface := range node.Interfaces {
+		if iface.LinkID == "" || iface.RuntimeName == "" {
+			continue
+		}
+		link, ok := linksCopy[iface.LinkID]
+		if !ok {
+			continue
+		}
+
+		thisIsA := link.InterfaceAID == iface.ID
+		peerIfaceID := link.InterfaceBID
+		if !thisIsA {
+			peerIfaceID = link.InterfaceAID
+		}
+
+		s.repo.store.Mu.RLock()
+		peerNodeID, ok := s.repo.store.InterfaceOwnerIndex[peerIfaceID]
+		var peerContainerID string
+		if ok {
+			if peerNode, ok2 := s.repo.store.Nodes[peerNodeID]; ok2 {
+				peerContainerID = peerNode.ContainerID
+			}
+		}
+		s.repo.store.Mu.RUnlock()
+
+		if peerContainerID == "" {
+			continue
+		}
+
+		peerInspect, err := s.docker.ContainerInspect(ctx, peerContainerID)
+		if err != nil || peerInspect.NetworkSettings == nil {
+			continue
+		}
+		sandboxKeyPeer := peerInspect.NetworkSettings.SandboxKey
+		if sandboxKeyPeer == "" {
+			continue
+		}
+
+		var nameThis, namePeer string
+		if thisIsA {
+			nameThis, namePeer = links.VethNameA(link.ID), links.VethNameB(link.ID)
+		} else {
+			nameThis, namePeer = links.VethNameB(link.ID), links.VethNameA(link.ID)
+		}
+
+		vethOK := false
+		if err := links.CreateVethPair(nameThis, namePeer, sandboxKeyThis, sandboxKeyPeer); err != nil {
+			// Peer node may have created the pair simultaneously and is still
+			// moving our end into this container. Retry a few times.
+			for i := 0; i < 5; i++ {
+				if i > 0 {
+					time.Sleep(50 * time.Millisecond)
+				}
+				_, _, exitCode, _ := execInContainer(ctx, s.docker, node.ContainerID,
+					[]string{"ip", "link", "show", nameThis})
+				if exitCode == 0 {
+					vethOK = true
+					break
+				}
+			}
+			if !vethOK {
+				slog.Warn("ensureLinkedVeths: veth unavailable", "interface", nameThis, "err", err)
+			}
+		} else {
+			vethOK = true
+		}
+		if vethOK {
+			ready[iface.ID] = true
+		}
+	}
+	return ready
 }
 
 func (s *Service) findBestRouteLocked(node model.Node, targetAddr netip.Addr) (model.Route, bool) {

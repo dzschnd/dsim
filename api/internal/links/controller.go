@@ -42,6 +42,10 @@ func NewHandler(docker *client.Client, store *store.Store) *Handler {
 	}
 }
 
+func (h *Handler) Service() *Service {
+	return h.service
+}
+
 func (h *Handler) CreateLinkHandler(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

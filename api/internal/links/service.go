@@ -3,11 +3,9 @@ package links
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
-	"net/netip"
 	"sort"
 	"strconv"
 	"strings"
@@ -15,7 +13,6 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/dzschnd/dsim/internal/httputil"
@@ -36,7 +33,6 @@ type Service struct {
 }
 
 type ifaceStatsSample struct {
-	rx uint64
 	tx uint64
 }
 
@@ -58,15 +54,6 @@ const (
 	linkSampleInterval  = time.Second
 )
 
-type runtimeAddrInfo struct {
-	Local     string `json:"local"`
-	PrefixLen int    `json:"prefixlen"`
-}
-
-type runtimeInterfaceInfo struct {
-	IfName   string            `json:"ifname"`
-	AddrInfo []runtimeAddrInfo `json:"addr_info"`
-}
 
 func NewService(docker *client.Client, s *store.Store) *Service {
 	svc := &Service{
@@ -110,95 +97,77 @@ func (s *Service) CreateLink(ctx context.Context, interfaceAID, interfaceBID str
 	}
 
 	linkID := store.NewID("link_")
-	networkName := linkID
 	subnet, err := s.repo.store.LinkSubnets.Allocate()
 	if err != nil {
 		slog.Error("Link subnet allocation failed", "err", err)
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "link subnet allocation failed")
 	}
-	gateway, err := store.GatewayAddr(subnet)
-	if err != nil {
-		s.repo.store.LinkSubnets.Release(subnet)
-		slog.Error("Link subnet gateway resolution failed", "err", err)
-		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "link subnet gateway resolution failed")
-	}
-	networkResp, err := s.docker.NetworkCreate(ctx, networkName, network.CreateOptions{
-		Driver: "bridge",
-		IPAM: &network.IPAM{
-			Config: []network.IPAMConfig{
-				{
-					Subnet:  subnet.String(),
-					Gateway: gateway.String(),
-				},
-			},
-		},
-	})
-	if err != nil {
-		s.repo.store.LinkSubnets.Release(subnet)
-		slog.Error("Network create failed", "err", err)
-		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, fmt.Sprintf("network create failed: %v", err))
-	}
 
-	if err := s.docker.NetworkConnect(ctx, networkResp.ID, nodeA.ContainerID, nil); err != nil {
-		s.rollbackLinkCreate(ctx, networkResp.ID, subnet, nodeA.ContainerID)
-		slog.Error("Network connect failed", "err", err)
-		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "network connect failed")
-	}
-	if err := s.docker.NetworkConnect(ctx, networkResp.ID, nodeB.ContainerID, nil); err != nil {
-		s.rollbackLinkCreate(ctx, networkResp.ID, subnet, nodeA.ContainerID, nodeB.ContainerID)
-		slog.Error("Network connect failed", "err", err)
-		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "network connect failed")
-	}
+	// Assign the first two usable addresses in the /29 subnet to the two ends.
+	ipA := subnet.Addr().Next()
+	ipB := ipA.Next()
+	prefixLen := subnet.Bits()
+	nameA := vethNameA(linkID)
+	nameB := vethNameB(linkID)
 
 	inspectA, err := s.docker.ContainerInspect(ctx, nodeA.ContainerID)
 	if err != nil {
-		s.rollbackLinkCreate(ctx, networkResp.ID, subnet, nodeA.ContainerID, nodeB.ContainerID)
+		s.repo.store.LinkSubnets.Release(subnet)
 		slog.Error("Container inspect failed", "err", err)
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
-
-	endpointA, ok := inspectA.NetworkSettings.Networks[networkName]
-	if !ok || endpointA == nil {
-		s.rollbackLinkCreate(ctx, networkResp.ID, subnet, nodeA.ContainerID, nodeB.ContainerID)
-		slog.Error("Runtime network endpoint missing")
-		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "runtime network endpoint missing")
-	}
-
 	inspectB, err := s.docker.ContainerInspect(ctx, nodeB.ContainerID)
 	if err != nil {
-		s.rollbackLinkCreate(ctx, networkResp.ID, subnet, nodeA.ContainerID, nodeB.ContainerID)
+		s.repo.store.LinkSubnets.Release(subnet)
 		slog.Error("Container inspect failed", "err", err)
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
 	}
 
-	endpointB, ok := inspectB.NetworkSettings.Networks[networkName]
-	if !ok || endpointB == nil {
-		s.rollbackLinkCreate(ctx, networkResp.ID, subnet, nodeA.ContainerID, nodeB.ContainerID)
-		slog.Error("Runtime network endpoint missing")
-		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "runtime network endpoint missing")
+	sandboxKeyA := inspectA.NetworkSettings.SandboxKey
+	sandboxKeyB := inspectB.NetworkSettings.SandboxKey
+	runningA := inspectA.State != nil && inspectA.State.Running
+	runningB := inspectB.State != nil && inspectB.State.Running
+
+	// Create the veth pair immediately only when both containers are running.
+	// If either is stopped, veth creation is deferred to syncNodeRuntime on start.
+	if sandboxKeyA != "" && sandboxKeyB != "" {
+		if err := CreateVethPair(nameA, nameB, sandboxKeyA, sandboxKeyB); err != nil {
+			s.repo.store.LinkSubnets.Release(subnet)
+			slog.Error("Veth pair create failed", "err", err)
+			return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, fmt.Sprintf("veth pair create failed: %v", err))
+		}
+		slog.Info("Veth pair created", "name_a", nameA, "name_b", nameB, "node_a", nodeA.Name, "node_b", nodeB.Name)
+	} else {
+		runningA = false
+		runningB = false
 	}
 
 	link := model.Link{
 		ID:           linkID,
 		InterfaceAID: interfaceAID,
 		InterfaceBID: interfaceBID,
-		NetworkID:    networkResp.ID,
-		NetworkName:  networkName,
 		Subnet:       subnet.String(),
 		CreatedAt:    time.Now().UTC(),
 	}
 	s.repo.AddLink(link)
 	s.repo.SetInterfaceLink(interfaceAID, linkID)
 	s.repo.SetInterfaceLink(interfaceBID, linkID)
-	s.repo.SetInterfaceRuntime(interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen)
-	s.repo.SetInterfaceRuntime(interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen)
-	if err := s.realizeLinkedInterface(ctx, nodeA, interfaceAID, endpointA.IPAddress, endpointA.IPPrefixLen, ifaceA.IPAddr, ifaceA.PrefixLen, ifaceA.Conditions, ifaceA.AdminDown); err != nil {
-		s.rollbackPersistedLinkCreate(ctx, link)
-		return model.Link{}, err
+	s.repo.SetInterfaceRuntime(interfaceAID, ipA.String(), prefixLen)
+	s.repo.SetInterfaceRuntime(interfaceBID, ipB.String(), prefixLen)
+	s.repo.SetInterfaceRuntimeName(interfaceAID, nameA)
+	s.repo.SetInterfaceRuntimeName(interfaceBID, nameB)
+
+	if runningA {
+		if err := s.realizeLinkedInterface(ctx, nodeA, nameA, ipA.String(), prefixLen, ifaceA.IPAddr, ifaceA.PrefixLen, ifaceA.Conditions, ifaceA.AdminDown); err != nil {
+			s.rollbackPersistedLinkCreate(ctx, link, nameA, nodeA.ContainerID)
+			return model.Link{}, err
+		}
 	}
-	if err := s.realizeLinkedInterface(ctx, nodeB, interfaceBID, endpointB.IPAddress, endpointB.IPPrefixLen, ifaceB.IPAddr, ifaceB.PrefixLen, ifaceB.Conditions, ifaceB.AdminDown); err != nil {
-		s.rollbackPersistedLinkCreate(ctx, link)
-		return model.Link{}, err
+	if runningB {
+		if err := s.realizeLinkedInterface(ctx, nodeB, nameB, ipB.String(), prefixLen, ifaceB.IPAddr, ifaceB.PrefixLen, ifaceB.Conditions, ifaceB.AdminDown); err != nil {
+			s.rollbackPersistedLinkCreate(ctx, link, nameA, nodeA.ContainerID)
+			return model.Link{}, err
+		}
 	}
 
 	return link, nil
@@ -231,16 +200,65 @@ func (s *Service) sampleAndBroadcast(ctx context.Context) {
 	})
 }
 
+type rawCounterSample struct {
+	ifaceID     string
+	runtimeName string
+	tx          uint64
+	valid       bool
+}
+
+// readRawCounter reads the TX counter for one interface without holding s.mu.
+// Uses node.Status from the store instead of a live ContainerInspect.
+func (s *Service) readRawCounter(ctx context.Context, interfaceID string) rawCounterSample {
+	node, iface, ok := s.repo.GetNodeByInterface(interfaceID)
+	if !ok || iface.LinkID == "" || iface.RuntimeName == "" {
+		return rawCounterSample{ifaceID: interfaceID}
+	}
+	if node.Status != model.Running {
+		return rawCounterSample{ifaceID: interfaceID}
+	}
+	_, tx, err := readInterfaceCounters(ctx, s.docker, node.ContainerID, iface.RuntimeName)
+	if err != nil {
+		return rawCounterSample{ifaceID: interfaceID}
+	}
+	return rawCounterSample{ifaceID: interfaceID, runtimeName: iface.RuntimeName, tx: tx, valid: true}
+}
+
+// applyRawSample updates s.stats and returns (txDelta, active). Must be called under s.mu.
+func (s *Service) applyRawSample(raw rawCounterSample) (uint64, bool) {
+	if !raw.valid {
+		return 0, false
+	}
+	key := raw.ifaceID + "|" + raw.runtimeName
+	prev, hasPrev := s.stats[key]
+	s.stats[key] = ifaceStatsSample{tx: raw.tx}
+	if !hasPrev || raw.tx < prev.tx {
+		return 0, false
+	}
+	return raw.tx - prev.tx, true
+}
+
 func (s *Service) sampleActivityPatch(ctx context.Context) ([]LinkDirectionalActivity, []string) {
 	links := s.repo.ListLinks()
-	nextByID := make(map[string]LinkDirectionalActivity, len(links))
+
+	// Collect counter reads outside the lock — no Docker IO under s.mu.
+	type linkSamples struct {
+		a, b rawCounterSample
+	}
+	samples := make([]linkSamples, len(links))
+	for i, link := range links {
+		samples[i].a = s.readRawCounter(ctx, link.InterfaceAID)
+		samples[i].b = s.readRawCounter(ctx, link.InterfaceBID)
+	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	for _, link := range links {
-		aToBDelta, aToB := s.sampleInterfaceDeltaLocked(ctx, link.InterfaceAID)
-		bToADelta, bToA := s.sampleInterfaceDeltaLocked(ctx, link.InterfaceBID)
-		if aToB && aToBDelta >= linkActivityMinStep || bToA && bToADelta >= linkActivityMinStep {
+
+	nextByID := make(map[string]LinkDirectionalActivity, len(links))
+	for i, link := range links {
+		aToBDelta, aToB := s.applyRawSample(samples[i].a)
+		bToADelta, bToA := s.applyRawSample(samples[i].b)
+		if (aToB && aToBDelta >= linkActivityMinStep) || (bToA && bToADelta >= linkActivityMinStep) {
 			nextByID[link.ID] = LinkDirectionalActivity{
 				LinkID: link.ID,
 				AToB:   aToB && aToBDelta >= linkActivityMinStep,
@@ -248,6 +266,7 @@ func (s *Service) sampleActivityPatch(ctx context.Context) ([]LinkDirectionalAct
 			}
 		}
 	}
+
 	for key := range s.stats {
 		ifaceID, _, found := strings.Cut(key, "|")
 		if !found {
@@ -333,35 +352,6 @@ func (s *Service) broadcast(event LinkActivityEvent) {
 	s.mu.Unlock()
 }
 
-func (s *Service) sampleInterfaceDeltaLocked(ctx context.Context, interfaceID string) (uint64, bool) {
-	node, iface, ok := s.repo.GetNodeByInterface(interfaceID)
-	if !ok {
-		return 0, false
-	}
-	if iface.LinkID == "" || iface.RuntimeName == "" {
-		return 0, false
-	}
-	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
-	if err != nil || inspect.State == nil || !inspect.State.Running || inspect.State.Paused {
-		return 0, false
-	}
-
-	rx, tx, err := readInterfaceCounters(ctx, s.docker, node.ContainerID, iface.RuntimeName)
-	if err != nil {
-		return 0, false
-	}
-
-	statsKey := interfaceID + "|" + iface.RuntimeName
-	prev, hasPrev := s.stats[statsKey]
-	s.stats[statsKey] = ifaceStatsSample{rx: rx, tx: tx}
-	if !hasPrev {
-		return 0, false
-	}
-	if rx < prev.rx || tx < prev.tx {
-		return 0, false
-	}
-	return tx - prev.tx, true
-}
 
 func (s *Service) deleteLink(ctx context.Context, linkID string) error {
 	if linkID == "" {
@@ -384,9 +374,24 @@ func (s *Service) deleteLink(ctx context.Context, linkID string) error {
 		}
 	}
 
-	if err := s.removeLinkNetwork(ctx, link); err != nil {
-		return err
+	// Delete the veth pair from whichever end's container is running.
+	// Deleting one end automatically destroys the peer (kernel veth behavior).
+	nameA := vethNameA(linkID)
+	if nodeA, _, ok := s.repo.GetNodeByInterface(link.InterfaceAID); ok && nodeA.ContainerID != "" {
+		inspect, err := s.docker.ContainerInspect(ctx, nodeA.ContainerID)
+		if err == nil && inspect.State != nil && inspect.State.Running {
+			_, _, _, _ = execInContainer(ctx, s.docker, nodeA.ContainerID,
+				[]string{"ip", "link", "delete", nameA})
+		}
+	} else if nodeB, _, ok := s.repo.GetNodeByInterface(link.InterfaceBID); ok && nodeB.ContainerID != "" {
+		nameB := vethNameB(linkID)
+		inspect, err := s.docker.ContainerInspect(ctx, nodeB.ContainerID)
+		if err == nil && inspect.State != nil && inspect.State.Running {
+			_, _, _, _ = execInContainer(ctx, s.docker, nodeB.ContainerID,
+				[]string{"ip", "link", "delete", nameB})
+		}
 	}
+
 	s.repo.SetInterfaceLink(link.InterfaceAID, "")
 	s.repo.SetInterfaceLink(link.InterfaceBID, "")
 	s.repo.SetInterfaceRuntime(link.InterfaceAID, "", 0)
@@ -395,41 +400,18 @@ func (s *Service) deleteLink(ctx context.Context, linkID string) error {
 	s.repo.SetInterfaceRuntimeName(link.InterfaceBID, "")
 	s.repo.DeleteLink(linkID)
 	s.repo.store.LinkSubnets.ReleaseString(link.Subnet)
+
 	return nil
 }
 
-func (s *Service) removeLinkNetwork(ctx context.Context, link model.Link) error {
-	if link.NetworkID == "" {
-		return nil
-	}
-	if nodeA, _, ok := s.repo.GetNodeByInterface(link.InterfaceAID); ok && nodeA.ContainerID != "" {
-		_ = s.docker.NetworkDisconnect(ctx, link.NetworkID, nodeA.ContainerID, true)
-	}
-	if nodeB, _, ok := s.repo.GetNodeByInterface(link.InterfaceBID); ok && nodeB.ContainerID != "" {
-		_ = s.docker.NetworkDisconnect(ctx, link.NetworkID, nodeB.ContainerID, true)
-	}
-	if err := s.docker.NetworkRemove(ctx, link.NetworkID); err != nil && !client.IsErrNotFound(err) {
-		slog.Error("Link network remove failed", "err", err)
-		return httputil.NewAppError(http.StatusInternalServerError, "link network remove failed")
-	}
-	return nil
-}
-
-func (s *Service) rollbackLinkCreate(ctx context.Context, networkID string, subnet netip.Prefix, containerIDs ...string) {
-	for _, containerID := range containerIDs {
-		if containerID == "" {
-			continue
+func (s *Service) rollbackPersistedLinkCreate(ctx context.Context, link model.Link, vethName, containerID string) {
+	if containerID != "" {
+		inspect, err := s.docker.ContainerInspect(ctx, containerID)
+		if err == nil && inspect.State != nil && inspect.State.Running {
+			_, _, _, _ = execInContainer(ctx, s.docker, containerID,
+				[]string{"ip", "link", "delete", vethName})
 		}
-		_ = s.docker.NetworkDisconnect(ctx, networkID, containerID, true)
 	}
-	if networkID != "" {
-		_ = s.docker.NetworkRemove(ctx, networkID)
-	}
-	s.repo.store.LinkSubnets.Release(subnet)
-}
-
-func (s *Service) rollbackPersistedLinkCreate(ctx context.Context, link model.Link) {
-	_ = s.removeLinkNetwork(ctx, link)
 	s.repo.SetInterfaceLink(link.InterfaceAID, "")
 	s.repo.SetInterfaceLink(link.InterfaceBID, "")
 	s.repo.SetInterfaceRuntime(link.InterfaceAID, "", 0)
@@ -443,7 +425,7 @@ func (s *Service) rollbackPersistedLinkCreate(ctx context.Context, link model.Li
 func (s *Service) realizeLinkedInterface(
 	ctx context.Context,
 	node model.Node,
-	interfaceID string,
+	runtimeName string,
 	runtimeIP string,
 	runtimePrefixLen int,
 	logicalIP string,
@@ -451,26 +433,6 @@ func (s *Service) realizeLinkedInterface(
 	conditions model.TrafficConditions,
 	adminDown bool,
 ) error {
-	inspect, err := s.docker.ContainerInspect(ctx, node.ContainerID)
-	if err != nil {
-		if client.IsErrNotFound(err) {
-			return httputil.NewAppError(http.StatusNotFound, "container not found")
-		}
-		slog.Error("Container inspect failed", "err", err)
-		return httputil.NewAppError(http.StatusInternalServerError, "container inspect failed")
-	}
-	if inspect.State == nil || !inspect.State.Running {
-		return nil
-	}
-
-	runtimeName, err := resolveRuntimeInterfaceName(ctx, s.docker, node.ContainerID, runtimeIP, runtimePrefixLen)
-	if err != nil {
-		return err
-	}
-	if !s.repo.SetInterfaceRuntimeName(interfaceID, runtimeName) {
-		slog.Error("Failed to persist runtime interface name")
-		return httputil.NewAppError(http.StatusInternalServerError, "failed to persist runtime interface name")
-	}
 	if node.Type == model.Switch {
 		if err := s.attachSwitchPort(ctx, node, runtimeName); err != nil {
 			return err
@@ -490,8 +452,13 @@ func (s *Service) realizeLinkedInterface(
 		}
 		return s.applyRuntimeInterfaceConditions(ctx, node.ContainerID, runtimeName, conditions)
 	}
-	if logicalIP != "" && logicalPrefixLen != 0 {
-		cidr := logicalIP + "/" + strconv.Itoa(logicalPrefixLen)
+
+	ip, prefix := logicalIP, logicalPrefixLen
+	if ip == "" || prefix == 0 {
+		ip, prefix = runtimeIP, runtimePrefixLen
+	}
+	if ip != "" && prefix != 0 {
+		cidr := ip + "/" + strconv.Itoa(prefix)
 		if _, err := execInContainerChecked(
 			ctx,
 			s.docker,
@@ -520,53 +487,17 @@ func (s *Service) realizeLinkedInterface(
 	return s.applyRuntimeInterfaceConditions(ctx, node.ContainerID, runtimeName, conditions)
 }
 
-func resolveRuntimeInterfaceName(
-	ctx context.Context,
-	docker *client.Client,
-	containerID string,
-	runtimeIP string,
-	runtimePrefixLen int,
-) (string, error) {
-	stdout, err := execInContainerChecked(
-		ctx,
-		docker,
-		containerID,
-		[]string{"ip", "-j", "addr", "show"},
-		"failed to inspect runtime interfaces",
-	)
-	if err != nil {
-		return "", err
-	}
-
-	var runtimeIfaces []runtimeInterfaceInfo
-	if err := json.Unmarshal([]byte(stdout), &runtimeIfaces); err != nil {
-		slog.Error("Runtime interface inspect parse failed", "err", err)
-		return "", httputil.NewAppError(http.StatusInternalServerError, "runtime interface inspect parse failed")
-	}
-
-	targetAddr := runtimeIP + "/" + strconv.Itoa(runtimePrefixLen)
-	for _, runtimeIface := range runtimeIfaces {
-		for _, addrInfo := range runtimeIface.AddrInfo {
-			if addrInfo.Local+"/"+strconv.Itoa(addrInfo.PrefixLen) == targetAddr {
-				return runtimeIface.IfName, nil
-			}
-		}
-	}
-
-	slog.Error("Runtime interface name resolution failed")
-	return "", httputil.NewAppError(http.StatusInternalServerError, "runtime interface name resolution failed")
-}
-
 func readInterfaceCounters(ctx context.Context, docker *client.Client, containerID, runtimeName string) (uint64, uint64, error) {
+	// /proc/net/dev is netns-aware and always present; falls back to 0/0 when
+	// the interface row is absent (veth not yet in this container's netns).
+	cmd := `awk -v iface="` + runtimeName + `:" ` +
+		`'BEGIN{r=0;t=0} $1==iface{r=$2;t=$10;found=1} END{print r; print t}' ` +
+		`/proc/net/dev`
 	stdout, err := execInContainerChecked(
 		ctx,
 		docker,
 		containerID,
-		[]string{
-			"sh",
-			"-c",
-			"cat /sys/class/net/" + runtimeName + "/statistics/rx_bytes /sys/class/net/" + runtimeName + "/statistics/tx_bytes",
-		},
+		[]string{"sh", "-c", cmd},
 		"failed to read interface counters",
 	)
 	if err != nil {
@@ -805,6 +736,7 @@ func (s *Service) applyRuntimeInterfaceConditions(ctx context.Context, container
 
 	return nil
 }
+
 
 func (s *Service) clearRuntimeInterfaceConditions(ctx context.Context, containerID, runtimeName string) error {
 	stdout, stderr, exitCode, err := execInContainer(ctx, s.docker, containerID, []string{"tc", "qdisc", "del", "dev", runtimeName, "root"})

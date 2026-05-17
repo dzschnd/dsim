@@ -10,6 +10,11 @@ require (
 require github.com/lmittmann/tint v1.1.3
 
 require (
+	github.com/vishvananda/netlink v1.3.1
+	github.com/vishvananda/netns v0.0.5
+)
+
+require (
 	github.com/Microsoft/go-winio v0.4.21 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/containerd/log v0.1.0 // indirect

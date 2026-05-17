@@ -2,8 +2,6 @@ package routes
 
 import (
 	"bufio"
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net"
@@ -41,7 +39,6 @@ func jsonHeader(next http.Handler) http.Handler {
 type statusRecorder struct {
 	w      http.ResponseWriter
 	status int
-	body   bytes.Buffer
 }
 
 func (r *statusRecorder) Unwrap() http.ResponseWriter {
@@ -49,7 +46,6 @@ func (r *statusRecorder) Unwrap() http.ResponseWriter {
 }
 
 func (r *statusRecorder) Write(b []byte) (int, error) {
-	r.body.Write(b)
 	return r.w.Write(b)
 }
 func (r *statusRecorder) Header() http.Header {
@@ -84,25 +80,11 @@ func requestLogger(next http.Handler) http.Handler {
 
 		next.ServeHTTP(rec, r)
 
-		msg := fmt.Sprintf("HTTP Request\n  status: %d\n  path: %s\n  method:%s\n  duration_ms: %d",
+		slog.Info(fmt.Sprintf("HTTP Request\n  status: %d\n  path: %s\n  method:%s\n  duration_ms: %d",
 			rec.status,
 			r.URL.Path,
 			r.Method,
 			time.Since(start).Milliseconds(),
-		)
-		response := bytes.TrimSpace(rec.body.Bytes())
-		if len(response) > 0 {
-			if json.Valid(response) {
-				var pretty bytes.Buffer
-				if err := json.Indent(&pretty, response, "  ", "  "); err == nil {
-					msg += "\n  response:\n  " + pretty.String()
-				} else {
-					msg += "\n  response:\n  " + string(response)
-				}
-			} else {
-				msg += "\n  response:\n  " + string(response)
-			}
-		}
-		slog.Info(msg)
+		))
 	})
 }

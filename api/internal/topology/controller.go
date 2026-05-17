@@ -6,6 +6,7 @@ import (
 
 	"github.com/docker/docker/client"
 	"github.com/dzschnd/dsim/internal/httputil"
+	"github.com/dzschnd/dsim/internal/links"
 	"github.com/dzschnd/dsim/internal/store"
 )
 
@@ -13,8 +14,8 @@ type Handler struct {
 	service *service
 }
 
-func NewHandler(docker *client.Client, store *store.Store) *Handler {
-	return &Handler{service: newService(docker, store)}
+func NewHandler(docker *client.Client, store *store.Store, linkSvc *links.Service) *Handler {
+	return &Handler{service: newService(docker, store, linkSvc)}
 }
 
 func (h *Handler) ExportTopologyHandler(w http.ResponseWriter, r *http.Request) {
