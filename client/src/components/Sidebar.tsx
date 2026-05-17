@@ -1101,7 +1101,7 @@ function NodePanel({
 													className="h-8 rounded border border-gray-200 bg-white px-2 text-xs outline-none focus:border-blue-300"
 												>
 													<option value="">Destination node</option>
-													{nodes.filter((n) => n.id !== data.nodeId).map((n) => (
+													{nodes.filter((n) => n.id !== data.nodeId).sort((a, b) => a.data.displayName.localeCompare(b.data.displayName)).map((n) => (
 														<option key={n.id} value={n.id}>{n.data.displayName}</option>
 													))}
 												</select>

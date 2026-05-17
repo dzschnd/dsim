@@ -108,19 +108,32 @@ func applyRuntimeRoute(ctx context.Context, docker *client.Client, node model.No
 }
 
 func execInContainer(ctx context.Context, docker *client.Client, containerID string, execCmd []string) (string, string, int, error) {
+	stdout, stderr, code, err := execInContainerQuiet(ctx, docker, containerID, execCmd)
+	if err != nil {
+		slog.Error("Exec create failed", "err", err)
+	}
+	return stdout, stderr, code, err
+}
+
+// execInContainerQuiet runs a command in a container and returns its output
+// without logging errors. Use this for background sampling where transient
+// failures (container stopped, not found) are expected and should be silent.
+func ExecInContainerQuiet(ctx context.Context, docker *client.Client, containerID string, execCmd []string) (string, string, int, error) {
+	return execInContainerQuiet(ctx, docker, containerID, execCmd)
+}
+
+func execInContainerQuiet(ctx context.Context, docker *client.Client, containerID string, execCmd []string) (string, string, int, error) {
 	execResp, err := docker.ContainerExecCreate(ctx, containerID, container.ExecOptions{
 		AttachStdout: true,
 		AttachStderr: true,
 		Cmd:          execCmd,
 	})
 	if err != nil {
-		slog.Error("Exec create failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec create failed")
 	}
 
 	attachResp, err := docker.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
 	if err != nil {
-		slog.Error("Exec attach failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec attach failed")
 	}
 	defer attachResp.Close()
@@ -128,13 +141,11 @@ func execInContainer(ctx context.Context, docker *client.Client, containerID str
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	if _, err := stdcopy.StdCopy(&stdout, &stderr, attachResp.Reader); err != nil {
-		slog.Error("Exec read failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec read failed")
 	}
 
 	execInspect, err := docker.ContainerExecInspect(ctx, execResp.ID)
 	if err != nil {
-		slog.Error("Exec inspect failed", "err", err)
 		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec inspect failed")
 	}
 

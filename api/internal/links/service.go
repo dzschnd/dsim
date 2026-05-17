@@ -493,13 +493,7 @@ func readInterfaceCounters(ctx context.Context, docker *client.Client, container
 	cmd := `awk -v iface="` + runtimeName + `:" ` +
 		`'BEGIN{r=0;t=0} $1==iface{r=$2;t=$10;found=1} END{print r; print t}' ` +
 		`/proc/net/dev`
-	stdout, err := execInContainerChecked(
-		ctx,
-		docker,
-		containerID,
-		[]string{"sh", "-c", cmd},
-		"failed to read interface counters",
-	)
+	stdout, _, _, err := execInContainerQuiet(ctx, docker, containerID, []string{"sh", "-c", cmd})
 	if err != nil {
 		return 0, 0, err
 	}
@@ -516,6 +510,36 @@ func readInterfaceCounters(ctx context.Context, docker *client.Client, container
 		return 0, 0, httputil.NewAppError(http.StatusInternalServerError, "invalid tx counter value")
 	}
 	return rx, tx, nil
+}
+
+func execInContainerQuiet(ctx context.Context, docker *client.Client, containerID string, execCmd []string) (string, string, int, error) {
+	execResp, err := docker.ContainerExecCreate(ctx, containerID, container.ExecOptions{
+		AttachStdout: true,
+		AttachStderr: true,
+		Cmd:          execCmd,
+	})
+	if err != nil {
+		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec create failed")
+	}
+
+	attachResp, err := docker.ContainerExecAttach(ctx, execResp.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec attach failed")
+	}
+	defer attachResp.Close()
+
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	if _, err := stdcopy.StdCopy(&stdout, &stderr, attachResp.Reader); err != nil {
+		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec read failed")
+	}
+
+	execInspect, err := docker.ContainerExecInspect(ctx, execResp.ID)
+	if err != nil {
+		return "", "", 0, httputil.NewAppError(http.StatusInternalServerError, "exec inspect failed")
+	}
+
+	return stdout.String(), stderr.String(), execInspect.ExitCode, nil
 }
 
 func execInContainer(ctx context.Context, docker *client.Client, containerID string, execCmd []string) (string, string, int, error) {
