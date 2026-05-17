@@ -762,6 +762,10 @@ export function TopologyCanvas() {
 	);
 
 	useEffect(() => {
+		if (edges.length === 0) {
+			setLinkActivityById((curr) => (Object.keys(curr).length === 0 ? curr : {}));
+			return;
+		}
 		if (edges.length > LINK_ACTIVITY_MAX_LINKS) {
 			setLinkActivityById((curr) => (Object.keys(curr).length === 0 ? curr : {}));
 			return;

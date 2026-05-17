@@ -432,6 +432,10 @@ func (s *Service) syncNodeRuntime(ctx context.Context, nodeID string, prebuilt m
 		if _, ok := ifaceExpr[iface.ID]; ok {
 			continue
 		}
+		if iface.LinkID != "" {
+			// Veth not ready (peer container stopped); skip — will be configured when peer starts.
+			continue
+		}
 		if iface.RuntimeIPAddr == "" || iface.RuntimePrefixLen == 0 {
 			continue
 		}
