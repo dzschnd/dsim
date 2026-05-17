@@ -351,6 +351,7 @@ func (s *Service) StartNode(ctx context.Context, nodeID string) error {
 			return err
 		}
 		s.repo.UpdateNodeStatus(nodeID, model.Running)
+		s.resyncLinkedPeers(ctx, nodeID)
 		return nil
 	}
 
@@ -368,7 +369,16 @@ func (s *Service) StartNode(ctx context.Context, nodeID string) error {
 	}
 
 	s.repo.UpdateNodeStatus(nodeID, model.Running)
+	s.resyncLinkedPeers(ctx, nodeID)
 	return nil
+}
+
+func (s *Service) resyncLinkedPeers(ctx context.Context, nodeID string) {
+	for _, peerID := range s.runningLinkedPeerIDs(nodeID) {
+		if err := s.syncNodeRuntime(ctx, peerID, nil); err != nil {
+			slog.Warn("Failed to re-sync peer after node start", "peer", peerID, "err", err)
+		}
+	}
 }
 
 func (s *Service) waitForNode(ctx context.Context, node model.Node) (string, error) {
@@ -485,10 +495,7 @@ func (s *Service) syncNodeRuntime(ctx context.Context, nodeID string, prebuilt m
 		}
 		expr, hasExpr := ifaceExpr[iface.ID]
 		if !hasExpr {
-			if iface.LinkID == "" {
-				continue
-			}
-			expr = iface.Name
+			continue
 		}
 		cmds = append(cmds, fmt.Sprintf("ip link set %s up", expr))
 	}
@@ -508,6 +515,26 @@ func (s *Service) syncNodeRuntime(ctx context.Context, nodeID string, prebuilt m
 		cmds = append(cmds, fmt.Sprintf("ip addr replace %s/%d dev %s", ip, prefix, expr))
 	}
 
+	// Build the set of active prefixes from interfaces that are confirmed in ifaceExpr.
+	var activePrefixes []netip.Prefix
+	for _, iface := range node.Interfaces {
+		if _, ok := ifaceExpr[iface.ID]; !ok {
+			continue
+		}
+		ip, prefix := iface.IPAddr, iface.PrefixLen
+		if ip == "" || prefix == 0 {
+			ip, prefix = iface.RuntimeIPAddr, iface.RuntimePrefixLen
+		}
+		if ip == "" || prefix == 0 {
+			continue
+		}
+		if addr, err := netip.ParseAddr(ip); err == nil {
+			if pfx, err := addr.Prefix(prefix); err == nil {
+				activePrefixes = append(activePrefixes, pfx.Masked())
+			}
+		}
+	}
+
 	for _, route := range node.Routes {
 		dest := route.Destination
 		if dest == "0.0.0.0/0" {
@@ -515,6 +542,19 @@ func (s *Service) syncNodeRuntime(ctx context.Context, nodeID string, prebuilt m
 		}
 		switch route.Kind {
 		case model.RouteKindVia:
+			// Skip if the gateway isn't reachable via any active interface.
+			gwReachable := false
+			if gw, err := netip.ParseAddr(route.NextHop); err == nil {
+				for _, pfx := range activePrefixes {
+					if pfx.Contains(gw) {
+						gwReachable = true
+						break
+					}
+				}
+			}
+			if !gwReachable {
+				continue
+			}
 			cmds = append(cmds, fmt.Sprintf("ip route replace %s via %s", dest, route.NextHop))
 		case model.RouteKindBlackhole:
 			cmds = append(cmds, fmt.Sprintf("ip route replace blackhole %s", dest))
@@ -530,10 +570,7 @@ func (s *Service) syncNodeRuntime(ctx context.Context, nodeID string, prebuilt m
 		}
 		expr, hasExpr := ifaceExpr[iface.ID]
 		if !hasExpr {
-			if iface.LinkID == "" {
-				continue
-			}
-			expr = iface.Name
+			continue
 		}
 		cmds = append(cmds, fmt.Sprintf("ip link set %s down", expr))
 	}
@@ -3822,4 +3859,45 @@ func (s *Service) findBestRouteLocked(node model.Node, targetAddr netip.Addr) (m
 	}
 
 	return best, true
+}
+
+// runningLinkedPeerIDs returns the IDs of distinct nodes that are currently
+// running and share a link with the given node.
+func (s *Service) runningLinkedPeerIDs(nodeID string) []string {
+	s.repo.store.Mu.RLock()
+	defer s.repo.store.Mu.RUnlock()
+
+	node, ok := s.repo.store.Nodes[nodeID]
+	if !ok {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var peers []string
+	for _, iface := range node.Interfaces {
+		if iface.LinkID == "" {
+			continue
+		}
+		link, ok := s.repo.store.Links[iface.LinkID]
+		if !ok {
+			continue
+		}
+		peerIfaceID := link.InterfaceBID
+		if peerIfaceID == iface.ID {
+			peerIfaceID = link.InterfaceAID
+		}
+		peerNodeID, ok := s.repo.store.InterfaceOwnerIndex[peerIfaceID]
+		if !ok || peerNodeID == nodeID || seen[peerNodeID] {
+			continue
+		}
+		peerNode, ok := s.repo.store.Nodes[peerNodeID]
+		if !ok {
+			continue
+		}
+		if peerNode.Status == model.Running || peerNode.Status == model.Frozen {
+			seen[peerNodeID] = true
+			peers = append(peers, peerNodeID)
+		}
+	}
+	return peers
 }

@@ -585,9 +585,6 @@ export function TopologyCanvas() {
 				setLastCommand({ command, status: "success", nodeId });
 			} catch (err: unknown) {
 				const message = err instanceof Error ? err.message : String(err);
-				setTerminalTabs((curr) => curr.map((t) =>
-					t.tabId === tabId ? { ...t, lines: [...t.lines, `$ ${command}`, message] } : t,
-				));
 				setStatus(message.trim() !== "" ? message : "Failed to execute command");
 				setLastCommand({ command, status: "failed", errorMessage: message, nodeId });
 			} finally {
@@ -612,6 +609,7 @@ export function TopologyCanvas() {
 		setLastCommand({ command, status: "executing", nodeId });
 		setBusy(true);
 		setRequestStatus(`Running command on ${nodeId}...`);
+		let terminalAppended = false;
 		try {
 			const result: ApiCommandResponse = await runNodeCommand(baseUrl, nodeId, command);
 			const outputLines = [
@@ -626,6 +624,7 @@ export function TopologyCanvas() {
 					));
 					setActiveTabId(tab.tabId);
 					setTerminalPanelState((s) => s === "hidden" ? "normal" : s);
+					terminalAppended = true;
 				}
 			}
 			if (result.exitCode !== 0) {
@@ -640,7 +639,7 @@ export function TopologyCanvas() {
 			return true;
 		} catch (err: unknown) {
 			const message = err instanceof Error ? err.message : String(err);
-			if (!silent) {
+			if (!silent && !terminalAppended) {
 				const tab = terminalTabsRef.current.find((t) => t.nodeId === nodeId);
 				if (tab) {
 					setTerminalTabs((curr) => curr.map((t) =>
