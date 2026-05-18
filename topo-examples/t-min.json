@@ -1,0 +1,71 @@
+{
+  "nodes": [
+    {
+      "id": "node_4c2ddf9b901595f3",
+      "name": "h2",
+      "type": "host",
+      "position": {
+        "x": 347.6720358732879,
+        "y": 201.78203563889258
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.10.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_c0db30e20af15c1f",
+      "name": "h1",
+      "type": "host",
+      "position": {
+        "x": 26.211076969813107,
+        "y": 204.37612445143412
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.10.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    }
+  ],
+  "links": [
+    {
+      "id": "link_ca33576b6fb70a7e",
+      "a": {
+        "nodeId": "node_c0db30e20af15c1f",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_4c2ddf9b901595f3",
+        "interface": "eth0"
+      }
+    }
+  ]
+}

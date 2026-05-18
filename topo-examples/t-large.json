@@ -1,0 +1,2916 @@
+{
+  "nodes": [
+    {
+      "id": "node_83724d47a40a47da",
+      "name": "h6",
+      "type": "host",
+      "position": {
+        "x": 557.67,
+        "y": -122.16999999999996
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.2.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.2.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_54470f4bf06529f6",
+      "name": "h9",
+      "type": "host",
+      "position": {
+        "x": 1260.67,
+        "y": -79.17000000000002
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.3.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.3.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_9aaae67d5a9d2e11",
+      "name": "h12",
+      "type": "host",
+      "position": {
+        "x": 1732.67,
+        "y": 131.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.3.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.3.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_c4baa0c653fad478",
+      "name": "h15",
+      "type": "host",
+      "position": {
+        "x": 1298.67,
+        "y": 977.3299999999999
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.4.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.4.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_c7aede60e516611a",
+      "name": "h16",
+      "type": "host",
+      "position": {
+        "x": 1548.67,
+        "y": 1053.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.4.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.4.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_407c881d2f1794bb",
+      "name": "h13",
+      "type": "host",
+      "position": {
+        "x": 1538.67,
+        "y": 544.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.4.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.4.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_c70f1864c72272c9",
+      "name": "sw2",
+      "type": "switch",
+      "position": {
+        "x": 1496.67,
+        "y": 28.829999999999984
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_56924bc9f522ae5f",
+      "name": "r12",
+      "type": "router",
+      "position": {
+        "x": 525.6700000000001,
+        "y": 649.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.255.132.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.121.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.255.100.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.121.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.100.9",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.132.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.100.13",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.100.13",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.121.2",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_4a96922db279377d",
+      "name": "h5",
+      "type": "host",
+      "position": {
+        "x": 369.67,
+        "y": 6.829999999999984
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.2.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.2.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_06a50b4391199486",
+      "name": "h19",
+      "type": "host",
+      "position": {
+        "x": 825.67,
+        "y": 1099.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.5.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.5.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_b910ad93be220174",
+      "name": "h20",
+      "type": "host",
+      "position": {
+        "x": 1019.6700000000001,
+        "y": 946.8299999999999
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.5.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.5.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_3ac7967d2c102091",
+      "name": "h24",
+      "type": "host",
+      "position": {
+        "x": 183.17000000000002,
+        "y": 995.3299999999999
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.6.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.6.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_8587deb149aef6b5",
+      "name": "sw1",
+      "type": "switch",
+      "position": {
+        "x": 730.67,
+        "y": 81.83000000000001
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_ae04f72686a7b0a4",
+      "name": "sw5",
+      "type": "switch",
+      "position": {
+        "x": 1508.67,
+        "y": 813.8299999999999
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_4fbaafed797de14b",
+      "name": "h2",
+      "type": "host",
+      "position": {
+        "x": 171.17000000000002,
+        "y": -133.17000000000002
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.1.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.1.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_b188db6f3f4d5736",
+      "name": "h8",
+      "type": "host",
+      "position": {
+        "x": 999.6700000000001,
+        "y": -51.170000000000016
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.2.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.2.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_c87febc98bd238fa",
+      "name": "h11",
+      "type": "host",
+      "position": {
+        "x": 1504.67,
+        "y": 269.83000000000004
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.3.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.3.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_36acf8ce9d8577d3",
+      "name": "h21",
+      "type": "host",
+      "position": {
+        "x": -299.33000000000004,
+        "y": 704.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.6.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.6.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_f605a66953edfc4a",
+      "name": "h23",
+      "type": "host",
+      "position": {
+        "x": -51.33000000000004,
+        "y": 1113.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.6.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.6.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_4a3a17eb073c13f3",
+      "name": "r7",
+      "type": "router",
+      "position": {
+        "x": 201.67000000000002,
+        "y": 163.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.1.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.78.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.255.117.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.78.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.117.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.78.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.78.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.117.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_89b4692481e2d465",
+      "name": "r11",
+      "type": "router",
+      "position": {
+        "x": 177.67000000000002,
+        "y": 742.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.6.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.121.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.255.117.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.117.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.121.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.121.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.121.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.121.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_eb5a6497c86918ee",
+      "name": "h17",
+      "type": "host",
+      "position": {
+        "x": 417.67,
+        "y": 976.8299999999999
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.5.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.5.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_40558385dff18bb3",
+      "name": "h18",
+      "type": "host",
+      "position": {
+        "x": 609.67,
+        "y": 1121.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.5.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.5.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_d148c71b4fb19ec8",
+      "name": "sw0",
+      "type": "switch",
+      "position": {
+        "x": -38.329999999999984,
+        "y": 2.829999999999984
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_5ea0f9dfb74259e0",
+      "name": "sw3",
+      "type": "switch",
+      "position": {
+        "x": -48.329999999999984,
+        "y": 879.8299999999999
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_1c009d91c58cd15d",
+      "name": "h3",
+      "type": "host",
+      "position": {
+        "x": -317.33000000000004,
+        "y": 126.83000000000001
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.1.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.1.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_17d1bbbab85e5e99",
+      "name": "h4",
+      "type": "host",
+      "position": {
+        "x": -74.82999999999998,
+        "y": 232.83000000000004
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.1.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.1.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_f13e7dcbdd47e25d",
+      "name": "r9",
+      "type": "router",
+      "position": {
+        "x": 926.67,
+        "y": 236.82999999999998
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.255.89.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.90.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.255.100.9/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "cidr": "10.0.2.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.89.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.90.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.90.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.100.13",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.100.12",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_7ee1c9f8bb04cc94",
+      "name": "sw4",
+      "type": "switch",
+      "position": {
+        "x": 730.67,
+        "y": 792.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_1043ffa7aab836e8",
+      "name": "r13",
+      "type": "router",
+      "position": {
+        "x": 954.67,
+        "y": 625.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.255.134.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.132.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.255.100.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "cidr": "10.0.5.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.132.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.100.9",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.134.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.134.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.100.12",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_7f6c5cc7f20a6f1b",
+      "name": "h7",
+      "type": "host",
+      "position": {
+        "x": 793.67,
+        "y": -156.16999999999996
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.2.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.2.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_7a3d798b35a51746",
+      "name": "h10",
+      "type": "host",
+      "position": {
+        "x": 1430.67,
+        "y": -259.17
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.3.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.3.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_3995a1e6ff7899d3",
+      "name": "r14",
+      "type": "router",
+      "position": {
+        "x": 1260.67,
+        "y": 692.8300000000002
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.255.104.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.134.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.0.4.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.134.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.104.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.104.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.134.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.134.2",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_c5fe95056dad1d65",
+      "name": "sw6",
+      "type": "switch",
+      "position": {
+        "x": 734.67,
+        "y": 449.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_c85d280a0b3e7c21",
+      "name": "r10",
+      "type": "router",
+      "position": {
+        "x": 1258.67,
+        "y": 177.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.255.90.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.104.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.0.3.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.104.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.90.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.104.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.90.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.90.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_30be48803f1be09f",
+      "name": "h14",
+      "type": "host",
+      "position": {
+        "x": 1754.67,
+        "y": 708.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.4.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.4.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_76adcb38be6966d5",
+      "name": "h22",
+      "type": "host",
+      "position": {
+        "x": -64.82999999999998,
+        "y": 584.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.6.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.6.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_381c970888fa2d27",
+      "name": "h1",
+      "type": "host",
+      "position": {
+        "x": 4.669999999999959,
+        "y": -239.17000000000002
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.1.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.1.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_511bfe64919987b3",
+      "name": "r8",
+      "type": "router",
+      "position": {
+        "x": 531.6700000000001,
+        "y": 236.82999999999998
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.255.78.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.89.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.255.100.8/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.78.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.89.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.89.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.100.13",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.100.13",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.100.12",
+          "kind": "via"
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "id": "link_7ef128a86599da01",
+      "a": {
+        "nodeId": "node_d148c71b4fb19ec8",
+        "interface": "eth4"
+      },
+      "b": {
+        "nodeId": "node_17d1bbbab85e5e99",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_edceafdcdaeda28b",
+      "a": {
+        "nodeId": "node_8587deb149aef6b5",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_4a96922db279377d",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_12ea73061660ee6f",
+      "a": {
+        "nodeId": "node_c85d280a0b3e7c21",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_c70f1864c72272c9",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_9d1d7d71bb31de19",
+      "a": {
+        "nodeId": "node_c70f1864c72272c9",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_54470f4bf06529f6",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_a499aa49d9bcba3c",
+      "a": {
+        "nodeId": "node_3995a1e6ff7899d3",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_1043ffa7aab836e8",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_70e99fe379baa288",
+      "a": {
+        "nodeId": "node_c70f1864c72272c9",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_7a3d798b35a51746",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_708042265625367c",
+      "a": {
+        "nodeId": "node_d148c71b4fb19ec8",
+        "interface": "eth3"
+      },
+      "b": {
+        "nodeId": "node_1c009d91c58cd15d",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_91378524e97e719a",
+      "a": {
+        "nodeId": "node_c70f1864c72272c9",
+        "interface": "eth3"
+      },
+      "b": {
+        "nodeId": "node_c87febc98bd238fa",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_31ebb119741d6290",
+      "a": {
+        "nodeId": "node_ae04f72686a7b0a4",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_407c881d2f1794bb",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_50a51f80aede1b43",
+      "a": {
+        "nodeId": "node_8587deb149aef6b5",
+        "interface": "eth4"
+      },
+      "b": {
+        "nodeId": "node_b188db6f3f4d5736",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_5c07f03f1f0177b9",
+      "a": {
+        "nodeId": "node_4a3a17eb073c13f3",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_d148c71b4fb19ec8",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_b02ae24a19902515",
+      "a": {
+        "nodeId": "node_ae04f72686a7b0a4",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_30be48803f1be09f",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_14a38a41460b48dc",
+      "a": {
+        "nodeId": "node_ae04f72686a7b0a4",
+        "interface": "eth3"
+      },
+      "b": {
+        "nodeId": "node_c4baa0c653fad478",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_c05c2b241122ea95",
+      "a": {
+        "nodeId": "node_ae04f72686a7b0a4",
+        "interface": "eth4"
+      },
+      "b": {
+        "nodeId": "node_c7aede60e516611a",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_a78f189891ef11aa",
+      "a": {
+        "nodeId": "node_7ee1c9f8bb04cc94",
+        "interface": "eth4"
+      },
+      "b": {
+        "nodeId": "node_b910ad93be220174",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_7a56119986ee073c",
+      "a": {
+        "nodeId": "node_5ea0f9dfb74259e0",
+        "interface": "eth4"
+      },
+      "b": {
+        "nodeId": "node_3ac7967d2c102091",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_91e7d9c3f89aaf50",
+      "a": {
+        "nodeId": "node_511bfe64919987b3",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_c5fe95056dad1d65",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_f63501542be7e2b1",
+      "a": {
+        "nodeId": "node_d148c71b4fb19ec8",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_381c970888fa2d27",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_ed5d994a6906272f",
+      "a": {
+        "nodeId": "node_56924bc9f522ae5f",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_89b4692481e2d465",
+        "interface": "eth1"
+      }
+    },
+    {
+      "id": "link_25bd44e293d63bca",
+      "a": {
+        "nodeId": "node_f13e7dcbdd47e25d",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_c5fe95056dad1d65",
+        "interface": "eth1"
+      }
+    },
+    {
+      "id": "link_9070af7041845fff",
+      "a": {
+        "nodeId": "node_8587deb149aef6b5",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_83724d47a40a47da",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_600b77eaa6a504e2",
+      "a": {
+        "nodeId": "node_d148c71b4fb19ec8",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_4fbaafed797de14b",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_424b5796a15690f5",
+      "a": {
+        "nodeId": "node_3995a1e6ff7899d3",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_ae04f72686a7b0a4",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_0d42680480070ecd",
+      "a": {
+        "nodeId": "node_1043ffa7aab836e8",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_56924bc9f522ae5f",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_74c25aa6b431d0a1",
+      "a": {
+        "nodeId": "node_5ea0f9dfb74259e0",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_36acf8ce9d8577d3",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_d6bad2ef83d65876",
+      "a": {
+        "nodeId": "node_5ea0f9dfb74259e0",
+        "interface": "eth3"
+      },
+      "b": {
+        "nodeId": "node_f605a66953edfc4a",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_2131ca5ff3ffd7cf",
+      "a": {
+        "nodeId": "node_511bfe64919987b3",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_f13e7dcbdd47e25d",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_cc973def7232aa44",
+      "a": {
+        "nodeId": "node_c85d280a0b3e7c21",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_3995a1e6ff7899d3",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_a636e2480d748ced",
+      "a": {
+        "nodeId": "node_56924bc9f522ae5f",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_c5fe95056dad1d65",
+        "interface": "eth2"
+      }
+    },
+    {
+      "id": "link_d62aabcbcb440e97",
+      "a": {
+        "nodeId": "node_7ee1c9f8bb04cc94",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_c5fe95056dad1d65",
+        "interface": "eth4"
+      }
+    },
+    {
+      "id": "link_1b8ebe054238ef94",
+      "a": {
+        "nodeId": "node_8587deb149aef6b5",
+        "interface": "eth3"
+      },
+      "b": {
+        "nodeId": "node_7f6c5cc7f20a6f1b",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_86307a517e72b2cd",
+      "a": {
+        "nodeId": "node_8587deb149aef6b5",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_c5fe95056dad1d65",
+        "interface": "eth5"
+      }
+    },
+    {
+      "id": "link_9930ded7a51119e1",
+      "a": {
+        "nodeId": "node_c70f1864c72272c9",
+        "interface": "eth4"
+      },
+      "b": {
+        "nodeId": "node_9aaae67d5a9d2e11",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_b65a03346574e77d",
+      "a": {
+        "nodeId": "node_7ee1c9f8bb04cc94",
+        "interface": "eth3"
+      },
+      "b": {
+        "nodeId": "node_06a50b4391199486",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_64314d0fac7c30b4",
+      "a": {
+        "nodeId": "node_5ea0f9dfb74259e0",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_76adcb38be6966d5",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_f1d6a487fab81a69",
+      "a": {
+        "nodeId": "node_f13e7dcbdd47e25d",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_c85d280a0b3e7c21",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_966200fc68ebc3f0",
+      "a": {
+        "nodeId": "node_89b4692481e2d465",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_4a3a17eb073c13f3",
+        "interface": "eth2"
+      }
+    },
+    {
+      "id": "link_99cb2fc07bef0f38",
+      "a": {
+        "nodeId": "node_1043ffa7aab836e8",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_c5fe95056dad1d65",
+        "interface": "eth3"
+      }
+    },
+    {
+      "id": "link_8f8fc306819aee7d",
+      "a": {
+        "nodeId": "node_89b4692481e2d465",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_5ea0f9dfb74259e0",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_5cc677895e8312a8",
+      "a": {
+        "nodeId": "node_7ee1c9f8bb04cc94",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_eb5a6497c86918ee",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_3a2a46fcda64267f",
+      "a": {
+        "nodeId": "node_7ee1c9f8bb04cc94",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_40558385dff18bb3",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_737038be5f33ab0f",
+      "a": {
+        "nodeId": "node_4a3a17eb073c13f3",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_511bfe64919987b3",
+        "interface": "eth0"
+      }
+    }
+  ]
+}

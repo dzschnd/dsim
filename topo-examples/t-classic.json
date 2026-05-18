@@ -1,0 +1,522 @@
+{
+  "nodes": [
+    {
+      "id": "node_087ce64d4c3daa89",
+      "name": "r1",
+      "type": "router",
+      "position": {
+        "x": 594.2697183748329,
+        "y": -125.58190794927373
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.10.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "192.168.20.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_9cf83a541faae8cd",
+      "name": "h1",
+      "type": "host",
+      "position": {
+        "x": 72.62585904786245,
+        "y": 293.49250604128883
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.10.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "192.168.10.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_80bf6415e38e5fdc",
+      "name": "s1",
+      "type": "switch",
+      "position": {
+        "x": 300,
+        "y": 100
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_a5c50e54977e2f45",
+      "name": "h2",
+      "type": "host",
+      "position": {
+        "x": 481.1486114201831,
+        "y": 287.57033918990805
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.10.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "192.168.10.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_af0a0d166d123feb",
+      "name": "h3",
+      "type": "host",
+      "position": {
+        "x": 732.5736348675122,
+        "y": 301.4401542187342
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.20.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "192.168.20.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_126463e14ae5a164",
+      "name": "h4",
+      "type": "host",
+      "position": {
+        "x": 1076.0369551951233,
+        "y": 298.6552672940512
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.20.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "192.168.20.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_152d8d81ec9850b3",
+      "name": "s2",
+      "type": "switch",
+      "position": {
+        "x": 908.0397122724005,
+        "y": 99.06563730848518
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    }
+  ],
+  "links": [
+    {
+      "id": "link_ca9b0e02e32e156d",
+      "a": {
+        "nodeId": "node_80bf6415e38e5fdc",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_a5c50e54977e2f45",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_39465ca987358e1f",
+      "a": {
+        "nodeId": "node_152d8d81ec9850b3",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_af0a0d166d123feb",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_cc4657268fa757ee",
+      "a": {
+        "nodeId": "node_152d8d81ec9850b3",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_126463e14ae5a164",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_4df05e556807a2bb",
+      "a": {
+        "nodeId": "node_087ce64d4c3daa89",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_80bf6415e38e5fdc",
+        "interface": "eth2"
+      }
+    },
+    {
+      "id": "link_d627c9194dad58bb",
+      "a": {
+        "nodeId": "node_087ce64d4c3daa89",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_152d8d81ec9850b3",
+        "interface": "eth2"
+      }
+    },
+    {
+      "id": "link_48d6e4db01eee106",
+      "a": {
+        "nodeId": "node_9cf83a541faae8cd",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_80bf6415e38e5fdc",
+        "interface": "eth0"
+      }
+    }
+  ]
+}
