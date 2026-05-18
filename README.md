@@ -2,17 +2,23 @@
 
 Docker-based network simulator
 
+### build locally
 ```bash
 docker build -f infra/app/Dockerfile -t dsim/app:local .
 ```
 
+### build to dockerhub
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 -f infra/app/Dockerfile -t dzschnd/dsim:latest --push .
 ```
 
+### pull app image
 ```bash
 docker pull dzschnd/dsim:latest
+```
 
+### run app container (pulls remote image if missing, builds network node image if missing)
+```bash
 docker run --rm \
   -p 8080:8080 \
   --pid host \
@@ -21,8 +27,13 @@ docker run --rm \
   dzschnd/dsim:latest
 ```
 
-# local dev (requires elevated privileges for netlink operations)
+### local dev (api requires elevated privileges for netlink operations)
 
 ```bash
+cd api
 sudo air
+```
+```bash
+cd client
+bun run dev
 ```
