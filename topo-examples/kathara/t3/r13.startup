@@ -1,0 +1,18 @@
+# eth0 = P2P_R14_R13
+ip addr add 10.255.134.2/30 dev eth0
+ip link set eth0 up
+# eth1 = P2P_R13_R12
+ip addr add 10.255.132.1/30 dev eth1
+ip link set eth1 up
+# eth2 = TRANSIT
+ip addr add 10.255.100.13/24 dev eth2
+ip link set eth2 up
+# eth3 = LAN5 (GW for 10.0.5.x)
+ip addr add 10.0.5.1/24 dev eth3
+ip link set eth3 up
+sysctl -w net.ipv4.ip_forward=1
+ip route add 10.0.1.0/24 via 10.255.100.8
+ip route add 10.0.2.0/24 via 10.255.100.9
+ip route add 10.0.3.0/24 via 10.255.100.9
+ip route add 10.0.4.0/24 via 10.255.134.1
+ip route add 10.0.6.0/24 via 10.255.100.12

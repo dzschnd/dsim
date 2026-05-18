@@ -1,0 +1,5 @@
+Okay, now I want you to help me create the three topology tiers to test mininet. I will attach the 3 files for my app, which describe the topology in json, and i want you to return the counterparts in mininet topos.
+
+basically, first is host-to-host only
+second is 1 router, 2 switches on it, with 2 hosts per switch
+third is a large 39 node topology made to test complex routing and a big number of nodes

@@ -1,0 +1,4669 @@
+eve/t1.unl:
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<lab name="t1" id="84abfd8e-51de-4e81-873c-60e4da1da3c8" version="0" scripttimeout="600" lock="0">
+  <description>Host to host</description>
+  <topology>
+    <nodes>
+      <node id="1" name="h1" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="390f937b-bbcd-4683-af0a-9159deb9e2cb" firstmac="50:00:00:01:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="312" top="237">
+        <interface id="0" name="e0" type="ethernet" network_id="1"/>
+      </node>
+      <node id="2" name="h2" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="af67fa9c-3aa5-4a9f-8bc3-46940e9862b8" firstmac="50:00:00:02:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="528" top="243">
+        <interface id="0" name="e0" type="ethernet" network_id="1"/>
+      </node>
+    </nodes>
+    <networks>
+      <network id="1" type="bridge" name="Net-h2iface0" left="0" top="0" visibility="0" icon="lan.png"/>
+    </networks>
+  </topology>
+</lab>
+
+eve/t2.unl:
+<?xml version="1.0" ?>
+<lab name="t2" id="aa4069c3-529a-42fc-84ed-9e481a759623" version="0" scripttimeout="600" lock="0">
+  <description>Router 2 switches 4 hosts</description>
+  <topology>
+    <nodes>
+      <node id="1" name="r1" type="qemu" template="vyos" image="vyos-2026" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="2" uuid="324a3602-a6b9-45d9-b2a0-14c353854114" firstmac="50:00:00:01:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Router-2D.svg" config="0" left="500" top="100">
+        <interface id="0" name="e0" type="ethernet" network_id="1"/>
+        <interface id="1" name="e1" type="ethernet" network_id="2"/>
+      </node>
+      <node id="2" name="h1" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="e050729c-417a-4227-abef-7a071205527e" firstmac="50:00:00:02:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="150" top="300">
+        <interface id="0" name="e0" type="ethernet" network_id="1"/>
+      </node>
+      <node id="3" name="h2" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="4bae02b9-f15e-4f6f-b2c6-37697f5643c6" firstmac="50:00:00:03:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="350" top="300">
+        <interface id="0" name="e0" type="ethernet" network_id="1"/>
+      </node>
+      <node id="4" name="h3" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="f3c378cd-e5ea-4cbc-ba3a-ba05dbd77301" firstmac="50:00:00:04:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="550" top="300">
+        <interface id="0" name="e0" type="ethernet" network_id="2"/>
+      </node>
+      <node id="5" name="h4" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="f3b8ab10-974f-4e1e-9c0e-55214d85ca78" firstmac="50:00:00:05:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="750" top="300">
+        <interface id="0" name="e0" type="ethernet" network_id="2"/>
+      </node>
+    </nodes>
+    <networks>
+      <network id="1" type="bridge" name="s1" left="300" top="150" visibility="1" icon="lan.png"/>
+      <network id="2" type="bridge" name="s2" left="700" top="150" visibility="1" icon="lan.png"/>
+    </networks>
+  </topology>
+</lab>
+
+eve/t3.unl:
+<?xml version="1.0" ?>
+<lab name="t3" id="8c2a9bca-4d33-42bf-8603-c1198dfc777e" version="0" scripttimeout="600" lock="0">
+  <description>Large topology complex routing</description>
+  <topology>
+    <nodes>
+      <node id="1" name="r7" type="qemu" template="vyos" image="vyos-2026" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="3" uuid="f5963076-6160-4e6f-afdc-5d460df89b50" firstmac="50:00:00:01:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Router-2D.svg" config="0" left="500" top="250">
+        <interface id="0" name="e0" type="ethernet" network_id="1"/>
+        <interface id="1" name="e1" type="ethernet" network_id="8"/>
+        <interface id="2" name="e2" type="ethernet" network_id="12"/>
+      </node>
+      <node id="2" name="r8" type="qemu" template="vyos" image="vyos-2026" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="3" uuid="168bcc1a-23fb-44c2-86c6-7f397e02339b" firstmac="50:00:00:02:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Router-2D.svg" config="0" left="700" top="250">
+        <interface id="0" name="e0" type="ethernet" network_id="8"/>
+        <interface id="1" name="e1" type="ethernet" network_id="9"/>
+        <interface id="2" name="e2" type="ethernet" network_id="7"/>
+      </node>
+      <node id="3" name="r9" type="qemu" template="vyos" image="vyos-2026" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="4" uuid="1208e4bb-fff1-4b7e-84d1-5460195cb191" firstmac="50:00:00:03:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Router-2D.svg" config="0" left="900" top="250">
+        <interface id="0" name="e0" type="ethernet" network_id="9"/>
+        <interface id="1" name="e1" type="ethernet" network_id="10"/>
+        <interface id="2" name="e2" type="ethernet" network_id="7"/>
+        <interface id="3" name="e3" type="ethernet" network_id="2"/>
+      </node>
+      <node id="4" name="r10" type="qemu" template="vyos" image="vyos-2026" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="3" uuid="12e85386-5ad0-4152-8c9a-ed1c2e963e80" firstmac="50:00:00:04:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Router-2D.svg" config="0" left="1100" top="250">
+        <interface id="0" name="e0" type="ethernet" network_id="10"/>
+        <interface id="1" name="e1" type="ethernet" network_id="11"/>
+        <interface id="2" name="e2" type="ethernet" network_id="3"/>
+      </node>
+      <node id="5" name="r11" type="qemu" template="vyos" image="vyos-2026" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="3" uuid="e882d436-4bfe-459f-aa98-25532526d5d2" firstmac="50:00:00:05:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Router-2D.svg" config="0" left="500" top="500">
+        <interface id="0" name="e0" type="ethernet" network_id="6"/>
+        <interface id="1" name="e1" type="ethernet" network_id="13"/>
+        <interface id="2" name="e2" type="ethernet" network_id="12"/>
+      </node>
+      <node id="6" name="r12" type="qemu" template="vyos" image="vyos-2026" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="3" uuid="8ce8b068-f02a-48cd-9464-0fde0977fdbf" firstmac="50:00:00:06:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Router-2D.svg" config="0" left="700" top="500">
+        <interface id="0" name="e0" type="ethernet" network_id="14"/>
+        <interface id="1" name="e1" type="ethernet" network_id="13"/>
+        <interface id="2" name="e2" type="ethernet" network_id="7"/>
+      </node>
+      <node id="7" name="r13" type="qemu" template="vyos" image="vyos-2026" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="4" uuid="55676637-8941-4c03-9fb3-b13cc5f7f15e" firstmac="50:00:00:07:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Router-2D.svg" config="0" left="900" top="500">
+        <interface id="0" name="e0" type="ethernet" network_id="15"/>
+        <interface id="1" name="e1" type="ethernet" network_id="14"/>
+        <interface id="2" name="e2" type="ethernet" network_id="7"/>
+        <interface id="3" name="e3" type="ethernet" network_id="5"/>
+      </node>
+      <node id="8" name="r14" type="qemu" template="vyos" image="vyos-2026" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="3" uuid="e81d318c-a41c-4c40-949f-5bc91826f8ee" firstmac="50:00:00:08:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Router-2D.svg" config="0" left="1100" top="500">
+        <interface id="0" name="e0" type="ethernet" network_id="11"/>
+        <interface id="1" name="e1" type="ethernet" network_id="15"/>
+        <interface id="2" name="e2" type="ethernet" network_id="4"/>
+      </node>
+      <node id="9" name="h1" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="9607810b-fbdb-410d-a8e7-011722ae6c53" firstmac="50:00:00:09:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="100" top="50">
+        <interface id="0" name="e0" type="ethernet" network_id="1"/>
+      </node>
+      <node id="10" name="h2" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="f8b8a080-08e1-4336-933d-6aa62c4aa9c5" firstmac="50:00:00:0a:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="200" top="50">
+        <interface id="0" name="e0" type="ethernet" network_id="1"/>
+      </node>
+      <node id="11" name="h3" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="bfaf849f-7231-4c0c-9954-0ddeaf2031e8" firstmac="50:00:00:0b:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="100" top="150">
+        <interface id="0" name="e0" type="ethernet" network_id="1"/>
+      </node>
+      <node id="12" name="h4" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="fe9f178e-1ec5-48f4-ad61-97a7b21541fa" firstmac="50:00:00:0c:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="200" top="150">
+        <interface id="0" name="e0" type="ethernet" network_id="1"/>
+      </node>
+      <node id="13" name="h5" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="0ac0e549-0924-4740-a9aa-bd4c997a3ab6" firstmac="50:00:00:0d:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="600" top="50">
+        <interface id="0" name="e0" type="ethernet" network_id="2"/>
+      </node>
+      <node id="14" name="h6" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="02c56385-e63a-4628-ad59-970fff4c1258" firstmac="50:00:00:0e:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="700" top="50">
+        <interface id="0" name="e0" type="ethernet" network_id="2"/>
+      </node>
+      <node id="15" name="h7" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="a8bcee0d-fa20-4164-aae9-e1936f873408" firstmac="50:00:00:0f:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="600" top="150">
+        <interface id="0" name="e0" type="ethernet" network_id="2"/>
+      </node>
+      <node id="16" name="h8" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="1cdf465d-34c7-4150-85c6-0f9d6fa1105f" firstmac="50:00:00:10:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="700" top="150">
+        <interface id="0" name="e0" type="ethernet" network_id="2"/>
+      </node>
+      <node id="17" name="h9" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="1711c83d-62eb-4cec-bd3b-5ffcee419af8" firstmac="50:00:00:11:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="1000" top="50">
+        <interface id="0" name="e0" type="ethernet" network_id="3"/>
+      </node>
+      <node id="18" name="h10" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="4e42e206-2a19-4dbb-b618-3a3a92909b90" firstmac="50:00:00:12:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="1100" top="50">
+        <interface id="0" name="e0" type="ethernet" network_id="3"/>
+      </node>
+      <node id="19" name="h11" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="1da115c8-0e09-4913-8b8c-cc005eb8bc37" firstmac="50:00:00:13:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="1000" top="150">
+        <interface id="0" name="e0" type="ethernet" network_id="3"/>
+      </node>
+      <node id="20" name="h12" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="60c6d50d-1365-4b66-8532-98307fcb3320" firstmac="50:00:00:14:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="1100" top="150">
+        <interface id="0" name="e0" type="ethernet" network_id="3"/>
+      </node>
+      <node id="21" name="h13" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="43036b0b-83a0-4e38-8ed5-431d680fb14a" firstmac="50:00:00:15:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="1400" top="50">
+        <interface id="0" name="e0" type="ethernet" network_id="4"/>
+      </node>
+      <node id="22" name="h14" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="fb4e096c-cc25-4b2c-8748-007c05f8ccba" firstmac="50:00:00:16:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="1500" top="50">
+        <interface id="0" name="e0" type="ethernet" network_id="4"/>
+      </node>
+      <node id="23" name="h15" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="8a588382-1663-4415-90ba-f4965ccebd69" firstmac="50:00:00:17:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="1400" top="150">
+        <interface id="0" name="e0" type="ethernet" network_id="4"/>
+      </node>
+      <node id="24" name="h16" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="0e6aace5-1f03-4cbf-85ec-4b6e89b391f5" firstmac="50:00:00:18:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="1500" top="150">
+        <interface id="0" name="e0" type="ethernet" network_id="4"/>
+      </node>
+      <node id="25" name="h17" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="b213a940-4f1c-4ada-aa1c-dcaee8b07dc5" firstmac="50:00:00:19:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="1000" top="600">
+        <interface id="0" name="e0" type="ethernet" network_id="5"/>
+      </node>
+      <node id="26" name="h18" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="5edefab7-c3f5-4dc1-815d-91282dc98f4a" firstmac="50:00:00:1a:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="1100" top="600">
+        <interface id="0" name="e0" type="ethernet" network_id="5"/>
+      </node>
+      <node id="27" name="h19" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="c28dd040-7cde-4e32-9ac8-58d21a5d3649" firstmac="50:00:00:1b:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="1000" top="700">
+        <interface id="0" name="e0" type="ethernet" network_id="5"/>
+      </node>
+      <node id="28" name="h20" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="3a3070ba-ea99-4d97-a43c-8f57fa0d460c" firstmac="50:00:00:1c:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="1100" top="700">
+        <interface id="0" name="e0" type="ethernet" network_id="5"/>
+      </node>
+      <node id="29" name="h21" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="49f37574-a7c5-48c2-8443-fe71f74a78d3" firstmac="50:00:00:1d:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="100" top="600">
+        <interface id="0" name="e0" type="ethernet" network_id="6"/>
+      </node>
+      <node id="30" name="h22" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="4f0b28cc-81f9-46c4-8d46-0c1f8aa655fd" firstmac="50:00:00:1e:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="200" top="600">
+        <interface id="0" name="e0" type="ethernet" network_id="6"/>
+      </node>
+      <node id="31" name="h23" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="6027905a-73c0-458f-b1f5-a8ee73f77b66" firstmac="50:00:00:1f:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="100" top="700">
+        <interface id="0" name="e0" type="ethernet" network_id="6"/>
+      </node>
+      <node id="32" name="h24" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="0bcc1246-3a02-46a5-a56b-2a9a1a8c1f67" firstmac="50:00:00:20:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="200" top="700">
+        <interface id="0" name="e0" type="ethernet" network_id="6"/>
+      </node>
+    </nodes>
+    <networks>
+      <network id="1" type="bridge" name="sw0" left="300" top="50" visibility="1" icon="lan.png"/>
+      <network id="2" type="bridge" name="sw1" left="700" top="50" visibility="1" icon="lan.png"/>
+      <network id="3" type="bridge" name="sw2" left="1100" top="50" visibility="1" icon="lan.png"/>
+      <network id="4" type="bridge" name="sw5" left="1500" top="50" visibility="1" icon="lan.png"/>
+      <network id="5" type="bridge" name="sw4" left="1100" top="600" visibility="1" icon="lan.png"/>
+      <network id="6" type="bridge" name="sw3" left="300" top="600" visibility="1" icon="lan.png"/>
+      <network id="7" type="bridge" name="transit100" left="700" top="300" visibility="1" icon="lan.png"/>
+      <network id="8" type="bridge" name="p2p-r7-r8" left="0" top="0" visibility="0" icon="lan.png"/>
+      <network id="9" type="bridge" name="p2p-r8-r9" left="0" top="0" visibility="0" icon="lan.png"/>
+      <network id="10" type="bridge" name="p2p-r9-r10" left="0" top="0" visibility="0" icon="lan.png"/>
+      <network id="11" type="bridge" name="p2p-r10-r14" left="0" top="0" visibility="0" icon="lan.png"/>
+      <network id="12" type="bridge" name="p2p-r11-r7" left="0" top="0" visibility="0" icon="lan.png"/>
+      <network id="13" type="bridge" name="p2p-r12-r11" left="0" top="0" visibility="0" icon="lan.png"/>
+      <network id="14" type="bridge" name="p2p-r13-r12" left="0" top="0" visibility="0" icon="lan.png"/>
+      <network id="15" type="bridge" name="p2p-r14-r13" left="0" top="0" visibility="0" icon="lan.png"/>
+    </networks>
+  </topology>
+</lab>
+
+kathara/t1/h1.startup:
+ip addr add 192.168.10.10/24 dev eth0
+ip link set eth0 up
+
+kathara/t1/h2.startup:
+ip addr add 192.168.10.11/24 dev eth0
+ip link set eth0 up
+
+kathara/t1/lab.conf:
+h1[0]=A
+h2[0]=A
+
+kathara/t2/h1.startup:
+ip addr add 192.168.10.10/24 dev eth0
+ip link set eth0 up
+ip route add default via 192.168.10.1
+
+kathara/t2/h2.startup:
+ip addr add 192.168.10.11/24 dev eth0
+ip link set eth0 up
+ip route add default via 192.168.10.1
+
+kathara/t2/h3.startup:
+ip addr add 192.168.20.10/24 dev eth0
+ip link set eth0 up
+ip route add default via 192.168.20.1
+
+kathara/t2/h4.startup:
+ip addr add 192.168.20.11/24 dev eth0
+ip link set eth0 up
+ip route add default via 192.168.20.1
+
+kathara/t2/lab.conf:
+h1[0]=LAN1
+h2[0]=LAN1
+h3[0]=LAN2
+h4[0]=LAN2
+r1[0]=LAN1
+r1[1]=LAN2
+r1[privileged]=true
+
+kathara/t2/r1.startup:
+ip addr add 192.168.10.1/24 dev eth0
+ip link set eth0 up
+ip addr add 192.168.20.1/24 dev eth1
+ip link set eth1 up
+sysctl -w net.ipv4.ip_forward=1
+
+kathara/t3/h10.startup:
+ip addr add 10.0.3.11/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.3.1
+
+kathara/t3/h11.startup:
+ip addr add 10.0.3.12/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.3.1
+
+kathara/t3/h12.startup:
+ip addr add 10.0.3.13/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.3.1
+
+kathara/t3/h13.startup:
+ip addr add 10.0.4.10/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.4.1
+
+kathara/t3/h14.startup:
+ip addr add 10.0.4.11/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.4.1
+
+kathara/t3/h15.startup:
+ip addr add 10.0.4.12/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.4.1
+
+kathara/t3/h16.startup:
+ip addr add 10.0.4.13/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.4.1
+
+kathara/t3/h17.startup:
+ip addr add 10.0.5.10/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.5.1
+
+kathara/t3/h18.startup:
+ip addr add 10.0.5.11/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.5.1
+
+kathara/t3/h19.startup:
+ip addr add 10.0.5.12/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.5.1
+
+kathara/t3/h1.startup:
+ip addr add 10.0.1.10/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.1.1
+
+kathara/t3/h20.startup:
+ip addr add 10.0.5.13/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.5.1
+
+kathara/t3/h21.startup:
+ip addr add 10.0.6.10/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.6.1
+
+kathara/t3/h22.startup:
+ip addr add 10.0.6.11/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.6.1
+
+kathara/t3/h23.startup:
+ip addr add 10.0.6.12/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.6.1
+
+kathara/t3/h24.startup:
+ip addr add 10.0.6.13/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.6.1
+
+kathara/t3/h2.startup:
+ip addr add 10.0.1.11/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.1.1
+
+kathara/t3/h3.startup:
+ip addr add 10.0.1.12/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.1.1
+
+kathara/t3/h4.startup:
+ip addr add 10.0.1.13/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.1.1
+
+kathara/t3/h5.startup:
+ip addr add 10.0.2.10/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.2.1
+
+kathara/t3/h6.startup:
+ip addr add 10.0.2.11/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.2.1
+
+kathara/t3/h7.startup:
+ip addr add 10.0.2.12/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.2.1
+
+kathara/t3/h8.startup:
+ip addr add 10.0.2.13/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.2.1
+
+kathara/t3/h9.startup:
+ip addr add 10.0.3.10/24 dev eth0
+ip link set eth0 up
+ip route add default via 10.0.3.1
+
+kathara/t3/lab.conf:
+# LAN segments (hosts + gateway router)
+h1[0]=LAN1
+h2[0]=LAN1
+h3[0]=LAN1
+h4[0]=LAN1
+r7[0]=LAN1
+r7[privileged]=true
+
+h5[0]=LAN2
+h6[0]=LAN2
+h7[0]=LAN2
+h8[0]=LAN2
+r9[3]=LAN2
+r9[privileged]=true
+
+h9[0]=LAN3
+h10[0]=LAN3
+h11[0]=LAN3
+h12[0]=LAN3
+r10[2]=LAN3
+r10[privileged]=true
+
+h13[0]=LAN4
+h14[0]=LAN4
+h15[0]=LAN4
+h16[0]=LAN4
+r14[2]=LAN4
+r14[privileged]=true
+
+h17[0]=LAN5
+h18[0]=LAN5
+h19[0]=LAN5
+h20[0]=LAN5
+r13[3]=LAN5
+r13[privileged]=true
+
+h21[0]=LAN6
+h22[0]=LAN6
+h23[0]=LAN6
+h24[0]=LAN6
+r11[2]=LAN6
+r11[privileged]=true
+
+# Router point-to-point links
+r7[1]=P2P_R7_R8
+r8[0]=P2P_R7_R8
+
+r8[1]=P2P_R8_R9
+r9[0]=P2P_R8_R9
+
+r9[1]=P2P_R9_R10
+r10[0]=P2P_R9_R10
+
+r10[1]=P2P_R10_R14
+r14[0]=P2P_R10_R14
+
+r14[1]=P2P_R14_R13
+r13[0]=P2P_R14_R13
+
+r13[1]=P2P_R13_R12
+r12[0]=P2P_R13_R12
+
+r12[1]=P2P_R12_R11
+r11[1]=P2P_R12_R11
+
+r11[0]=P2P_R11_R7
+r7[2]=P2P_R11_R7
+
+# Transit bus (sw6 equivalent)
+r8[2]=TRANSIT
+r9[2]=TRANSIT
+r12[2]=TRANSIT
+r13[2]=TRANSIT
+
+r8[privileged]=true
+r12[privileged]=true
+
+kathara/t3/r10.startup:
+# eth0 = P2P_R9_R10
+ip addr add 10.255.90.2/30 dev eth0
+ip link set eth0 up
+# eth1 = P2P_R10_R14
+ip addr add 10.255.104.1/30 dev eth1
+ip link set eth1 up
+# eth2 = LAN3
+ip addr add 10.0.3.1/24 dev eth2
+ip link set eth2 up
+sysctl -w net.ipv4.ip_forward=1
+ip route add 10.0.1.0/24 via 10.255.90.1
+ip route add 10.0.2.0/24 via 10.255.90.1
+ip route add 10.0.4.0/24 via 10.255.104.2
+ip route add 10.0.5.0/24 via 10.255.90.1
+ip route add 10.0.6.0/24 via 10.255.90.1
+
+kathara/t3/r11.startup:
+# eth0 = P2P_R11_R7
+ip addr add 10.255.117.1/30 dev eth0
+ip link set eth0 up
+# eth1 = P2P_R12_R11
+ip addr add 10.255.121.2/30 dev eth1
+ip link set eth1 up
+# eth2 = LAN6
+ip addr add 10.0.6.1/24 dev eth2
+ip link set eth2 up
+sysctl -w net.ipv4.ip_forward=1
+ip route add 10.0.1.0/24 via 10.255.117.2
+ip route add 10.0.2.0/24 via 10.255.121.1
+ip route add 10.0.3.0/24 via 10.255.121.1
+ip route add 10.0.4.0/24 via 10.255.121.1
+ip route add 10.0.5.0/24 via 10.255.121.1
+
+kathara/t3/r12.startup:
+# eth0 = P2P_R13_R12
+ip addr add 10.255.132.2/30 dev eth0
+ip link set eth0 up
+# eth1 = P2P_R12_R11
+ip addr add 10.255.121.1/30 dev eth1
+ip link set eth1 up
+# eth2 = TRANSIT
+ip addr add 10.255.100.12/24 dev eth2
+ip link set eth2 up
+sysctl -w net.ipv4.ip_forward=1
+ip route add 10.0.1.0/24 via 10.255.100.8
+ip route add 10.0.2.0/24 via 10.255.100.9
+ip route add 10.0.3.0/24 via 10.255.100.9
+ip route add 10.0.4.0/24 via 10.255.100.13
+ip route add 10.0.5.0/24 via 10.255.100.13
+ip route add 10.0.6.0/24 via 10.255.121.2
+
+kathara/t3/r13.startup:
+# eth0 = P2P_R14_R13
+ip addr add 10.255.134.2/30 dev eth0
+ip link set eth0 up
+# eth1 = P2P_R13_R12
+ip addr add 10.255.132.1/30 dev eth1
+ip link set eth1 up
+# eth2 = TRANSIT
+ip addr add 10.255.100.13/24 dev eth2
+ip link set eth2 up
+# eth3 = LAN5 (GW for 10.0.5.x)
+ip addr add 10.0.5.1/24 dev eth3
+ip link set eth3 up
+sysctl -w net.ipv4.ip_forward=1
+ip route add 10.0.1.0/24 via 10.255.100.8
+ip route add 10.0.2.0/24 via 10.255.100.9
+ip route add 10.0.3.0/24 via 10.255.100.9
+ip route add 10.0.4.0/24 via 10.255.134.1
+ip route add 10.0.6.0/24 via 10.255.100.12
+
+kathara/t3/r14.startup:
+# eth0 = P2P_R10_R14
+ip addr add 10.255.104.2/30 dev eth0
+ip link set eth0 up
+# eth1 = P2P_R14_R13
+ip addr add 10.255.134.1/30 dev eth1
+ip link set eth1 up
+# eth2 = LAN4
+ip addr add 10.0.4.1/24 dev eth2
+ip link set eth2 up
+sysctl -w net.ipv4.ip_forward=1
+ip route add 10.0.1.0/24 via 10.255.134.2
+ip route add 10.0.2.0/24 via 10.255.104.1
+ip route add 10.0.3.0/24 via 10.255.104.1
+ip route add 10.0.5.0/24 via 10.255.134.2
+ip route add 10.0.6.0/24 via 10.255.134.2
+
+kathara/t3/r7.startup:
+# eth0 = LAN1
+ip addr add 10.0.1.1/24 dev eth0
+ip link set eth0 up
+# eth1 = P2P_R7_R8
+ip addr add 10.255.78.1/30 dev eth1
+ip link set eth1 up
+# eth2 = P2P_R11_R7
+ip addr add 10.255.117.2/30 dev eth2
+ip link set eth2 up
+sysctl -w net.ipv4.ip_forward=1
+ip route add 10.0.2.0/24 via 10.255.78.2
+ip route add 10.0.3.0/24 via 10.255.78.2
+ip route add 10.0.4.0/24 via 10.255.78.2
+ip route add 10.0.5.0/24 via 10.255.78.2
+ip route add 10.0.6.0/24 via 10.255.117.1
+
+kathara/t3/r8.startup:
+# eth0 = P2P_R7_R8
+ip addr add 10.255.78.2/30 dev eth0
+ip link set eth0 up
+# eth1 = P2P_R8_R9
+ip addr add 10.255.89.1/30 dev eth1
+ip link set eth1 up
+# eth2 = TRANSIT
+ip addr add 10.255.100.8/24 dev eth2
+ip link set eth2 up
+sysctl -w net.ipv4.ip_forward=1
+ip route add 10.0.1.0/24 via 10.255.78.1
+ip route add 10.0.2.0/24 via 10.255.89.2
+ip route add 10.0.3.0/24 via 10.255.89.2
+ip route add 10.0.4.0/24 via 10.255.100.13
+ip route add 10.0.5.0/24 via 10.255.100.13
+ip route add 10.0.6.0/24 via 10.255.100.12
+
+kathara/t3/r9.startup:
+# eth0 = P2P_R8_R9
+ip addr add 10.255.89.2/30 dev eth0
+ip link set eth0 up
+# eth1 = P2P_R9_R10
+ip addr add 10.255.90.1/30 dev eth1
+ip link set eth1 up
+# eth2 = TRANSIT
+ip addr add 10.255.100.9/24 dev eth2
+ip link set eth2 up
+# eth3 = LAN2 (GW for 10.0.2.x)
+ip addr add 10.0.2.1/24 dev eth3
+ip link set eth3 up
+sysctl -w net.ipv4.ip_forward=1
+ip route add 10.0.1.0/24 via 10.255.89.1
+ip route add 10.0.3.0/24 via 10.255.90.2
+ip route add 10.0.4.0/24 via 10.255.90.2
+ip route add 10.0.5.0/24 via 10.255.100.13
+ip route add 10.0.6.0/24 via 10.255.100.12
+
+mininet/t1.py:
+#!/usr/bin/env python3
+"""
+Topology : 2 hosts connected directly (no switch, no router)
+  h1  eth0  192.168.10.10/24
+  h2  eth0  192.168.10.11/24
+  Link: h1-eth0 <-> h2-eth0
+
+Run:  sudo python3 mn_t1.py
+"""
+
+import time
+from mininet.net import Mininet
+from mininet.node import Host
+from mininet.link import TCLink
+from mininet.log import setLogLevel, info
+from mininet.cli import CLI
+
+
+def build():
+    setLogLevel('info')
+
+    net = Mininet(host=Host, link=TCLink, controller=None)
+
+    info('*** Adding hosts\n')
+    h1 = net.addHost('h1', ip=None)
+    h2 = net.addHost('h2', ip=None)
+
+    info('*** Adding links\n')
+    net.addLink(h1, h2)
+
+    info('*** Starting network\n')
+    t_start = time.time()
+    net.start()
+    t_end = time.time()
+
+    info('*** Configuring interfaces and routes\n')
+    # h1
+    h1.cmd('ip addr flush dev h1-eth0')
+    h1.cmd('ip addr add 192.168.10.10/24 dev h1-eth0')
+    h1.cmd('ip link set h1-eth0 up')
+
+    # h2
+    h2.cmd('ip addr flush dev h2-eth0')
+    h2.cmd('ip addr add 192.168.10.11/24 dev h2-eth0')
+    h2.cmd('ip link set h2-eth0 up')
+
+    info('*** Topology init time: %.4f s\n' % (t_end - t_start))
+
+    info('*** Running CLI (type "exit" or Ctrl-D to quit)\n')
+    CLI(net)
+
+    info('*** Stopping network\n')
+    net.stop()
+
+
+if __name__ == '__main__':
+    build()
+
+mininet/t2.py:
+#!/usr/bin/env python3
+"""
+Topology:
+  Hosts   : h1 192.168.10.10/24 gw 192.168.10.1
+             h2 192.168.10.11/24 gw 192.168.10.1
+             h3 192.168.20.10/24 gw 192.168.20.1
+             h4 192.168.20.11/24 gw 192.168.20.1
+  Switches: s1 (LAN 192.168.10.x), s2 (LAN 192.168.20.x)
+  Router  : r1  eth0 192.168.10.1/24 — s1
+                eth1 192.168.20.1/24 — s2
+
+  Links:
+    h1 — s1
+    h2 — s1
+    r1 — s1  (r1-eth0)
+    h3 — s2
+    h4 — s2
+    r1 — s2  (r1-eth1)
+
+Run:  sudo python3 mn_t2.py
+"""
+
+import time
+from mininet.net import Mininet
+from mininet.node import Host, OVSBridge
+from mininet.link import TCLink
+from mininet.log import setLogLevel, info
+from mininet.cli import CLI
+
+
+class LinuxRouter(Host):
+    """A Host with IP forwarding enabled — acts as a Linux router."""
+
+    def config(self, **params):
+        super().config(**params)
+        self.cmd('sysctl -w net.ipv4.ip_forward=1')
+
+    def terminate(self):
+        self.cmd('sysctl -w net.ipv4.ip_forward=0')
+        super().terminate()
+
+
+def build():
+    setLogLevel('info')
+
+    net = Mininet(host=Host, switch=OVSBridge, link=TCLink, controller=None)
+
+    info('*** Adding nodes\n')
+    r1 = net.addHost('r1', cls=LinuxRouter, ip=None)
+    s1 = net.addSwitch('s1')
+    s2 = net.addSwitch('s2')
+    h1 = net.addHost('h1', ip=None)
+    h2 = net.addHost('h2', ip=None)
+    h3 = net.addHost('h3', ip=None)
+    h4 = net.addHost('h4', ip=None)
+
+    info('*** Adding links\n')
+    # h1 — s1
+    net.addLink(h1, s1)
+    # h2 — s1
+    net.addLink(h2, s1)
+    # r1-eth0 — s1
+    net.addLink(r1, s1)
+    # h3 — s2
+    net.addLink(h3, s2)
+    # h4 — s2
+    net.addLink(h4, s2)
+    # r1-eth1 — s2
+    net.addLink(r1, s2)
+
+    info('*** Starting network\n')
+    t_start = time.time()
+    net.start()
+    t_end = time.time()
+
+    info('*** Configuring interfaces and routes\n')
+
+    # --- r1 ---
+    # r1-eth0 is the first link added for r1: connects to s1
+    # r1-eth1 is the second link: connects to s2
+    r1.cmd('ip addr flush dev r1-eth0')
+    r1.cmd('ip addr add 192.168.10.1/24 dev r1-eth0')
+    r1.cmd('ip link set r1-eth0 up')
+
+    r1.cmd('ip addr flush dev r1-eth1')
+    r1.cmd('ip addr add 192.168.20.1/24 dev r1-eth1')
+    r1.cmd('ip link set r1-eth1 up')
+
+    # --- h1 ---
+    h1.cmd('ip addr flush dev h1-eth0')
+    h1.cmd('ip addr add 192.168.10.10/24 dev h1-eth0')
+    h1.cmd('ip link set h1-eth0 up')
+    h1.cmd('ip route add default via 192.168.10.1')
+
+    # --- h2 ---
+    h2.cmd('ip addr flush dev h2-eth0')
+    h2.cmd('ip addr add 192.168.10.11/24 dev h2-eth0')
+    h2.cmd('ip link set h2-eth0 up')
+    h2.cmd('ip route add default via 192.168.10.1')
+
+    # --- h3 ---
+    h3.cmd('ip addr flush dev h3-eth0')
+    h3.cmd('ip addr add 192.168.20.10/24 dev h3-eth0')
+    h3.cmd('ip link set h3-eth0 up')
+    h3.cmd('ip route add default via 192.168.20.1')
+
+    # --- h4 ---
+    h4.cmd('ip addr flush dev h4-eth0')
+    h4.cmd('ip addr add 192.168.20.11/24 dev h4-eth0')
+    h4.cmd('ip link set h4-eth0 up')
+    h4.cmd('ip route add default via 192.168.20.1')
+
+    info('*** Topology init time: %.4f s\n' % (t_end - t_start))
+
+    info('*** Running CLI (type "exit" or Ctrl-D to quit)\n')
+    CLI(net)
+
+    info('*** Stopping network\n')
+    net.stop()
+
+
+if __name__ == '__main__':
+    build()
+
+mininet/t3.py:
+#!/usr/bin/env python3
+"""
+39 nodes: 24 hosts, 8 routers (r7-r14), 7 switches (sw0-sw6)
+
+LAN subnets:
+  sw0 — r7 GW  — 10.0.1.x/24   (h1, h2, h3, h4)
+  sw1 — r9 GW  — 10.0.2.x/24   (h5, h6, h7, h8)
+  sw2 — r10 GW — 10.0.3.x/24   (h9, h10, h11, h12)
+  sw5 — r14 GW — 10.0.4.x/24   (h13, h14, h15, h16)
+  sw4 — r13 GW — 10.0.5.x/24   (h17, h18, h19, h20)
+  sw3 — r11 GW — 10.0.6.x/24   (h21, h22, h23, h24)
+
+Router interconnects (point-to-point /30):
+  r7-eth1  10.255.78.1/30  <->  r8-eth0  10.255.78.2/30
+  r8-eth1  10.255.89.1/30  <->  r9-eth0  10.255.89.2/30
+  r9-eth1  10.255.90.1/30  <->  r10-eth0 10.255.90.2/30
+  r10-eth1 10.255.104.1/30 <->  r14-eth0 10.255.104.2/30
+  r14-eth1 10.255.134.1/30 <->  r13-eth0 10.255.134.2/30
+  r13-eth1 10.255.132.1/30 <->  r12-eth0 10.255.132.2/30
+  r12-eth1 10.255.121.1/30 <->  r11-eth2 10.255.121.2/30  (NOTE: r12-eth1 side)
+  r11-eth1 10.255.117.1/30 <->  r7-eth2  10.255.117.2/30
+
+Transit/shared bus sw6 (10.255.100.x/24):
+  r8-eth2  10.255.100.8/24
+  r9-eth2  10.255.100.9/24
+  r12-eth2 10.255.100.12/24
+  r13-eth2 10.255.100.13/24
+
+sw6 also bridges sw1 and sw4:
+  sw1-eth0 <-> sw6-eth5   (sw1 is the 10.0.2 LAN switch, its uplink via sw6 transit)
+  sw4-eth0 <-> sw6-eth4   (sw4 is the 10.0.5 LAN switch, its uplink via sw6 transit)
+
+Run:  sudo python3 mn_t3.py
+"""
+
+import time
+from mininet.net import Mininet
+from mininet.node import Host, OVSBridge
+from mininet.link import TCLink
+from mininet.log import setLogLevel, info
+from mininet.cli import CLI
+
+
+class LinuxRouter(Host):
+    """Host node with IP forwarding enabled."""
+
+    def config(self, **params):
+        super().config(**params)
+        self.cmd('sysctl -w net.ipv4.ip_forward=1')
+
+    def terminate(self):
+        self.cmd('sysctl -w net.ipv4.ip_forward=0')
+        super().terminate()
+
+
+def iface(node, idx):
+    """Return the Mininet interface name for a node's idx-th interface (0-based)."""
+    return '%s-eth%d' % (node.name, idx)
+
+
+def cfg(node, idx, cidr):
+    """Flush, assign CIDR, and bring up a node interface."""
+    intf = iface(node, idx)
+    node.cmd('ip addr flush dev %s' % intf)
+    node.cmd('ip addr add %s dev %s' % (cidr, intf))
+    node.cmd('ip link set %s up' % intf)
+
+
+def route(node, dst, via):
+    node.cmd('ip route add %s via %s' % (dst, via))
+
+
+def build():
+    setLogLevel('info')
+
+    net = Mininet(host=Host, switch=OVSBridge, link=TCLink, controller=None)
+
+    info('*** Adding routers\n')
+    r7  = net.addHost('r7',  cls=LinuxRouter, ip=None)
+    r8  = net.addHost('r8',  cls=LinuxRouter, ip=None)
+    r9  = net.addHost('r9',  cls=LinuxRouter, ip=None)
+    r10 = net.addHost('r10', cls=LinuxRouter, ip=None)
+    r11 = net.addHost('r11', cls=LinuxRouter, ip=None)
+    r12 = net.addHost('r12', cls=LinuxRouter, ip=None)
+    r13 = net.addHost('r13', cls=LinuxRouter, ip=None)
+    r14 = net.addHost('r14', cls=LinuxRouter, ip=None)
+
+    info('*** Adding switches\n')
+    sw0 = net.addSwitch('sw0')
+    sw1 = net.addSwitch('sw1')
+    sw2 = net.addSwitch('sw2')
+    sw3 = net.addSwitch('sw3')
+    sw4 = net.addSwitch('sw4')
+    sw5 = net.addSwitch('sw5')
+    sw6 = net.addSwitch('sw6')
+
+    info('*** Adding hosts\n')
+    h1  = net.addHost('h1',  ip=None)
+    h2  = net.addHost('h2',  ip=None)
+    h3  = net.addHost('h3',  ip=None)
+    h4  = net.addHost('h4',  ip=None)
+    h5  = net.addHost('h5',  ip=None)
+    h6  = net.addHost('h6',  ip=None)
+    h7  = net.addHost('h7',  ip=None)
+    h8  = net.addHost('h8',  ip=None)
+    h9  = net.addHost('h9',  ip=None)
+    h10 = net.addHost('h10', ip=None)
+    h11 = net.addHost('h11', ip=None)
+    h12 = net.addHost('h12', ip=None)
+    h13 = net.addHost('h13', ip=None)
+    h14 = net.addHost('h14', ip=None)
+    h15 = net.addHost('h15', ip=None)
+    h16 = net.addHost('h16', ip=None)
+    h17 = net.addHost('h17', ip=None)
+    h18 = net.addHost('h18', ip=None)
+    h19 = net.addHost('h19', ip=None)
+    h20 = net.addHost('h20', ip=None)
+    h21 = net.addHost('h21', ip=None)
+    h22 = net.addHost('h22', ip=None)
+    h23 = net.addHost('h23', ip=None)
+    h24 = net.addHost('h24', ip=None)
+
+    # ---------------------------------------------------------------
+    # Links — order determines the eth-index on each multi-iface node.
+    # We track each node's next available eth index manually.
+    # The comments show: <node>-eth<idx>
+    # ---------------------------------------------------------------
+    info('*** Adding links\n')
+
+    # ---- sw0 LAN (10.0.1.x): r7-eth0 connects to sw0 ----
+    # r7-eth0  sw0-eth0
+    net.addLink(r7, sw0)     # r7-eth0, sw0-ethX
+    # sw0 <-> hosts
+    net.addLink(sw0, h1)     # sw0 <-> h1-eth0
+    net.addLink(sw0, h2)     # sw0 <-> h2-eth0
+    net.addLink(sw0, h3)     # sw0 <-> h3-eth0
+    net.addLink(sw0, h4)     # sw0 <-> h4-eth0
+
+    # ---- r7-r8 point-to-point ----
+    # r7-eth1 <-> r8-eth0
+    net.addLink(r7, r8)      # r7-eth1, r8-eth0
+
+    # ---- r7-r11 point-to-point (r11 side is eth2 in JSON, but we add eth1 here) ----
+    # r11-eth1 <-> r7-eth2
+    # We add r11 first link as r11-eth0 later; let's defer and add r7-eth2 / r11-eth? by order:
+    # To keep r7's ifaces in order:  eth0=sw0  eth1=r8  eth2=r11
+    # We'll add r7-r11 link now so r7 gets eth2 and r11 gets eth0
+    net.addLink(r7, r11)     # r7-eth2, r11-eth0
+
+    # ---- r8-r9 point-to-point ----
+    # r8-eth1 <-> r9-eth0
+    net.addLink(r8, r9)      # r8-eth1, r9-eth0
+
+    # ---- sw6 transit bus — r8-eth2 ----
+    net.addLink(r8, sw6)     # r8-eth2, sw6-eth0
+
+    # ---- r9-r10 point-to-point ----
+    # r9-eth1 <-> r10-eth0
+    net.addLink(r9, r10)     # r9-eth1, r10-eth0
+
+    # ---- sw6 — r9-eth2 ----
+    net.addLink(r9, sw6)     # r9-eth2, sw6-eth1
+
+    # ---- sw1 LAN (10.0.2.x): r9 GW is via transit sw6, sw1 connected to sw6 ----
+    # sw1-eth0 <-> sw6  (bus access)
+    net.addLink(sw1, sw6)    # sw1-eth0, sw6-eth2
+    # sw1 <-> hosts
+    net.addLink(sw1, h5)     # sw1-eth1 <-> h5-eth0
+    net.addLink(sw1, h6)     # sw1-eth2 <-> h6-eth0
+    net.addLink(sw1, h7)     # sw1-eth3 <-> h7-eth0
+    net.addLink(sw1, h8)     # sw1-eth4 <-> h8-eth0
+
+    # ---- r10-r14 point-to-point ----
+    # r10-eth1 <-> r14-eth0
+    net.addLink(r10, r14)    # r10-eth1, r14-eth0
+
+    # ---- sw2 LAN (10.0.3.x): r10-eth2 ----
+    net.addLink(r10, sw2)    # r10-eth2, sw2-eth0
+    # sw2 <-> hosts
+    net.addLink(sw2, h9)     # sw2-eth1 <-> h9-eth0
+    net.addLink(sw2, h10)    # sw2-eth2 <-> h10-eth0
+    net.addLink(sw2, h11)    # sw2-eth3 <-> h11-eth0
+    net.addLink(sw2, h12)    # sw2-eth4 <-> h12-eth0
+
+    # ---- r14-r13 point-to-point ----
+    # r14-eth1 <-> r13-eth0
+    net.addLink(r14, r13)    # r14-eth1, r13-eth0
+
+    # ---- sw5 LAN (10.0.4.x): r14-eth2 ----
+    net.addLink(r14, sw5)    # r14-eth2, sw5-eth0
+    # sw5 <-> hosts
+    net.addLink(sw5, h13)    # sw5-eth1 <-> h13-eth0
+    net.addLink(sw5, h14)    # sw5-eth2 <-> h14-eth0
+    net.addLink(sw5, h15)    # sw5-eth3 <-> h15-eth0
+    net.addLink(sw5, h16)    # sw5-eth4 <-> h16-eth0
+
+    # ---- r13-r12 point-to-point ----
+    # r13-eth1 <-> r12-eth0
+    net.addLink(r13, r12)    # r13-eth1, r12-eth0
+
+    # ---- sw6 — r13-eth2 ----
+    net.addLink(r13, sw6)    # r13-eth2, sw6-eth3
+
+    # ---- sw4 LAN (10.0.5.x): r13 GW is via transit sw6 ----
+    # sw4-eth0 <-> sw6
+    net.addLink(sw4, sw6)    # sw4-eth0, sw6-eth4
+    # sw4 <-> hosts
+    net.addLink(sw4, h17)    # sw4-eth1 <-> h17-eth0
+    net.addLink(sw4, h18)    # sw4-eth2 <-> h18-eth0
+    net.addLink(sw4, h19)    # sw4-eth3 <-> h19-eth0
+    net.addLink(sw4, h20)    # sw4-eth4 <-> h20-eth0
+
+    # ---- r12-r11 point-to-point ----
+    # r12-eth1 <-> r11-eth1
+    net.addLink(r12, r11)    # r12-eth1, r11-eth1 (r11-eth0 used above for r7 link)
+
+    # ---- sw6 — r12-eth2 ----
+    net.addLink(r12, sw6)    # r12-eth2, sw6-eth5
+
+    # ---- sw3 LAN (10.0.6.x): r11-eth2 ----
+    # r11-eth2 <-> sw3-eth0
+    net.addLink(r11, sw3)    # r11-eth2, sw3-eth0
+    # sw3 <-> hosts
+    net.addLink(sw3, h21)    # sw3-eth1 <-> h21-eth0
+    net.addLink(sw3, h22)    # sw3-eth2 <-> h22-eth0
+    net.addLink(sw3, h23)    # sw3-eth3 <-> h23-eth0
+    net.addLink(sw3, h24)    # sw3-eth4 <-> h24-eth0
+
+    # ---------------------------------------------------------------
+    info('*** Starting network\n')
+    # ---------------------------------------------------------------
+    t_start = time.time()
+    net.start()
+    t_end = time.time()
+
+    info('*** Configuring routers\n')
+    # Interface index tracking:
+    # r7:  eth0=sw0  eth1=r8  eth2=r11
+    cfg(r7,  0, '10.0.1.1/24')
+    cfg(r7,  1, '10.255.78.1/30')
+    cfg(r7,  2, '10.255.117.2/30')
+    route(r7, '10.0.2.0/24', '10.255.78.2')
+    route(r7, '10.0.3.0/24', '10.255.78.2')
+    route(r7, '10.0.4.0/24', '10.255.78.2')
+    route(r7, '10.0.5.0/24', '10.255.78.2')
+    route(r7, '10.0.6.0/24', '10.255.117.1')
+
+    # r8:  eth0=r7  eth1=r9  eth2=sw6
+    cfg(r8,  0, '10.255.78.2/30')
+    cfg(r8,  1, '10.255.89.1/30')
+    cfg(r8,  2, '10.255.100.8/24')
+    route(r8, '10.0.1.0/24', '10.255.78.1')
+    route(r8, '10.0.2.0/24', '10.255.89.2')
+    route(r8, '10.0.3.0/24', '10.255.89.2')
+    route(r8, '10.0.4.0/24', '10.255.100.13')
+    route(r8, '10.0.5.0/24', '10.255.100.13')
+    route(r8, '10.0.6.0/24', '10.255.100.12')
+
+    # r9:  eth0=r8  eth1=r10  eth2=sw6  eth3=sw6-via-sw1(acts as LAN GW)
+    # r9 is GW for 10.0.2.x via the sw6 transit bus that sw1 is also on.
+    # r9-eth2 is 10.255.100.9 (transit). r9-eth3 is 10.0.2.1 directly.
+    # According to JSON: r9 has eth3=10.0.2.1/24 directly.
+    # We used r9-eth0=r8, r9-eth1=r10, r9-eth2=sw6, so we need eth3 for the LAN.
+    # But sw1 connects to sw6 (transit), not directly to r9. r9's 10.0.2.1 iface
+    # is on the same L2 segment as sw1 via sw6. So we assign r9-eth2 (sw6 side)
+    # a second address too, OR we use a dedicated link.
+    # Looking at JSON more carefully: r9-eth3=10.0.2.1/24 and sw1-eth0 links to sw6.
+    # This means r9 has a 4th interface directly into the sw6 transit segment... but
+    # that's the same sw6. In Linux/Mininet it's simplest to put BOTH addresses on
+    # the same sw6-connected interface, since they're on the same L2.
+    # We'll add r9-eth2 = 10.255.100.9 AND r9-eth2 gets a second alias for 10.0.2.1,
+    # OR we just add 10.0.2.1 as an alias on the same interface.
+    cfg(r9,  0, '10.255.89.2/30')
+    cfg(r9,  1, '10.255.90.1/30')
+    cfg(r9,  2, '10.255.100.9/24')
+    # Add 10.0.2.1 as an additional address on same sw6-connected iface
+    r9.cmd('ip addr add 10.0.2.1/24 dev r9-eth2')
+    route(r9, '10.0.1.0/24', '10.255.89.1')
+    route(r9, '10.0.3.0/24', '10.255.90.2')
+    route(r9, '10.0.4.0/24', '10.255.90.2')
+    route(r9, '10.0.5.0/24', '10.255.100.13')
+    route(r9, '10.0.6.0/24', '10.255.100.12')
+
+    # r10: eth0=r9  eth1=r14  eth2=sw2
+    cfg(r10, 0, '10.255.90.2/30')
+    cfg(r10, 1, '10.255.104.1/30')
+    cfg(r10, 2, '10.0.3.1/24')
+    route(r10, '10.0.1.0/24', '10.255.90.1')
+    route(r10, '10.0.2.0/24', '10.255.90.1')
+    route(r10, '10.0.4.0/24', '10.255.104.2')
+    route(r10, '10.0.5.0/24', '10.255.90.1')
+    route(r10, '10.0.6.0/24', '10.255.90.1')
+
+    # r14: eth0=r10  eth1=r13  eth2=sw5
+    cfg(r14, 0, '10.255.104.2/30')
+    cfg(r14, 1, '10.255.134.1/30')
+    cfg(r14, 2, '10.0.4.1/24')
+    route(r14, '10.0.1.0/24', '10.255.134.2')
+    route(r14, '10.0.2.0/24', '10.255.104.1')
+    route(r14, '10.0.3.0/24', '10.255.104.1')
+    route(r14, '10.0.5.0/24', '10.255.134.2')
+    route(r14, '10.0.6.0/24', '10.255.134.2')
+
+    # r13: eth0=r14  eth1=r12  eth2=sw6  eth3=sw4 (10.0.5.1 GW)
+    # Same pattern as r9: r13-eth2 is on sw6 transit (10.255.100.13/24),
+    # and r13-eth3 is 10.0.5.1/24 also on sw6 (via sw4 being on sw6).
+    cfg(r13, 0, '10.255.134.2/30')
+    cfg(r13, 1, '10.255.132.1/30')
+    cfg(r13, 2, '10.255.100.13/24')
+    r13.cmd('ip addr add 10.0.5.1/24 dev r13-eth2')
+    route(r13, '10.0.1.0/24', '10.255.100.8')
+    route(r13, '10.0.2.0/24', '10.255.100.9')
+    route(r13, '10.0.3.0/24', '10.255.100.9')
+    route(r13, '10.0.4.0/24', '10.255.134.1')
+    route(r13, '10.0.6.0/24', '10.255.100.12')
+
+    # r12: eth0=r13  eth1=r11  eth2=sw6
+    cfg(r12, 0, '10.255.132.2/30')
+    cfg(r12, 1, '10.255.121.1/30')
+    cfg(r12, 2, '10.255.100.12/24')
+    route(r12, '10.0.1.0/24', '10.255.100.8')
+    route(r12, '10.0.2.0/24', '10.255.100.9')
+    route(r12, '10.0.3.0/24', '10.255.100.9')
+    route(r12, '10.0.4.0/24', '10.255.100.13')
+    route(r12, '10.0.5.0/24', '10.255.100.13')
+    route(r12, '10.0.6.0/24', '10.255.121.2')
+
+    # r11: eth0=r7  eth1=r12  eth2=sw3
+    cfg(r11, 0, '10.255.117.1/30')
+    cfg(r11, 1, '10.255.121.2/30')
+    cfg(r11, 2, '10.0.6.1/24')
+    route(r11, '10.0.1.0/24', '10.255.117.2')
+    route(r11, '10.0.2.0/24', '10.255.121.1')
+    route(r11, '10.0.3.0/24', '10.255.121.1')
+    route(r11, '10.0.4.0/24', '10.255.121.1')
+    route(r11, '10.0.5.0/24', '10.255.121.1')
+
+    info('*** Configuring hosts (10.0.1.x — sw0)\n')
+    cfg(h1, 0, '10.0.1.10/24');  h1.cmd('ip route add default via 10.0.1.1')
+    cfg(h2, 0, '10.0.1.11/24');  h2.cmd('ip route add default via 10.0.1.1')
+    cfg(h3, 0, '10.0.1.12/24');  h3.cmd('ip route add default via 10.0.1.1')
+    cfg(h4, 0, '10.0.1.13/24');  h4.cmd('ip route add default via 10.0.1.1')
+
+    info('*** Configuring hosts (10.0.2.x — sw1)\n')
+    cfg(h5, 0, '10.0.2.10/24');  h5.cmd('ip route add default via 10.0.2.1')
+    cfg(h6, 0, '10.0.2.11/24');  h6.cmd('ip route add default via 10.0.2.1')
+    cfg(h7, 0, '10.0.2.12/24');  h7.cmd('ip route add default via 10.0.2.1')
+    cfg(h8, 0, '10.0.2.13/24');  h8.cmd('ip route add default via 10.0.2.1')
+
+    info('*** Configuring hosts (10.0.3.x — sw2)\n')
+    cfg(h9,  0, '10.0.3.10/24'); h9.cmd('ip route add default via 10.0.3.1')
+    cfg(h10, 0, '10.0.3.11/24'); h10.cmd('ip route add default via 10.0.3.1')
+    cfg(h11, 0, '10.0.3.12/24'); h11.cmd('ip route add default via 10.0.3.1')
+    cfg(h12, 0, '10.0.3.13/24'); h12.cmd('ip route add default via 10.0.3.1')
+
+    info('*** Configuring hosts (10.0.4.x — sw5)\n')
+    cfg(h13, 0, '10.0.4.10/24'); h13.cmd('ip route add default via 10.0.4.1')
+    cfg(h14, 0, '10.0.4.11/24'); h14.cmd('ip route add default via 10.0.4.1')
+    cfg(h15, 0, '10.0.4.12/24'); h15.cmd('ip route add default via 10.0.4.1')
+    cfg(h16, 0, '10.0.4.13/24'); h16.cmd('ip route add default via 10.0.4.1')
+
+    info('*** Configuring hosts (10.0.5.x — sw4)\n')
+    cfg(h17, 0, '10.0.5.10/24'); h17.cmd('ip route add default via 10.0.5.1')
+    cfg(h18, 0, '10.0.5.11/24'); h18.cmd('ip route add default via 10.0.5.1')
+    cfg(h19, 0, '10.0.5.12/24'); h19.cmd('ip route add default via 10.0.5.1')
+    cfg(h20, 0, '10.0.5.13/24'); h20.cmd('ip route add default via 10.0.5.1')
+
+    info('*** Configuring hosts (10.0.6.x — sw3)\n')
+    cfg(h21, 0, '10.0.6.10/24'); h21.cmd('ip route add default via 10.0.6.1')
+    cfg(h22, 0, '10.0.6.11/24'); h22.cmd('ip route add default via 10.0.6.1')
+    cfg(h23, 0, '10.0.6.12/24'); h23.cmd('ip route add default via 10.0.6.1')
+    cfg(h24, 0, '10.0.6.13/24'); h24.cmd('ip route add default via 10.0.6.1')
+
+    info('*** Topology init time: %.4f s\n' % (t_end - t_start))
+
+    info('*** Running CLI (type "exit" or Ctrl-D to quit)\n')
+    CLI(net)
+
+    info('*** Stopping network\n')
+    net.stop()
+
+
+if __name__ == '__main__':
+    build()
+
+mininet/tmp:
+Okay, now I want you to help me create the three topology tiers to test mininet. I will attach the 3 files for my app, which describe the topology in json, and i want you to return the counterparts in mininet topos.
+
+basically, first is host-to-host only
+second is 1 router, 2 switches on it, with 2 hosts per switch
+third is a large 39 node topology made to test complex routing and a big number of nodes
+
+t-classic.json:
+{
+  "nodes": [
+    {
+      "id": "node_087ce64d4c3daa89",
+      "name": "r1",
+      "type": "router",
+      "position": {
+        "x": 594.2697183748329,
+        "y": -125.58190794927373
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.10.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "192.168.20.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_9cf83a541faae8cd",
+      "name": "h1",
+      "type": "host",
+      "position": {
+        "x": 72.62585904786245,
+        "y": 293.49250604128883
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.10.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "192.168.10.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_80bf6415e38e5fdc",
+      "name": "s1",
+      "type": "switch",
+      "position": {
+        "x": 300,
+        "y": 100
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_a5c50e54977e2f45",
+      "name": "h2",
+      "type": "host",
+      "position": {
+        "x": 481.1486114201831,
+        "y": 287.57033918990805
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.10.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "192.168.10.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_af0a0d166d123feb",
+      "name": "h3",
+      "type": "host",
+      "position": {
+        "x": 732.5736348675122,
+        "y": 301.4401542187342
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.20.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "192.168.20.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_126463e14ae5a164",
+      "name": "h4",
+      "type": "host",
+      "position": {
+        "x": 1076.0369551951233,
+        "y": 298.6552672940512
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.20.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "192.168.20.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_152d8d81ec9850b3",
+      "name": "s2",
+      "type": "switch",
+      "position": {
+        "x": 908.0397122724005,
+        "y": 99.06563730848518
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    }
+  ],
+  "links": [
+    {
+      "id": "link_ca9b0e02e32e156d",
+      "a": {
+        "nodeId": "node_80bf6415e38e5fdc",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_a5c50e54977e2f45",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_39465ca987358e1f",
+      "a": {
+        "nodeId": "node_152d8d81ec9850b3",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_af0a0d166d123feb",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_cc4657268fa757ee",
+      "a": {
+        "nodeId": "node_152d8d81ec9850b3",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_126463e14ae5a164",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_4df05e556807a2bb",
+      "a": {
+        "nodeId": "node_087ce64d4c3daa89",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_80bf6415e38e5fdc",
+        "interface": "eth2"
+      }
+    },
+    {
+      "id": "link_d627c9194dad58bb",
+      "a": {
+        "nodeId": "node_087ce64d4c3daa89",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_152d8d81ec9850b3",
+        "interface": "eth2"
+      }
+    },
+    {
+      "id": "link_48d6e4db01eee106",
+      "a": {
+        "nodeId": "node_9cf83a541faae8cd",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_80bf6415e38e5fdc",
+        "interface": "eth0"
+      }
+    }
+  ]
+}
+t-large.json:
+{
+  "nodes": [
+    {
+      "id": "node_83724d47a40a47da",
+      "name": "h6",
+      "type": "host",
+      "position": {
+        "x": 557.67,
+        "y": -122.16999999999996
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.2.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.2.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_54470f4bf06529f6",
+      "name": "h9",
+      "type": "host",
+      "position": {
+        "x": 1260.67,
+        "y": -79.17000000000002
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.3.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.3.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_9aaae67d5a9d2e11",
+      "name": "h12",
+      "type": "host",
+      "position": {
+        "x": 1732.67,
+        "y": 131.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.3.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.3.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_c4baa0c653fad478",
+      "name": "h15",
+      "type": "host",
+      "position": {
+        "x": 1298.67,
+        "y": 977.3299999999999
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.4.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.4.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_c7aede60e516611a",
+      "name": "h16",
+      "type": "host",
+      "position": {
+        "x": 1548.67,
+        "y": 1053.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.4.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.4.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_407c881d2f1794bb",
+      "name": "h13",
+      "type": "host",
+      "position": {
+        "x": 1538.67,
+        "y": 544.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.4.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.4.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_c70f1864c72272c9",
+      "name": "sw2",
+      "type": "switch",
+      "position": {
+        "x": 1496.67,
+        "y": 28.829999999999984
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_56924bc9f522ae5f",
+      "name": "r12",
+      "type": "router",
+      "position": {
+        "x": 525.6700000000001,
+        "y": 649.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.255.132.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.121.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.255.100.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.121.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.100.9",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.132.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.100.13",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.100.13",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.121.2",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_4a96922db279377d",
+      "name": "h5",
+      "type": "host",
+      "position": {
+        "x": 369.67,
+        "y": 6.829999999999984
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.2.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.2.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_06a50b4391199486",
+      "name": "h19",
+      "type": "host",
+      "position": {
+        "x": 825.67,
+        "y": 1099.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.5.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.5.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_b910ad93be220174",
+      "name": "h20",
+      "type": "host",
+      "position": {
+        "x": 1019.6700000000001,
+        "y": 946.8299999999999
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.5.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.5.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_3ac7967d2c102091",
+      "name": "h24",
+      "type": "host",
+      "position": {
+        "x": 183.17000000000002,
+        "y": 995.3299999999999
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.6.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.6.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_8587deb149aef6b5",
+      "name": "sw1",
+      "type": "switch",
+      "position": {
+        "x": 730.67,
+        "y": 81.83000000000001
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_ae04f72686a7b0a4",
+      "name": "sw5",
+      "type": "switch",
+      "position": {
+        "x": 1508.67,
+        "y": 813.8299999999999
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_4fbaafed797de14b",
+      "name": "h2",
+      "type": "host",
+      "position": {
+        "x": 171.17000000000002,
+        "y": -133.17000000000002
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.1.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.1.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_b188db6f3f4d5736",
+      "name": "h8",
+      "type": "host",
+      "position": {
+        "x": 999.6700000000001,
+        "y": -51.170000000000016
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.2.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.2.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_c87febc98bd238fa",
+      "name": "h11",
+      "type": "host",
+      "position": {
+        "x": 1504.67,
+        "y": 269.83000000000004
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.3.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.3.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_36acf8ce9d8577d3",
+      "name": "h21",
+      "type": "host",
+      "position": {
+        "x": -299.33000000000004,
+        "y": 704.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.6.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.6.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_f605a66953edfc4a",
+      "name": "h23",
+      "type": "host",
+      "position": {
+        "x": -51.33000000000004,
+        "y": 1113.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.6.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.6.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_4a3a17eb073c13f3",
+      "name": "r7",
+      "type": "router",
+      "position": {
+        "x": 201.67000000000002,
+        "y": 163.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.1.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.78.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.255.117.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.78.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.117.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.78.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.78.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.117.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_89b4692481e2d465",
+      "name": "r11",
+      "type": "router",
+      "position": {
+        "x": 177.67000000000002,
+        "y": 742.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.6.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.121.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.255.117.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.117.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.121.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.121.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.121.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.121.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_eb5a6497c86918ee",
+      "name": "h17",
+      "type": "host",
+      "position": {
+        "x": 417.67,
+        "y": 976.8299999999999
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.5.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.5.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_40558385dff18bb3",
+      "name": "h18",
+      "type": "host",
+      "position": {
+        "x": 609.67,
+        "y": 1121.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.5.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.5.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_d148c71b4fb19ec8",
+      "name": "sw0",
+      "type": "switch",
+      "position": {
+        "x": -38.329999999999984,
+        "y": 2.829999999999984
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_5ea0f9dfb74259e0",
+      "name": "sw3",
+      "type": "switch",
+      "position": {
+        "x": -48.329999999999984,
+        "y": 879.8299999999999
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_1c009d91c58cd15d",
+      "name": "h3",
+      "type": "host",
+      "position": {
+        "x": -317.33000000000004,
+        "y": 126.83000000000001
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.1.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.1.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_17d1bbbab85e5e99",
+      "name": "h4",
+      "type": "host",
+      "position": {
+        "x": -74.82999999999998,
+        "y": 232.83000000000004
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.1.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.1.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_f13e7dcbdd47e25d",
+      "name": "r9",
+      "type": "router",
+      "position": {
+        "x": 926.67,
+        "y": 236.82999999999998
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.255.89.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.90.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.255.100.9/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "cidr": "10.0.2.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.89.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.90.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.90.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.100.13",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.100.12",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_7ee1c9f8bb04cc94",
+      "name": "sw4",
+      "type": "switch",
+      "position": {
+        "x": 730.67,
+        "y": 792.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_1043ffa7aab836e8",
+      "name": "r13",
+      "type": "router",
+      "position": {
+        "x": 954.67,
+        "y": 625.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.255.134.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.132.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.255.100.13/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "cidr": "10.0.5.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.132.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.100.9",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.134.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.134.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.100.12",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_7f6c5cc7f20a6f1b",
+      "name": "h7",
+      "type": "host",
+      "position": {
+        "x": 793.67,
+        "y": -156.16999999999996
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.2.12/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.2.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_7a3d798b35a51746",
+      "name": "h10",
+      "type": "host",
+      "position": {
+        "x": 1430.67,
+        "y": -259.17
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.3.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.3.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_3995a1e6ff7899d3",
+      "name": "r14",
+      "type": "router",
+      "position": {
+        "x": 1260.67,
+        "y": 692.8300000000002
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.255.104.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.134.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.0.4.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.134.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.104.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.104.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.134.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.134.2",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_c5fe95056dad1d65",
+      "name": "sw6",
+      "type": "switch",
+      "position": {
+        "x": 734.67,
+        "y": 449.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth4",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth5",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth6",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth7",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_c85d280a0b3e7c21",
+      "name": "r10",
+      "type": "router",
+      "position": {
+        "x": 1258.67,
+        "y": 177.83
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.255.90.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.104.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.0.3.1/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.104.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.90.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.104.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.90.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.90.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_30be48803f1be09f",
+      "name": "h14",
+      "type": "host",
+      "position": {
+        "x": 1754.67,
+        "y": 708.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.4.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.4.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_76adcb38be6966d5",
+      "name": "h22",
+      "type": "host",
+      "position": {
+        "x": -64.82999999999998,
+        "y": 584.33
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.6.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.6.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_381c970888fa2d27",
+      "name": "h1",
+      "type": "host",
+      "position": {
+        "x": 4.669999999999959,
+        "y": -239.17000000000002
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.0.1.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "0.0.0.0/0",
+          "nextHop": "10.0.1.1",
+          "kind": "via"
+        }
+      ]
+    },
+    {
+      "id": "node_511bfe64919987b3",
+      "name": "r8",
+      "type": "router",
+      "position": {
+        "x": 531.6700000000001,
+        "y": 236.82999999999998
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "10.255.78.2/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth1",
+          "cidr": "10.255.89.1/30",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth2",
+          "cidr": "10.255.100.8/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        },
+        {
+          "name": "eth3",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": [
+        {
+          "destination": "10.0.1.0/24",
+          "nextHop": "10.255.78.1",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.2.0/24",
+          "nextHop": "10.255.89.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.3.0/24",
+          "nextHop": "10.255.89.2",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.4.0/24",
+          "nextHop": "10.255.100.13",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.5.0/24",
+          "nextHop": "10.255.100.13",
+          "kind": "via"
+        },
+        {
+          "destination": "10.0.6.0/24",
+          "nextHop": "10.255.100.12",
+          "kind": "via"
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "id": "link_7ef128a86599da01",
+      "a": {
+        "nodeId": "node_d148c71b4fb19ec8",
+        "interface": "eth4"
+      },
+      "b": {
+        "nodeId": "node_17d1bbbab85e5e99",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_edceafdcdaeda28b",
+      "a": {
+        "nodeId": "node_8587deb149aef6b5",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_4a96922db279377d",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_12ea73061660ee6f",
+      "a": {
+        "nodeId": "node_c85d280a0b3e7c21",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_c70f1864c72272c9",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_9d1d7d71bb31de19",
+      "a": {
+        "nodeId": "node_c70f1864c72272c9",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_54470f4bf06529f6",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_a499aa49d9bcba3c",
+      "a": {
+        "nodeId": "node_3995a1e6ff7899d3",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_1043ffa7aab836e8",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_70e99fe379baa288",
+      "a": {
+        "nodeId": "node_c70f1864c72272c9",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_7a3d798b35a51746",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_708042265625367c",
+      "a": {
+        "nodeId": "node_d148c71b4fb19ec8",
+        "interface": "eth3"
+      },
+      "b": {
+        "nodeId": "node_1c009d91c58cd15d",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_91378524e97e719a",
+      "a": {
+        "nodeId": "node_c70f1864c72272c9",
+        "interface": "eth3"
+      },
+      "b": {
+        "nodeId": "node_c87febc98bd238fa",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_31ebb119741d6290",
+      "a": {
+        "nodeId": "node_ae04f72686a7b0a4",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_407c881d2f1794bb",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_50a51f80aede1b43",
+      "a": {
+        "nodeId": "node_8587deb149aef6b5",
+        "interface": "eth4"
+      },
+      "b": {
+        "nodeId": "node_b188db6f3f4d5736",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_5c07f03f1f0177b9",
+      "a": {
+        "nodeId": "node_4a3a17eb073c13f3",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_d148c71b4fb19ec8",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_b02ae24a19902515",
+      "a": {
+        "nodeId": "node_ae04f72686a7b0a4",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_30be48803f1be09f",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_14a38a41460b48dc",
+      "a": {
+        "nodeId": "node_ae04f72686a7b0a4",
+        "interface": "eth3"
+      },
+      "b": {
+        "nodeId": "node_c4baa0c653fad478",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_c05c2b241122ea95",
+      "a": {
+        "nodeId": "node_ae04f72686a7b0a4",
+        "interface": "eth4"
+      },
+      "b": {
+        "nodeId": "node_c7aede60e516611a",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_a78f189891ef11aa",
+      "a": {
+        "nodeId": "node_7ee1c9f8bb04cc94",
+        "interface": "eth4"
+      },
+      "b": {
+        "nodeId": "node_b910ad93be220174",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_7a56119986ee073c",
+      "a": {
+        "nodeId": "node_5ea0f9dfb74259e0",
+        "interface": "eth4"
+      },
+      "b": {
+        "nodeId": "node_3ac7967d2c102091",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_91e7d9c3f89aaf50",
+      "a": {
+        "nodeId": "node_511bfe64919987b3",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_c5fe95056dad1d65",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_f63501542be7e2b1",
+      "a": {
+        "nodeId": "node_d148c71b4fb19ec8",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_381c970888fa2d27",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_ed5d994a6906272f",
+      "a": {
+        "nodeId": "node_56924bc9f522ae5f",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_89b4692481e2d465",
+        "interface": "eth1"
+      }
+    },
+    {
+      "id": "link_25bd44e293d63bca",
+      "a": {
+        "nodeId": "node_f13e7dcbdd47e25d",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_c5fe95056dad1d65",
+        "interface": "eth1"
+      }
+    },
+    {
+      "id": "link_9070af7041845fff",
+      "a": {
+        "nodeId": "node_8587deb149aef6b5",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_83724d47a40a47da",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_600b77eaa6a504e2",
+      "a": {
+        "nodeId": "node_d148c71b4fb19ec8",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_4fbaafed797de14b",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_424b5796a15690f5",
+      "a": {
+        "nodeId": "node_3995a1e6ff7899d3",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_ae04f72686a7b0a4",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_0d42680480070ecd",
+      "a": {
+        "nodeId": "node_1043ffa7aab836e8",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_56924bc9f522ae5f",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_74c25aa6b431d0a1",
+      "a": {
+        "nodeId": "node_5ea0f9dfb74259e0",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_36acf8ce9d8577d3",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_d6bad2ef83d65876",
+      "a": {
+        "nodeId": "node_5ea0f9dfb74259e0",
+        "interface": "eth3"
+      },
+      "b": {
+        "nodeId": "node_f605a66953edfc4a",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_2131ca5ff3ffd7cf",
+      "a": {
+        "nodeId": "node_511bfe64919987b3",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_f13e7dcbdd47e25d",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_cc973def7232aa44",
+      "a": {
+        "nodeId": "node_c85d280a0b3e7c21",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_3995a1e6ff7899d3",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_a636e2480d748ced",
+      "a": {
+        "nodeId": "node_56924bc9f522ae5f",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_c5fe95056dad1d65",
+        "interface": "eth2"
+      }
+    },
+    {
+      "id": "link_d62aabcbcb440e97",
+      "a": {
+        "nodeId": "node_7ee1c9f8bb04cc94",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_c5fe95056dad1d65",
+        "interface": "eth4"
+      }
+    },
+    {
+      "id": "link_1b8ebe054238ef94",
+      "a": {
+        "nodeId": "node_8587deb149aef6b5",
+        "interface": "eth3"
+      },
+      "b": {
+        "nodeId": "node_7f6c5cc7f20a6f1b",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_86307a517e72b2cd",
+      "a": {
+        "nodeId": "node_8587deb149aef6b5",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_c5fe95056dad1d65",
+        "interface": "eth5"
+      }
+    },
+    {
+      "id": "link_9930ded7a51119e1",
+      "a": {
+        "nodeId": "node_c70f1864c72272c9",
+        "interface": "eth4"
+      },
+      "b": {
+        "nodeId": "node_9aaae67d5a9d2e11",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_b65a03346574e77d",
+      "a": {
+        "nodeId": "node_7ee1c9f8bb04cc94",
+        "interface": "eth3"
+      },
+      "b": {
+        "nodeId": "node_06a50b4391199486",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_64314d0fac7c30b4",
+      "a": {
+        "nodeId": "node_5ea0f9dfb74259e0",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_76adcb38be6966d5",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_f1d6a487fab81a69",
+      "a": {
+        "nodeId": "node_f13e7dcbdd47e25d",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_c85d280a0b3e7c21",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_966200fc68ebc3f0",
+      "a": {
+        "nodeId": "node_89b4692481e2d465",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_4a3a17eb073c13f3",
+        "interface": "eth2"
+      }
+    },
+    {
+      "id": "link_99cb2fc07bef0f38",
+      "a": {
+        "nodeId": "node_1043ffa7aab836e8",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_c5fe95056dad1d65",
+        "interface": "eth3"
+      }
+    },
+    {
+      "id": "link_8f8fc306819aee7d",
+      "a": {
+        "nodeId": "node_89b4692481e2d465",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_5ea0f9dfb74259e0",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_5cc677895e8312a8",
+      "a": {
+        "nodeId": "node_7ee1c9f8bb04cc94",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_eb5a6497c86918ee",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_3a2a46fcda64267f",
+      "a": {
+        "nodeId": "node_7ee1c9f8bb04cc94",
+        "interface": "eth2"
+      },
+      "b": {
+        "nodeId": "node_40558385dff18bb3",
+        "interface": "eth0"
+      }
+    },
+    {
+      "id": "link_737038be5f33ab0f",
+      "a": {
+        "nodeId": "node_4a3a17eb073c13f3",
+        "interface": "eth1"
+      },
+      "b": {
+        "nodeId": "node_511bfe64919987b3",
+        "interface": "eth0"
+      }
+    }
+  ]
+}
+t-min.json:
+{
+  "nodes": [
+    {
+      "id": "node_4c2ddf9b901595f3",
+      "name": "h2",
+      "type": "host",
+      "position": {
+        "x": 347.6720358732879,
+        "y": 201.78203563889258
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.10.11/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    },
+    {
+      "id": "node_c0db30e20af15c1f",
+      "name": "h1",
+      "type": "host",
+      "position": {
+        "x": 26.211076969813107,
+        "y": 204.37612445143412
+      },
+      "interfaces": [
+        {
+          "name": "eth0",
+          "cidr": "192.168.10.10/24",
+          "conditions": {
+            "delayMs": 0,
+            "jitterMs": 0,
+            "lossPct": 0,
+            "lossCorrelationPct": 0,
+            "reorderPct": 0,
+            "duplicatePct": 0,
+            "corruptPct": 0,
+            "bandwidthKbit": 0,
+            "queueLimitPackets": 0
+          }
+        }
+      ],
+      "routes": []
+    }
+  ],
+  "links": [
+    {
+      "id": "link_ca33576b6fb70a7e",
+      "a": {
+        "nodeId": "node_c0db30e20af15c1f",
+        "interface": "eth0"
+      },
+      "b": {
+        "nodeId": "node_4c2ddf9b901595f3",
+        "interface": "eth0"
+      }
+    }
+  ]
+}

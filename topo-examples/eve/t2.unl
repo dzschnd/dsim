@@ -1,0 +1,28 @@
+<?xml version="1.0" ?>
+<lab name="t2" id="aa4069c3-529a-42fc-84ed-9e481a759623" version="0" scripttimeout="600" lock="0">
+  <description>Router 2 switches 4 hosts</description>
+  <topology>
+    <nodes>
+      <node id="1" name="r1" type="qemu" template="vyos" image="vyos-2026" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="2" uuid="324a3602-a6b9-45d9-b2a0-14c353854114" firstmac="50:00:00:01:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Router-2D.svg" config="0" left="500" top="100">
+        <interface id="0" name="e0" type="ethernet" network_id="1"/>
+        <interface id="1" name="e1" type="ethernet" network_id="2"/>
+      </node>
+      <node id="2" name="h1" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="e050729c-417a-4227-abef-7a071205527e" firstmac="50:00:00:02:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="150" top="300">
+        <interface id="0" name="e0" type="ethernet" network_id="1"/>
+      </node>
+      <node id="3" name="h2" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="4bae02b9-f15e-4f6f-b2c6-37697f5643c6" firstmac="50:00:00:03:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="350" top="300">
+        <interface id="0" name="e0" type="ethernet" network_id="1"/>
+      </node>
+      <node id="4" name="h3" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="f3c378cd-e5ea-4cbc-ba3a-ba05dbd77301" firstmac="50:00:00:04:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="550" top="300">
+        <interface id="0" name="e0" type="ethernet" network_id="2"/>
+      </node>
+      <node id="5" name="h4" type="qemu" template="linux" image="linux-alpine-3.23" console="vnc" cpu="1" cpulimit="1" ram="512" ethernet="1" uuid="f3b8ab10-974f-4e1e-9c0e-55214d85ca78" firstmac="50:00:00:05:00:00" qemu_options="-machine type=pc,accel=kvm -vga std -usbdevice tablet -boot order=cd -cpu host" qemu_version="5.2.0" qemu_arch="x86_64" qemu_nic="virtio-net-pci" delay="0" icon="Server-2D-Linux-S.svg" config="0" left="750" top="300">
+        <interface id="0" name="e0" type="ethernet" network_id="2"/>
+      </node>
+    </nodes>
+    <networks>
+      <network id="1" type="bridge" name="s1" left="300" top="150" visibility="1" icon="lan.png"/>
+      <network id="2" type="bridge" name="s2" left="700" top="150" visibility="1" icon="lan.png"/>
+    </networks>
+  </topology>
+</lab>
