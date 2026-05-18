@@ -7,7 +7,7 @@ Docker-based network simulator
 docker build -f infra/app/Dockerfile -t dsim/app:local .
 ```
 
-### build to dockerhub
+### build & push
 ```bash
 docker buildx build --platform linux/amd64,linux/arm64 -f infra/app/Dockerfile -t dzschnd/dsim:latest --push .
 ```
