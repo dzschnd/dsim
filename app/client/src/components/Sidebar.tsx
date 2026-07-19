@@ -76,6 +76,7 @@ type SidebarProps = {
 	) => void;
 	onClearInterfaceTC: (nodeId: string, interfaceName: string) => void;
 	onListRoutes: (nodeId: string) => Promise<RouteRule[]>;
+	onListServerStatuses: (nodeId: string) => Promise<Record<string, boolean>>;
 	onAddRoute: (nodeId: string, destination: string, gatewayOrBlackhole: string) => Promise<boolean>;
 	onDeleteRoute: (nodeId: string, route: RouteRule) => Promise<void>;
 	onExecuteNodeCommand: (nodeId: string, command: string, options?: { silent?: boolean }) => Promise<boolean>;
@@ -86,6 +87,8 @@ type SidebarProps = {
 	onToggleCollapse: () => void;
 	nodeSidebarStateByNodeId: Record<string, NodeSidebarViewState>;
 	onNodeSidebarStateChange: (nodeId: string, next: NodeSidebarViewState) => void;
+	serverStatusByNodeId: Record<string, NodeServerStatus>;
+	onSetServerStatus: (nodeId: string, updater: (curr: NodeServerStatus) => NodeServerStatus) => void;
 };
 
 export type NodeSidebarViewState = {
@@ -103,8 +106,18 @@ type RouteRule = {
 	kind: "via" | "blackhole";
 };
 
-type ServerName = "iperf" | "http" | "tcp" | "udp";
-type ServerStatus = "stopped" | "running" | "loading";
+export type ServerName = "iperf" | "http" | "tcp" | "udp";
+export type ServerStatus = "stopped" | "running" | "loading";
+export type NodeServerStatus = Record<ServerName, ServerStatus>;
+
+const SERVER_NAMES: ServerName[] = ["iperf", "http", "tcp", "udp"];
+
+export const DEFAULT_SERVER_STATUS: NodeServerStatus = {
+	iperf: "stopped",
+	http: "stopped",
+	tcp: "stopped",
+	udp: "stopped",
+};
 
 function NodeIcon({ type, className }: { type: string; className?: string }) {
 	const cls = className ?? "w-5 h-5 text-gray-600";
@@ -496,6 +509,7 @@ function NodePanel({
 	onSetInterfaceTC,
 	onClearInterfaceTC,
 	onListRoutes,
+	onListServerStatuses,
 	onAddRoute,
 	onDeleteRoute,
 	onExecuteNodeCommand,
@@ -506,6 +520,9 @@ function NodePanel({
 	onRenameNode,
 	nodeSidebarState,
 	onNodeSidebarStateChange,
+	serverStatus,
+	serverStatusKnown,
+	onSetServerStatus,
 }: {
 	node: Node<SquareNodeData>;
 	nodes: Node<SquareNodeData>[];
@@ -540,6 +557,7 @@ function NodePanel({
 	) => void;
 	onClearInterfaceTC: (nodeId: string, interfaceName: string) => void;
 	onListRoutes: (nodeId: string) => Promise<RouteRule[]>;
+	onListServerStatuses: (nodeId: string) => Promise<Record<string, boolean>>;
 	onAddRoute: (nodeId: string, destination: string, gatewayOrBlackhole: string) => Promise<boolean>;
 	onDeleteRoute: (nodeId: string, route: RouteRule) => Promise<void>;
 	onExecuteNodeCommand: (nodeId: string, command: string, options?: { silent?: boolean }) => Promise<boolean>;
@@ -550,6 +568,9 @@ function NodePanel({
 	onRenameNode: (nodeId: string, displayName: string) => void;
 	nodeSidebarState: NodeSidebarViewState;
 	onNodeSidebarStateChange: (nodeId: string, next: NodeSidebarViewState) => void;
+	serverStatus: NodeServerStatus;
+	serverStatusKnown: boolean;
+	onSetServerStatus: (nodeId: string, updater: (curr: NodeServerStatus) => NodeServerStatus) => void;
 }) {
 	const { data } = node;
 	const nodeBusy = data.isBusy;
@@ -576,12 +597,6 @@ function NodePanel({
 	const [destinationIP, setDestinationIP] = useState("");
 	const [pingCount, setPingCount] = useState("4");
 	const [tracerouteMaxHops, setTracerouteMaxHops] = useState("30");
-	const [serverStatus, setServerStatus] = useState<Record<ServerName, ServerStatus>>({
-		iperf: "stopped",
-		http: "stopped",
-		tcp: "stopped",
-		udp: "stopped",
-	});
 	const [iperfMode, setIperfMode] = useState<"tcp" | "udp">("tcp");
 	const [iperfTransferMode, setIperfTransferMode] = useState<"time" | "bytes">("time");
 	const [iperfTransferValue, setIperfTransferValue] = useState("5");
@@ -617,10 +632,6 @@ function NodePanel({
 		serversCollapsed,
 	]);
 
-	useEffect(() => {
-		setServerStatus({ iperf: "stopped", http: "stopped", tcp: "stopped", udp: "stopped" });
-	}, [data.nodeId]);
-
 	const destinationNode = destinationNodeId ? nodes.find((n) => n.id === destinationNodeId) ?? null : null;
 	const destinationInterfaces = destinationNode
 		? destinationNode.data.interfaces.filter((iface) => iface.ipAddress !== "" && iface.prefixLength > 0)
@@ -655,6 +666,23 @@ function NodePanel({
 		}).catch(() => { });
 		return () => { cancelled = true; };
 	}, [canControlNodeNetworking, data.nodeId, onListRoutes, routesCollapsed]);
+
+	useEffect(() => {
+		if (!canControlNodeNetworking || serversCollapsed || serverStatusKnown) return;
+		let cancelled = false;
+		void onListServerStatuses(data.nodeId).then((statuses) => {
+			if (cancelled) return;
+			onSetServerStatus(data.nodeId, (curr) => {
+				const next = { ...curr };
+				for (const name of SERVER_NAMES) {
+					if (curr[name] === "loading") continue;
+					next[name] = statuses[name] ? "running" : "stopped";
+				}
+				return next;
+			});
+		}).catch(() => { });
+		return () => { cancelled = true; };
+	}, [canControlNodeNetworking, data.nodeId, onListServerStatuses, onSetServerStatus, serverStatusKnown, serversCollapsed]);
 
 	const submitRoute = async () => {
 		const destination = routeLeftMode === "default" ? "default" : routeDestination.trim();
@@ -701,9 +729,9 @@ function NodePanel({
 	const submitServerToggle = (name: ServerName) => {
 		const current = serverStatus[name];
 		const nextCommand = current === "running" ? `${name} server stop` : `${name} server start`;
-		setServerStatus((curr) => ({ ...curr, [name]: "loading" }));
+		onSetServerStatus(data.nodeId, (curr) => ({ ...curr, [name]: "loading" }));
 		void onExecuteNodeCommand(data.nodeId, nextCommand, { silent: true }).then((ok) => {
-			setServerStatus((curr) => ({ ...curr, [name]: ok ? (current === "running" ? "stopped" : "running") : current }));
+			onSetServerStatus(data.nodeId, (curr) => ({ ...curr, [name]: ok ? (current === "running" ? "stopped" : "running") : current }));
 		});
 	};
 
@@ -1400,6 +1428,7 @@ export function Sidebar({
 	onSetInterfaceTC,
 	onClearInterfaceTC,
 	onListRoutes,
+	onListServerStatuses,
 	onAddRoute,
 	onDeleteRoute,
 	onExecuteNodeCommand,
@@ -1410,6 +1439,8 @@ export function Sidebar({
 	onToggleCollapse,
 	nodeSidebarStateByNodeId,
 	onNodeSidebarStateChange,
+	serverStatusByNodeId,
+	onSetServerStatus,
 }: SidebarProps) {
 	const hasSelection = selectedNode !== null || selectedEdge !== null;
 	const hidden = !hasSelection && isCollapsed;
@@ -1441,6 +1472,7 @@ export function Sidebar({
 					onSetInterfaceTC={onSetInterfaceTC}
 					onClearInterfaceTC={onClearInterfaceTC}
 					onListRoutes={onListRoutes}
+					onListServerStatuses={onListServerStatuses}
 					onAddRoute={onAddRoute}
 					onDeleteRoute={onDeleteRoute}
 					onExecuteNodeCommand={onExecuteNodeCommand}
@@ -1458,6 +1490,9 @@ export function Sidebar({
 						actionsCollapsed: true,
 					}}
 					onNodeSidebarStateChange={onNodeSidebarStateChange}
+					serverStatus={serverStatusByNodeId[selectedNode.id] ?? DEFAULT_SERVER_STATUS}
+					serverStatusKnown={selectedNode.id in serverStatusByNodeId}
+					onSetServerStatus={onSetServerStatus}
 				/>
 			) : selectedEdge ? (
 				<EdgePanel

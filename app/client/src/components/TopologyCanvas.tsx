@@ -16,7 +16,7 @@ import {
 	applyNodeChanges,
 } from "@xyflow/react";
 import { InterfaceLabelEdge, type InterfaceLabelEdgeData } from "./InterfaceLabelEdge";
-import { Sidebar, type NodeSidebarViewState, type SidebarLastCommand } from "./Sidebar";
+import { Sidebar, type NodeSidebarViewState, type NodeServerStatus, type SidebarLastCommand, DEFAULT_SERVER_STATUS } from "./Sidebar";
 import { SquareNode, type SquareNodeData } from "./SquareNode";
 import {
 	TerminalPanel,
@@ -258,6 +258,7 @@ export function TopologyCanvas() {
 	const [nodeNames, setNodeNames] = useState<Record<string, string>>({});
 	const [nodeRecentCommands, setNodeRecentCommands] = useState<Record<string, string[]>>({});
 	const [nodeSidebarStateByNodeId, setNodeSidebarStateByNodeId] = useState<Record<string, NodeSidebarViewState>>({});
+	const [serverStatusByNodeId, setServerStatusByNodeId] = useState<Record<string, NodeServerStatus>>({});
 	const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(true);
 	const [isTerminalResizing, setIsTerminalResizing] = useState<boolean>(false);
 
@@ -720,6 +721,19 @@ export function TopologyCanvas() {
 			for (const [nodeId, sidebarState] of Object.entries(curr)) {
 				if (existingIds.has(nodeId)) {
 					next[nodeId] = sidebarState;
+				} else {
+					changed = true;
+				}
+			}
+			return changed ? next : curr;
+		});
+		setServerStatusByNodeId((curr) => {
+			const liveIds = new Set(nodes.filter((node) => node.data.status === "running" || node.data.status === "frozen").map((node) => node.id));
+			let changed = false;
+			const next: Record<string, NodeServerStatus> = {};
+			for (const [nodeId, status] of Object.entries(curr)) {
+				if (liveIds.has(nodeId)) {
+					next[nodeId] = status;
 				} else {
 					changed = true;
 				}
@@ -1213,6 +1227,13 @@ export function TopologyCanvas() {
 		});
 	}, []);
 
+	const setNodeServerStatus = useCallback((nodeId: string, updater: (curr: NodeServerStatus) => NodeServerStatus) => {
+		setServerStatusByNodeId((curr) => ({
+			...curr,
+			[nodeId]: updater(curr[nodeId] ?? DEFAULT_SERVER_STATUS),
+		}));
+	}, []);
+
 	const runInterfaceCommand = useCallback(async (nodeId: string, command: string) => {
 		setNodeRecentCommands((curr) => ({
 			...curr,
@@ -1312,6 +1333,19 @@ export function TopologyCanvas() {
 	const listRoutes = useCallback(async (nodeId: string): Promise<RouteRule[]> => {
 		const result = await runNodeCommand(baseUrl, nodeId, "ip route");
 		return parseRoutes(result.stdout);
+	}, [baseUrl]);
+
+	const listServerStatuses = useCallback(async (nodeId: string): Promise<Record<string, boolean>> => {
+		const names = ["iperf", "http", "tcp", "udp"];
+		const entries = await Promise.all(names.map(async (name) => {
+			try {
+				const result = await runNodeCommand(baseUrl, nodeId, `${name} server status`);
+				return [name, result.stdout.trim().includes("running")] as const;
+			} catch {
+				return [name, false] as const;
+			}
+		}));
+		return Object.fromEntries(entries);
 	}, [baseUrl]);
 
 	const addRoute = useCallback(async (nodeId: string, destination: string, gatewayOrBlackhole: string): Promise<boolean> => {
@@ -1483,6 +1517,7 @@ export function TopologyCanvas() {
 				onSetInterfaceTC={setInterfaceTC}
 				onClearInterfaceTC={clearInterfaceTC}
 				onListRoutes={listRoutes}
+				onListServerStatuses={listServerStatuses}
 				onAddRoute={addRoute}
 				onDeleteRoute={deleteRouteRule}
 				onExecuteNodeCommand={executeNodeCommandFromSidebar}
@@ -1499,6 +1534,8 @@ export function TopologyCanvas() {
 				onRenameNode={renameNode}
 				nodeSidebarStateByNodeId={nodeSidebarStateByNodeId}
 				onNodeSidebarStateChange={updateNodeSidebarState}
+				serverStatusByNodeId={serverStatusByNodeId}
+				onSetServerStatus={setNodeServerStatus}
 			/>
 
 			{/* Terminal panel */}
