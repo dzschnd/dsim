@@ -1404,8 +1404,9 @@ export function TopologyCanvas() {
 	}, [baseUrl, setRequestStatus]);
 
 	const tabLabel = useCallback((tab: TerminalTab) => {
-		return nodeNames[tab.nodeId] ?? tab.nodeId;
-	}, [nodeNames]);
+		const node = nodes.find((n) => n.id === tab.nodeId);
+		return node?.data.displayName ?? nodeNames[tab.nodeId] ?? tab.nodeId;
+	}, [nodes, nodeNames]);
 
 	return (
 		<div className="relative h-screen w-screen bg-zinc-100 text-zinc-900">

@@ -28,12 +28,18 @@ docker run --rm \
 ```
 
 ### local dev (api requires elevated privileges for netlink operations)
-
+#### API
+Install [air](https://github.com/air-verse/air) for hot reloading
 ```bash
-cd api
-sudo air
+cd app/api
+cp .env.example .env
+sudo $(which air)
 ```
+
+#### Client
 ```bash
-cd client
+cd app/client
+cp .env.example .env
+bun install
 bun run dev
 ```
