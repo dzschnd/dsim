@@ -4,12 +4,18 @@ Docker-based network simulator
 
 ### build locally
 ```bash
-docker build -f infra/app/Dockerfile -t dsim/app:local .
+# run from repo root
+docker build -f app/infra/app/Dockerfile -t dsim/app:local .
 ```
 
 ### build & push
 ```bash
-docker buildx build --platform linux/amd64,linux/arm64 -f infra/app/Dockerfile -t dzschnd/dsim:latest --push .
+# run from repo root
+# create the builder (skip if it already exists)
+docker buildx create --name main-builder --driver docker-container --use
+
+docker login
+docker buildx build --platform linux/amd64,linux/arm64 -f app/infra/app/Dockerfile -t dzschnd/dsim:latest --push .
 ```
 
 ### pull app image
