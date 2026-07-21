@@ -2863,7 +2863,7 @@ func (s *Service) runIPSet(ctx context.Context, command, nodeID, interfaceName, 
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid interface address")
 	}
 
-	if prefix.Overlaps(s.repo.store.LinkSubnets.Base()) {
+	if s.repo.store.LinkSubnets.IsReserved(prefix) {
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "address overlaps the reserved management range")
 	}
 

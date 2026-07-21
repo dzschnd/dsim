@@ -377,6 +377,9 @@ func (s *service) applyNodeConfig(nodeID string, topologyNode Node) error {
 				if err != nil {
 					return httputil.NewAppError(http.StatusBadRequest, "invalid interface cidr")
 				}
+				if s.store.LinkSubnets.IsReserved(prefix) {
+					return httputil.NewAppError(http.StatusBadRequest, "interface address overlaps the reserved management range")
+				}
 				node.Interfaces[index].IPAddr = prefix.Addr().String()
 				node.Interfaces[index].PrefixLen = prefix.Bits()
 			}
