@@ -2070,7 +2070,7 @@ func (s *Service) runTCPServerStart(ctx context.Context, command string, node mo
 		ctx,
 		s.docker,
 		node.ContainerID,
-		[]string{"sh", "-c", fmt.Sprintf("mkdir -p /var/run && nohup sh -c 'while true; do nc -l -p %d >/dev/null 2>&1; done' >/dev/null 2>&1 & echo $! >%s", port, tcpPIDFilePath)},
+		[]string{"sh", "-c", fmt.Sprintf("mkdir -p /var/run && setsid sh -c 'echo $$ >%s; while true; do nc -l -p %d >/dev/null 2>&1; done' >/dev/null 2>&1 &", tcpPIDFilePath, port)},
 		"failed to start tcp server",
 	); err != nil {
 		return commandResponse{}, err
@@ -2104,7 +2104,7 @@ func (s *Service) runTCPServerStop(ctx context.Context, command string, node mod
 	return s.execCommand(
 		ctx,
 		node.ContainerID,
-		[]string{"sh", "-c", fmt.Sprintf("if [ -f %s ]; then pid=$(cat %s); pkill -P \"$pid\" >/dev/null 2>&1 || true; kill \"$pid\" >/dev/null 2>&1 || true; fi; rm -f %s", tcpPIDFilePath, tcpPIDFilePath, tcpPIDFilePath)},
+		[]string{"sh", "-c", fmt.Sprintf("if [ -f %s ]; then kill -TERM -\"$(cat %s)\" >/dev/null 2>&1 || true; fi; rm -f %s", tcpPIDFilePath, tcpPIDFilePath, tcpPIDFilePath)},
 		command,
 	)
 }
