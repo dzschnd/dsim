@@ -24,7 +24,7 @@ type Store struct {
 }
 
 func NewStore(_ context.Context, _ *client.Client) (*Store, error) {
-	linkSubnets, err := NewSubnetAllocator("10.251.0.0/16", 29)
+	linkSubnets, err := NewSubnetAllocator("10.251.0.0/16", 30)
 	if err != nil {
 		return nil, err
 	}
