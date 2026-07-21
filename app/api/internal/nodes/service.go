@@ -32,10 +32,10 @@ type linkRepository interface {
 }
 
 type Service struct {
-	docker      *client.Client
-	repo        *repository
-	linkRepo    linkRepository
-	imageCache  sync.Map // map[image]struct{}: images confirmed to exist this session
+	docker     *client.Client
+	repo       *repository
+	linkRepo   linkRepository
+	imageCache sync.Map // map[image]struct{}: images confirmed to exist this session
 }
 
 const (
@@ -94,7 +94,6 @@ func (s *Service) getNode(nodeID string) (model.Node, error) {
 	return node, nil
 }
 
-// TODO: add error handling for invalid type
 func nodeTypeTag(t model.NodeType) (string, int) {
 	var image string
 	var ifaceCount int
@@ -183,7 +182,6 @@ func (s *Service) CreateNode(ctx context.Context, reqNodeType string, position m
 	return node, nil
 }
 
-
 func (s *Service) UpdateNodePosition(ctx context.Context, nodeID string, position model.Position) error {
 	_ = ctx
 
@@ -254,7 +252,6 @@ func (s *Service) nodeOwnsInterfaceLocked(nodeID, interfaceID string) bool {
 	ownerID, ok := s.repo.store.InterfaceOwnerIndex[interfaceID]
 	return ok && ownerID == nodeID
 }
-
 
 func (s *Service) nodeByInterface(interfaceID string) (model.Node, model.Interface, bool) {
 	s.repo.store.Mu.RLock()
@@ -433,36 +430,6 @@ func (s *Service) syncNodeRuntime(ctx context.Context, nodeID string, prebuilt m
 		}
 	}
 
-	varIdx := 0
-	for _, iface := range node.Interfaces {
-		if _, ok := ifaceExpr[iface.ID]; ok {
-			continue
-		}
-		if iface.LinkID != "" {
-			// Veth not ready (peer container stopped); skip — will be configured when peer starts.
-			continue
-		}
-		if iface.RuntimeIPAddr == "" || iface.RuntimePrefixLen == 0 {
-			continue
-		}
-		if varIdx == 0 {
-			cmds = append(cmds,
-				`_a=$(ip -o addr show)`,
-				`_iface() { printf '%s\n' "$_a" | awk -v ip="$1" '$4==ip{print $2;exit}'; }`,
-			)
-		}
-		varName := fmt.Sprintf("_e%d", varIdx)
-		varIdx++
-		cidr := fmt.Sprintf("%s/%d", iface.RuntimeIPAddr, iface.RuntimePrefixLen)
-		cmds = append(cmds,
-			fmt.Sprintf(`%s=$(_iface %q)`, varName, cidr),
-			fmt.Sprintf(`[ -n "$%s" ] || { echo "name lookup failed: %s" >&2; exit 1; }`, varName, cidr),
-			// Print for Go to capture and store in the repo.
-			fmt.Sprintf(`echo "_rname_ %s $%s"`, iface.ID, varName),
-		)
-		ifaceExpr[iface.ID] = "$" + varName
-	}
-
 	if node.Type == model.Switch {
 		cmds = append(cmds,
 			"ip link show br0 >/dev/null 2>&1 || ip link add br0 type bridge",
@@ -571,36 +538,11 @@ func (s *Service) syncNodeRuntime(ctx context.Context, nodeID string, prebuilt m
 		cmds = append(cmds, fmt.Sprintf("ip link set %s down", expr))
 	}
 
-	var stdout string
 	if len(cmds) > 1 {
-		var err error
-		stdout, err = execInContainerChecked(ctx, s.docker, node.ContainerID,
+		if _, err := execInContainerChecked(ctx, s.docker, node.ContainerID,
 			[]string{"sh", "-c", strings.Join(cmds, "\n")},
-			"failed to apply node runtime configuration")
-		if err != nil {
+			"failed to apply node runtime configuration"); err != nil {
 			return err
-		}
-	}
-
-	// Parse _rname_ lines emitted by the script to persist resolved interface names.
-	if varIdx > 0 {
-		for _, line := range strings.Split(stdout, "\n") {
-			if !strings.HasPrefix(line, "_rname_ ") {
-				continue
-			}
-			parts := strings.Fields(line)
-			if len(parts) != 3 {
-				continue
-			}
-			if !s.repo.UpdateInterfaceRuntimeName(nodeID, parts[1], parts[2]) {
-				slog.Error("Failed to persist runtime interface name", "iface", parts[1])
-				return httputil.NewAppError(http.StatusInternalServerError, "failed to persist runtime interface name")
-			}
-		}
-		// Re-read so conditions/flap see the newly stored names.
-		node, ok = s.repo.GetNode(nodeID)
-		if !ok {
-			return httputil.NewAppError(http.StatusNotFound, "node not found")
 		}
 	}
 
@@ -623,7 +565,6 @@ func (s *Service) syncNodeRuntime(ctx context.Context, nodeID string, prebuilt m
 
 	return nil
 }
-
 
 func (s *Service) stopNode(ctx context.Context, nodeID string) error {
 	if nodeID == "" {

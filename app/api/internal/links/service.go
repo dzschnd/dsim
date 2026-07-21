@@ -54,7 +54,6 @@ const (
 	linkSampleInterval  = time.Second
 )
 
-
 func NewService(docker *client.Client, s *store.Store) *Service {
 	svc := &Service{
 		docker:       docker,
@@ -103,7 +102,7 @@ func (s *Service) CreateLink(ctx context.Context, interfaceAID, interfaceBID str
 		return model.Link{}, httputil.NewAppError(http.StatusInternalServerError, "link subnet allocation failed")
 	}
 
-	// Assign the first two usable addresses in the /29 subnet to the two ends.
+	// Assign the first two usable addresses in the subnet to the two ends.
 	ipA := subnet.Addr().Next()
 	ipB := ipA.Next()
 	prefixLen := subnet.Bits()
@@ -357,7 +356,6 @@ func (s *Service) broadcast(event LinkActivityEvent) {
 	}
 	s.mu.Unlock()
 }
-
 
 func (s *Service) deleteLink(ctx context.Context, linkID string) error {
 	if linkID == "" {
@@ -766,7 +764,6 @@ func (s *Service) applyRuntimeInterfaceConditions(ctx context.Context, container
 
 	return nil
 }
-
 
 func (s *Service) clearRuntimeInterfaceConditions(ctx context.Context, containerID, runtimeName string) error {
 	stdout, stderr, exitCode, err := execInContainer(ctx, s.docker, containerID, []string{"tc", "qdisc", "del", "dev", runtimeName, "root"})

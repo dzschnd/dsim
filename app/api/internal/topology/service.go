@@ -309,7 +309,7 @@ func (s *service) importLinksParallel(ctx context.Context, topologyLinks []Link,
 func CleanupRuntime(ctx context.Context, docker *client.Client, topologyStore *store.Store) {
 	nodesSnapshot := topologyStore.NodesSnapshot()
 
-	const nodePoolSize = 12
+	const nodePoolSize = 16
 	nodeSem := make(chan struct{}, nodePoolSize)
 	var wg sync.WaitGroup
 
