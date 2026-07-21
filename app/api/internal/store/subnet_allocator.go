@@ -99,18 +99,7 @@ func (a *SubnetAllocator) ReserveOverlapping(other netip.Prefix) int {
 	return reserved
 }
 
-func GatewayAddr(subnet netip.Prefix) (netip.Addr, error) {
-	subnet = subnet.Masked()
-	if !subnet.Addr().Is4() {
-		return netip.Addr{}, fmt.Errorf("gateway address only supported for ipv4 subnets")
-	}
-
-	gateway := subnet.Addr().Next()
-	if !subnet.Contains(gateway) {
-		return netip.Addr{}, fmt.Errorf("subnet %s has no usable gateway address", subnet)
-	}
-	return gateway, nil
-}
+func (a *SubnetAllocator) Base() netip.Prefix { return a.base }
 
 func ipv4ToUint32(addr netip.Addr) uint32 {
 	bytes := addr.As4()

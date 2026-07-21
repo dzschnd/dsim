@@ -2863,6 +2863,10 @@ func (s *Service) runIPSet(ctx context.Context, command, nodeID, interfaceName, 
 		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "invalid interface address")
 	}
 
+	if prefix.Overlaps(s.repo.store.LinkSubnets.Base()) {
+		return commandResponse{}, httputil.NewAppError(http.StatusBadRequest, "address overlaps the reserved management range")
+	}
+
 	node, ok := s.repo.GetNode(nodeID)
 	if !ok {
 		return commandResponse{}, httputil.NewAppError(http.StatusNotFound, "node not found")
